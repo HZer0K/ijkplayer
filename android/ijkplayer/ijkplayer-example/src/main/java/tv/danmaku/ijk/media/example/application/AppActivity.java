@@ -27,11 +27,17 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.EditText;
+import android.text.TextUtils;
+import android.content.Intent;
+import android.net.Uri;
+import androidx.appcompat.app.AlertDialog;
 
 import tv.danmaku.ijk.media.example.R;
 import tv.danmaku.ijk.media.example.activities.RecentMediaActivity;
 import tv.danmaku.ijk.media.example.activities.SampleMediaActivity;
 import tv.danmaku.ijk.media.example.activities.SettingsActivity;
+import tv.danmaku.ijk.media.example.activities.VideoActivity;
 
 @SuppressLint("Registered")
 public class AppActivity extends AppCompatActivity {
@@ -88,6 +94,22 @@ public class AppActivity extends AppCompatActivity {
             RecentMediaActivity.intentTo(this);
         } else if (id == R.id.action_sample) {
             SampleMediaActivity.intentTo(this);
+        } else if (id == R.id.action_open_url) {
+            EditText editText = new EditText(this);
+            new AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.open_url))
+                    .setView(editText)
+                    .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                        String url = editText.getText().toString();
+                        if (!TextUtils.isEmpty(url)) {
+                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                            intent.setClass(this, VideoActivity.class);
+                            intent.setData(Uri.parse(url));
+                            startActivity(intent);
+                        }
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
         }
 
         return super.onOptionsItemSelected(item);

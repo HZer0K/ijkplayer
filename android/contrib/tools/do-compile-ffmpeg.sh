@@ -99,15 +99,16 @@ elif [ "$FF_ARCH" = "x86" ]; then
     FF_BUILD_NAME_OPENSSL=openssl-x86
     FF_BUILD_NAME_LIBSOXR=libsoxr-x86
     FF_SOURCE=$FF_BUILD_ROOT/$FF_BUILD_NAME
-    API_LEVEL=16
+    API_LEVEL=21
     TARGET_TRIPLE=i686-linux-android${API_LEVEL}
 
     FF_CFG_FLAGS="$FF_CFG_FLAGS --arch=x86 --cpu=i686 --enable-yasm"
+    FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-x86asm --disable-asm"
 
     FF_EXTRA_CFLAGS="$FF_EXTRA_CFLAGS -march=atom -msse3 -ffast-math -mfpmath=sse"
     FF_EXTRA_LDFLAGS="$FF_EXTRA_LDFLAGS"
 
-    FF_ASSEMBLER_SUB_DIRS="x86"
+    FF_ASSEMBLER_SUB_DIRS=""
 
 elif [ "$FF_ARCH" = "x86_64" ]; then
     API_LEVEL=21
@@ -119,11 +120,12 @@ elif [ "$FF_ARCH" = "x86_64" ]; then
     TARGET_TRIPLE=x86_64-linux-android${API_LEVEL}
 
     FF_CFG_FLAGS="$FF_CFG_FLAGS --arch=x86_64 --enable-yasm"
+    FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-x86asm --disable-asm"
 
     FF_EXTRA_CFLAGS="$FF_EXTRA_CFLAGS"
     FF_EXTRA_LDFLAGS="$FF_EXTRA_LDFLAGS"
 
-    FF_ASSEMBLER_SUB_DIRS="x86"
+    FF_ASSEMBLER_SUB_DIRS=""
 
 elif [ "$FF_ARCH" = "arm64" ]; then
     API_LEVEL=21
@@ -182,8 +184,8 @@ echo "--------------------"
 echo "[*] check ffmpeg env"
 echo "--------------------"
 export PATH=$IJK_LLVM_BIN:$PATH
-export CC="$IJK_LLVM_BIN/clang"
-export CXX="$IJK_LLVM_BIN/clang++"
+export CC="$IJK_LLVM_BIN/clang --target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT"
+export CXX="$IJK_LLVM_BIN/clang++ --target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT"
 export LD="$IJK_LLVM_BIN/ld.lld"
 export AR="$IJK_LLVM_BIN/llvm-ar"
 export STRIP="$IJK_LLVM_BIN/llvm-strip"
@@ -193,6 +195,7 @@ export ASFLAGS="--target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT -fPIC -DPIC"
 export CCAS="$CC"
 export CCASFLAGS="--target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT -fPIC -DPIC"
 export AS="$CC"
+export YASMFLAGS="-DPIC"
 
 FF_CFLAGS="-O3 -Wall -pipe \
     -std=c99 \
@@ -298,6 +301,9 @@ if [ -f "./config.h" ]; then
 else
     echo "CC=$CC"
     ./configure $FF_CFG_FLAGS \
+        --target-os=android \
+        --enable-cross-compile \
+        --sysroot="$FF_SYSROOT" \
         --cc="$CC" --ar="$AR" --nm="$NM" --ranlib="$RANLIB" --strip="$STRIP" \
         --extra-cflags="$FF_CFLAGS $FF_EXTRA_CFLAGS" \
         --extra-ldflags="$FF_DEP_LIBS $FF_EXTRA_LDFLAGS"

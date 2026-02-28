@@ -21,8 +21,8 @@ FF_TARGET=$1
 set -e
 set +x
 
-FF_ACT_ARCHS_32="armv5 armv7a x86"
-FF_ACT_ARCHS_64="armv5 armv7a arm64 x86 x86_64"
+FF_ACT_ARCHS_32=""
+FF_ACT_ARCHS_64="arm64"
 FF_ACT_ARCHS_ALL=$FF_ACT_ARCHS_64
 
 echo_archs() {
@@ -36,9 +36,8 @@ echo_archs() {
 
 echo_usage() {
     echo "Usage:"
-    echo "  compile-libsoxr.sh armv5|armv7a|arm64|x86|x86_64"
-    echo "  compile-libsoxr.sh all|all32"
-    echo "  compile-libsoxr.sh all64"
+    echo "  compile-libsoxr.sh arm64"
+    echo "  compile-libsoxr.sh all"
     echo "  compile-libsoxr.sh clean"
     echo "  compile-libsoxr.sh check"
     exit 1
@@ -59,20 +58,12 @@ echo_nextstep_help() {
 #----------
 case "$FF_TARGET" in
     "")
-        echo_archs armv7a
-        sh tools/do-compile-libsoxr.sh armv7a
+        echo_archs arm64
+        sh tools/do-compile-libsoxr.sh arm64
     ;;
-    armv5|armv7a|arm64|x86|x86_64)
+    arm64)
         echo_archs $FF_TARGET
         sh tools/do-compile-libsoxr.sh $FF_TARGET
-        echo_nextstep_help
-    ;;
-    all32)
-        echo_archs $FF_ACT_ARCHS_32
-        for ARCH in $FF_ACT_ARCHS_32
-        do
-            sh tools/do-compile-libsoxr.sh $ARCH
-        done
         echo_nextstep_help
     ;;
     all|all64)

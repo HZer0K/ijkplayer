@@ -15,6 +15,9 @@
     <string name="toggle_ratio">Scale</string>
     <string name="show_info">Info</string>
     <string name="vdec">vdec</string>
+    <string name="open_url">Open URL</string>
+    <string name="playback_speed">Speed</string>
+    <string name="snapshot">Snapshot</string>
     <string name="fps">fps</string>
     <string name="v_cache">v-cache</string>
     <string name="a_cache">a-cache</string>

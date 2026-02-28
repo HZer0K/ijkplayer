@@ -18,13 +18,16 @@
 package tv.danmaku.ijk.media.example.widget.media;
 
 import android.annotation.TargetApi;
+import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import android.text.TextUtils;
@@ -40,8 +43,11 @@ import android.widget.TableLayout;
 import android.widget.TextView;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -53,6 +59,7 @@ import tv.danmaku.ijk.media.player.AndroidMediaPlayer;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkTimedText;
+import tv.danmaku.ijk.media.player.MediaPlayerProxy;
 import tv.danmaku.ijk.media.player.TextureMediaPlayer;
 import tv.danmaku.ijk.media.player.misc.IMediaDataSource;
 import tv.danmaku.ijk.media.player.misc.IMediaFormat;
@@ -933,6 +940,23 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         return mCurrentAspectRatio;
     }
 
+    private static final float[] s_allSpeed = new float[]{0.5f, 1.0f, 1.5f, 2.0f};
+    private int mCurrentSpeedIndex = 1;
+    public float toggleSpeed() {
+        mCurrentSpeedIndex++;
+        mCurrentSpeedIndex %= s_allSpeed.length;
+        float speed = s_allSpeed[mCurrentSpeedIndex];
+        if (mMediaPlayer instanceof IjkMediaPlayer) {
+            ((IjkMediaPlayer) mMediaPlayer).setSpeed(speed);
+        } else if (mMediaPlayer instanceof MediaPlayerProxy) {
+            IMediaPlayer internal = ((MediaPlayerProxy) mMediaPlayer).getInternalMediaPlayer();
+            if (internal instanceof IjkMediaPlayer) {
+                ((IjkMediaPlayer) internal).setSpeed(speed);
+            }
+        }
+        return speed;
+    }
+
     //-------------------------
     // Extend: Render
     //-------------------------
@@ -1093,6 +1117,35 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         }
 
         return mediaPlayer;
+    }
+
+    public String captureFrame(Context context) {
+        if (mCurrentRender != RENDER_TEXTURE_VIEW) {
+            return null;
+        }
+        View view = mRenderView != null ? mRenderView.getView() : null;
+        if (!(view instanceof TextureRenderView)) {
+            return null;
+        }
+        Bitmap bitmap = ((TextureRenderView) view).getBitmap();
+        if (bitmap == null) {
+            return null;
+        }
+        File dir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        if (dir == null) {
+            return null;
+        }
+        String time = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+        File file = new File(dir, "snapshot_" + time + ".png");
+        try {
+            FileOutputStream fos = new FileOutputStream(file);
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+            fos.flush();
+            fos.close();
+            return file.getAbsolutePath();
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     //-------------------------

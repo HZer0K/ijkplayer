@@ -24,8 +24,8 @@ fi
 
 REQUEST_TARGET=$1
 REQUEST_SUB_CMD=$2
-ACT_ABI_32="armv5 armv7a x86"
-ACT_ABI_64="armv5 armv7a arm64 x86 x86_64"
+ACT_ABI_32=""
+ACT_ABI_64="arm64"
 ACT_ABI_ALL=$ACT_ABI_64
 UNAME_S=$(uname -s)
 
@@ -73,12 +73,7 @@ do_ndk_build () {
     PARAM_TARGET=$1
     PARAM_SUB_CMD=$2
     case "$PARAM_TARGET" in
-        armv5|armv7a)
-            cd "ijkplayer/ijkplayer-$PARAM_TARGET/src/main/jni"
-            do_sub_cmd $PARAM_SUB_CMD
-            cd -
-        ;;
-        arm64|x86|x86_64)
+        arm64)
             cd "ijkplayer/ijkplayer-$PARAM_TARGET/src/main/jni"
             if [ "$PARAM_SUB_CMD" = 'prof' ]; then PARAM_SUB_CMD=''; fi
             do_sub_cmd $PARAM_SUB_CMD
@@ -90,16 +85,10 @@ do_ndk_build () {
 
 case "$REQUEST_TARGET" in
     "")
-        do_ndk_build armv7a;
+        do_ndk_build arm64;
     ;;
-    armv5|armv7a|arm64|x86|x86_64)
+    arm64)
         do_ndk_build $REQUEST_TARGET $REQUEST_SUB_CMD;
-    ;;
-    all32)
-        for ABI in $ACT_ABI_32
-        do
-            do_ndk_build "$ABI" $REQUEST_SUB_CMD;
-        done
     ;;
     all|all64)
         for ABI in $ACT_ABI_64
@@ -115,9 +104,8 @@ case "$REQUEST_TARGET" in
     ;;
     *)
         echo "Usage:"
-        echo "  compile-ijk.sh armv5|armv7a|arm64|x86|x86_64"
-        echo "  compile-ijk.sh all|all32"
-        echo "  compile-ijk.sh all64"
+        echo "  compile-ijk.sh arm64"
+        echo "  compile-ijk.sh all"
         echo "  compile-ijk.sh clean"
     ;;
 esac

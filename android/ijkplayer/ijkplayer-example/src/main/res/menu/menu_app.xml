@@ -15,4 +15,8 @@
         android:id="@+id/action_settings"
         android:title="@string/settings"
         app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_open_url"
+        android:title="@string/open_url"
+        app:showAsAction="ifRoom" />
 </menu>

@@ -22,13 +22,7 @@ allprojects {
 dependencies {
     # required, enough for most devices.
     compile 'tv.danmaku.ijk.media:ijkplayer-java:0.8.8'
-    compile 'tv.danmaku.ijk.media:ijkplayer-armv7a:0.8.8'
-
-    # Other ABIs: optional
-    compile 'tv.danmaku.ijk.media:ijkplayer-armv5:0.8.8'
     compile 'tv.danmaku.ijk.media:ijkplayer-arm64:0.8.8'
-    compile 'tv.danmaku.ijk.media:ijkplayer-x86:0.8.8'
-    compile 'tv.danmaku.ijk.media:ijkplayer-x86_64:0.8.8'
 
     # ExoPlayer as IMediaPlayer: optional, experimental
     compile 'tv.danmaku.ijk.media:ijkplayer-exo:0.8.8'
@@ -38,17 +32,7 @@ dependencies {
  - in coming...
 
 ### My Build Environment
-- Common
- - Mac OS X 10.11.5
-- Android
- - [NDK r10e](http://developer.android.com/tools/sdk/ndk/index.html)
- - Android Studio 2.1.3
- - Gradle 2.14.1
-- iOS
- - Xcode 7.3 (7D175)
-- [HomeBrew](http://brew.sh)
- - ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
- - brew install git
+This project targets Android arm64. Use a recent Android SDK/NDK and Gradle.
 
 ### Latest Changes
 - [NEWS.md](NEWS.md)
@@ -58,8 +42,7 @@ dependencies {
  - remove rarely used ffmpeg components to reduce binary size [config/module-lite.sh](config/module-lite.sh)
  - workaround for some buggy online video.
 - Android
- - platform: API 9~23
- - cpu: ARMv7a, ARM64v8a, x86 (ARMv5 is not tested on real devices)
+ - cpu: ARM64v8a
  - api: [MediaPlayer-like](android/ijkplayer/ijkplayer-java/src/main/java/tv/danmaku/ijk/media/player/IMediaPlayer.java)
  - video-output: NativeWindow, OpenGL ES 2.0
  - audio-output: AudioTrack, OpenSL ES
@@ -143,46 +126,10 @@ git checkout -B latest k0.8.8
 
 cd android/contrib
 ./compile-ffmpeg.sh clean
-./compile-ffmpeg.sh all
+./compile-ffmpeg.sh arm64
 
 cd ..
 ./compile-ijk.sh all
-
-# Android Studio:
-#     Open an existing Android Studio project
-#     Select android/ijkplayer/ and import
-#
-#     define ext block in your root build.gradle
-#     ext {
-#       compileSdkVersion = 23       // depending on your sdk version
-#       buildToolsVersion = "23.0.0" // depending on your build tools version
-#
-#       targetSdkVersion = 23        // depending on your sdk version
-#     }
-#
-# If you want to enable debugging ijkplayer(native modules) on Android Studio 2.2+: (experimental)
-#     sh android/patch-debugging-with-lldb.sh armv7a
-#     Install Android Studio 2.2(+)
-#     Preference -> Android SDK -> SDK Tools
-#     Select (LLDB, NDK, Android SDK Build-tools,Cmake) and install
-#     Open an existing Android Studio project
-#     Select android/ijkplayer
-#     Sync Project with Gradle Files
-#     Run -> Edit Configurations -> Debugger -> Symbol Directories
-#     Add "ijkplayer-armv7a/.externalNativeBuild/ndkBuild/release/obj/local/armeabi-v7a" to Symbol Directories
-#     Run -> Debug 'ijkplayer-example'
-#     if you want to reverse patches:
-#     sh patch-debugging-with-lldb.sh reverse armv7a
-#
-# Eclipse: (obselete)
-#     File -> New -> Project -> Android Project from Existing Code
-#     Select android/ and import all project
-#     Import appcompat-v7
-#     Import preference-v7
-#
-# Gradle
-#     cd ijkplayer
-#     gradle
 
 ```
 

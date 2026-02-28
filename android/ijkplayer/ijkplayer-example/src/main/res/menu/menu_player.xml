@@ -23,4 +23,12 @@
         android:id="@+id/action_show_tracks"
         android:title="@string/tracks"
         app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_toggle_speed"
+        android:title="@string/playback_speed"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_snapshot"
+        android:title="@string/snapshot"
+        app:showAsAction="ifRoom" />
 </menu>

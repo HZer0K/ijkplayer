@@ -37,6 +37,7 @@ import android.view.MenuItem;
 import android.view.ViewGroup;
 import android.widget.TableLayout;
 import android.widget.TextView;
+import java.util.Locale;
 
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 import tv.danmaku.ijk.media.player.misc.ITrackInfo;
@@ -219,6 +220,20 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 transaction.commit();
                 mDrawerLayout.openDrawer(mRightDrawer);
             }
+        } else if (id == R.id.action_toggle_speed) {
+            float speed = mVideoView.toggleSpeed();
+            mToastTextView.setText(String.format(Locale.US, "%s: %.1fx", getString(R.string.playback_speed), speed));
+            mMediaController.showOnce(mToastTextView);
+            return true;
+        } else if (id == R.id.action_snapshot) {
+            String path = mVideoView.captureFrame(this);
+            if (path != null) {
+                mToastTextView.setText(String.format(Locale.US, "%s: %s", getString(R.string.snapshot), path));
+            } else {
+                mToastTextView.setText(getString(R.string.N_A));
+            }
+            mMediaController.showOnce(mToastTextView);
+            return true;
         }
 
         return super.onOptionsItemSelected(item);

@@ -1,1 +1,2 @@
-../../../../ijkplayer-armv7a/src/main/jni/Android.mk
+LOCAL_PATH := $(call my-dir)
+include $(call all-subdir-makefiles)

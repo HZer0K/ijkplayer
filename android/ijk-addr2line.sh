@@ -1,3 +1,3 @@
 #! /bin/sh
 
-addr2line -e ijkplayer/ijkplayer-armv7a/src/main/obj/local/armeabi-v7a/lib$1.so
+addr2line -e ijkplayer/ijkplayer-arm64/src/main/obj/local/arm64-v8a/lib$1.so
