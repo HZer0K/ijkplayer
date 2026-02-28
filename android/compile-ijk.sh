@@ -52,19 +52,23 @@ do_sub_cmd () {
         ln -s ../../../../../../ijkprof/android-ndk-profiler-dummy/jni android-ndk-prof
     fi
 
+    # ensure ndk-build outputs to src/main/obj and src/main/libs
+    NDK_OUT_DIR="$(pwd)/../obj"
+    NDK_LIBS_DIR="$(pwd)/../libs"
+
     case $SUB_CMD in
         prof)
-            $ANDROID_NDK/ndk-build $FF_MAKEFLAGS
+            $ANDROID_NDK/ndk-build NDK_OUT="$NDK_OUT_DIR" NDK_LIBS_OUT="$NDK_LIBS_DIR" $FF_MAKEFLAGS
         ;;
         clean)
-            $ANDROID_NDK/ndk-build clean
+            $ANDROID_NDK/ndk-build NDK_OUT="$NDK_OUT_DIR" NDK_LIBS_OUT="$NDK_LIBS_DIR" clean
         ;;
         rebuild)
-            $ANDROID_NDK/ndk-build clean
-            $ANDROID_NDK/ndk-build $FF_MAKEFLAGS
+            $ANDROID_NDK/ndk-build NDK_OUT="$NDK_OUT_DIR" NDK_LIBS_OUT="$NDK_LIBS_DIR" clean
+            $ANDROID_NDK/ndk-build NDK_OUT="$NDK_OUT_DIR" NDK_LIBS_OUT="$NDK_LIBS_DIR" $FF_MAKEFLAGS
         ;;
         *)
-            $ANDROID_NDK/ndk-build $FF_MAKEFLAGS
+            $ANDROID_NDK/ndk-build NDK_OUT="$NDK_OUT_DIR" NDK_LIBS_OUT="$NDK_LIBS_DIR" $FF_MAKEFLAGS
         ;;
     esac
 }
@@ -77,6 +81,13 @@ do_ndk_build () {
             cd "ijkplayer/ijkplayer-$PARAM_TARGET/src/main/jni"
             if [ "$PARAM_SUB_CMD" = 'prof' ]; then PARAM_SUB_CMD=''; fi
             do_sub_cmd $PARAM_SUB_CMD
+            ABI_DIR="arm64-v8a"
+            OBJ_LIB_DIR="$(pwd)/../obj/local/$ABI_DIR"
+            OUT_LIB_DIR="$(pwd)/../libs/$ABI_DIR"
+            mkdir -p "$OUT_LIB_DIR"
+            if ls "$OBJ_LIB_DIR"/lib*.so 1> /dev/null 2>&1; then
+                cp -f "$OBJ_LIB_DIR"/lib*.so "$OUT_LIB_DIR"/
+            fi
             cd -
         ;;
     esac

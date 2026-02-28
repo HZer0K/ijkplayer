@@ -80,7 +80,9 @@ typedef struct IJKFF_Pipenode_Opaque {
 
     AVCodecContext           *avctx; // not own
     AVCodecParameters        *codecpar;
+#if AMC_USE_AVBITSTREAM_FILTER
     AVBitStreamFilterContext *bsfc;  // own
+#endif
 
 #if AMC_USE_AVBITSTREAM_FILTER
     uint8_t                  *orig_extradata;
@@ -275,7 +277,7 @@ fail:
 static int reconfigure_codec_l(JNIEnv *env, IJKFF_Pipenode *node, jobject new_surface)
 {
     IJKFF_Pipenode_Opaque *opaque   = node->opaque;
-    int                    ret      = 0;
+    int                       ret      = 0;
     sdl_amedia_status_t    amc_ret  = 0;
     jobject                prev_jsurface = NULL;
 

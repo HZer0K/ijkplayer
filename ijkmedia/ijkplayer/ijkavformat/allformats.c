@@ -22,8 +22,7 @@
  */
 
 #include "libavformat/avformat.h"
-#include "libavformat/url.h"
-#include "libavformat/version.h"
+#include "ff_ffinc.h"
 
 #define IJK_REGISTER_DEMUXER(x)                                         \
     {                                                                   \
@@ -41,11 +40,14 @@
 
 static struct AVInputFormat *ijkav_find_input_format(const char *iformat_name)
 {
+    void *opaque = NULL;
+    const AVInputFormat *fmt_const = NULL;
     AVInputFormat *fmt = NULL;
     if (!iformat_name)
         return NULL;
-    while ((fmt = av_iformat_next(fmt))) {
-        if (!fmt->name)
+    while ((fmt_const = av_demuxer_iterate(&opaque))) {
+        fmt = (AVInputFormat *)fmt_const;
+        if (!fmt || !fmt->name)
             continue;
         if (!strcmp(iformat_name, fmt->name))
             return fmt;
@@ -76,17 +78,7 @@ void ijkav_register_all(void)
 
     /* protocols */
     av_log(NULL, AV_LOG_INFO, "===== custom modules begin =====\n");
-#ifdef __ANDROID__
-    IJK_REGISTER_PROTOCOL(ijkmediadatasource);
-#endif
-    IJK_REGISTER_PROTOCOL(ijkio);
-    IJK_REGISTER_PROTOCOL(async);
-    IJK_REGISTER_PROTOCOL(ijklongurl);
-    IJK_REGISTER_PROTOCOL(ijktcphook);
-    IJK_REGISTER_PROTOCOL(ijkhttphook);
-    IJK_REGISTER_PROTOCOL(ijksegment);
+    /* Protocol registration is disabled for new FFmpeg; using built-in protocols */
     /* demuxers */
-    IJK_REGISTER_DEMUXER(ijklivehook);
-    IJK_REGISTER_DEMUXER(ijklas);
     av_log(NULL, AV_LOG_INFO, "===== custom modules end =====\n");
 }

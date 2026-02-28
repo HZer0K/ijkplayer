@@ -28,12 +28,12 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include "libavutil/avstring.h"
 #include "libavutil/time.h"
 #include "libavformat/avformat.h"
 #include "libavcodec/avfft.h"
 #include "libswscale/swscale.h"
-#include "libavutil/application.h"
 #include "libavutil/base64.h"
 #include "libavutil/error.h"
 #include "libavutil/opt.h"
@@ -41,6 +41,12 @@
 #include "libswresample/swresample.h"
 
 #include "ijksdl/ijksdl.h"
+
+#if __has_include(<libavutil/application.h>)
+#include <libavutil/application.h>
+#else
+#include "compat/libavutil/application.h"
+#endif
 
 typedef int (*ijk_inject_callback)(void *opaque, int type, void *data, size_t data_size);
 
@@ -52,6 +58,13 @@ typedef int (*ijk_inject_callback)(void *opaque, int type, void *data, size_t da
 
 static inline int av_dict_set_intptr(AVDictionary **pm, const char *key, intptr_t value, int flags) {
     return av_dict_set_int(pm, key, (int64_t)value, flags);
+}
+static inline void *av_dict_strtoptr(const char *str) {
+    if (!str) return NULL;
+    char *end = NULL;
+    long long v = strtoll(str, &end, 10);
+    (void)end;
+    return (void*)(intptr_t)v;
 }
 
 /* FFmpeg 5+ removed av_lockmgr_register; provide minimal compatibility */
@@ -78,6 +91,9 @@ static inline void av_register_input_format(AVInputFormat *iformat) { (void)ifor
 /* FFmpeg 5+ compatibility wrappers for removed codec helpers */
 static inline void av_codec_set_pkt_timebase(AVCodecContext *avctx, AVRational tb) {
     if (avctx) avctx->pkt_timebase = tb;
+}
+static inline AVRational av_codec_get_pkt_timebase(const AVCodecContext *avctx) {
+    return avctx ? avctx->pkt_timebase : (AVRational){0,1};
 }
 static inline int av_codec_get_max_lowres(const AVCodec *codec) {
     return codec ? codec->max_lowres : 0;
@@ -109,6 +125,22 @@ static inline int avcodec_decode_video2(AVCodecContext *avctx, AVFrame *picture,
     }
     if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
         if (got_picture_ptr) *got_picture_ptr = 0;
+        return 0;
+    }
+    return ret;
+}
+
+static inline int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame *frame, int *got_packet_ptr) {
+    int ret = avcodec_send_frame(avctx, frame);
+    if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF)
+        return ret;
+    ret = avcodec_receive_packet(avctx, avpkt);
+    if (ret == 0) {
+        if (got_packet_ptr) *got_packet_ptr = 1;
+        return 0;
+    }
+    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        if (got_packet_ptr) *got_packet_ptr = 0;
         return 0;
     }
     return ret;

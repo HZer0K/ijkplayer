@@ -6,6 +6,6 @@ MY_APP_ANDROID_ROOT := $(realpath $(MY_APP_PRJ_ROOT)/../../../..)
 
 MY_APP_FFMPEG_OUTPUT_PATH := $(realpath $(MY_APP_ANDROID_ROOT)/contrib/build/ffmpeg-arm64/output)
 MY_APP_FFMPEG_INCLUDE_PATH := $(realpath $(MY_APP_FFMPEG_OUTPUT_PATH)/include)
-MY_APP_FFMPEG_SOURCE_PATH := $(MY_APP_FFMPEG_INCLUDE_PATH)
+MY_APP_FFMPEG_SOURCE_PATH := $(realpath $(MY_APP_ANDROID_ROOT)/contrib/ffmpeg-arm64)
 
 include $(call all-subdir-makefiles)

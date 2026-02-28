@@ -26,7 +26,7 @@ include $(CLEAR_VARS)
 ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
 LOCAL_CFLAGS += -mfloat-abi=soft
 endif
-LOCAL_CFLAGS += -std=c99
+LOCAL_CPPFLAGS += -std=c++11
 LOCAL_LDLIBS += -llog -landroid
 
 LOCAL_C_INCLUDES += $(LOCAL_PATH)
@@ -55,22 +55,8 @@ LOCAL_SRC_FILES += android/pipeline/ffpipenode_android_mediacodec_vdec.c
 
 LOCAL_SRC_FILES += ijkavformat/allformats.c
 LOCAL_SRC_FILES += ijkavformat/cJSON.c
-LOCAL_SRC_FILES += ijkavformat/ijklas.c
-LOCAL_SRC_FILES += ijkavformat/ijklivehook.c
-LOCAL_SRC_FILES += ijkavformat/ijkmediadatasource.c
-LOCAL_SRC_FILES += ijkavformat/ijkio.c
-LOCAL_SRC_FILES += ijkavformat/ijkiomanager.c
-LOCAL_SRC_FILES += ijkavformat/ijkiocache.c
-LOCAL_SRC_FILES += ijkavformat/ijkioffio.c
-LOCAL_SRC_FILES += ijkavformat/ijkioandroidio.c
-LOCAL_SRC_FILES += ijkavformat/ijkioprotocol.c
-LOCAL_SRC_FILES += ijkavformat/ijkioapplication.c
-LOCAL_SRC_FILES += ijkavformat/ijkiourlhook.c
-
-LOCAL_SRC_FILES  += ijkavformat/ijkasync.c
-LOCAL_SRC_FILES  += ijkavformat/ijkurlhook.c
-LOCAL_SRC_FILES  += ijkavformat/ijklongurl.c
-LOCAL_SRC_FILES  += ijkavformat/ijksegment.c
+# custom protocol and io modules are disabled for FFmpeg 5+ compatibility
+LOCAL_SRC_FILES += ijkavformat/ijkiomanager_stub.c
 
 LOCAL_SRC_FILES += ijkavutil/ijkdict.c
 LOCAL_SRC_FILES += ijkavutil/ijkutils.c
