@@ -73,6 +73,7 @@
 #include "ijkmeta.h"
 #include "ijkversion.h"
 #include "ijkplayer.h"
+#include "ff_ffinc.h"
 #include <stdatomic.h>
 #if defined(__ANDROID__)
 #include "ijksoundtouch/ijksoundtouch_wrap.h"
@@ -92,7 +93,7 @@
 #ifdef isnan
 #undef isnan
 #endif
-#define isnan(x) (isnan((double)(x)) || isnanf((float)(x)))
+#define isnan(x) (isnan((double)(x)))
 #endif
 
 #if defined(__ANDROID__)
@@ -205,7 +206,7 @@ static int packet_queue_put(PacketQueue *q, AVPacket *pkt)
 static int packet_queue_put_nullpacket(PacketQueue *q, int stream_index)
 {
     AVPacket pkt1, *pkt = &pkt1;
-    av_init_packet(pkt);
+    memset(pkt, 0, sizeof(AVPacket));
     pkt->data = NULL;
     pkt->size = 0;
     pkt->stream_index = stream_index;
@@ -431,7 +432,7 @@ static int convert_image(FFPlayer *ffp, AVFrame *src_frame, int64_t src_frame_pt
     dst_width = img_info->width;
     dst_height = img_info->height;
 
-    av_init_packet(&avpkt);
+    memset(&avpkt, 0, sizeof(AVPacket));
     avpkt.size = 0;
     avpkt.data = NULL;
 
@@ -2809,7 +2810,7 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
     VideoState *is = ffp->is;
     AVFormatContext *ic = is->ic;
     AVCodecContext *avctx;
-    AVCodec *codec = NULL;
+    const AVCodec *codec = NULL;
     const char *forced_codec_name = NULL;
     AVDictionary *opts = NULL;
     AVDictionaryEntry *t = NULL;
@@ -3041,7 +3042,7 @@ static int stream_has_enough_packets(AVStream *st, int stream_id, PacketQueue *q
            queue->nb_packets > min_frames;
 }
 
-static int is_realtime(AVFormatContext *s)
+static int is_realtime(AVFormatContext *s, const char *filename)
 {
     if(   !strcmp(s->iformat->name, "rtp")
        || !strcmp(s->iformat->name, "rtsp")
@@ -3049,8 +3050,8 @@ static int is_realtime(AVFormatContext *s)
     )
         return 1;
 
-    if(s->pb && (   !strncmp(s->filename, "rtp:", 4)
-                 || !strncmp(s->filename, "udp:", 4)
+    if(s->pb && filename && (   !strncmp(filename, "rtp:", 4)
+                 || !strncmp(filename, "udp:", 4)
                 )
     )
         return 1;
@@ -3115,7 +3116,7 @@ static int read_thread(void *arg)
     }
 
     if (ffp->iformat_name)
-        is->iformat = av_find_input_format(ffp->iformat_name);
+        is->iformat = (AVInputFormat *) av_find_input_format(ffp->iformat_name);
 
     av_dict_set_intptr(&ffp->format_opts, "video_cache_ptr", (intptr_t)&ffp->stat.video_cache, 0);
     av_dict_set_intptr(&ffp->format_opts, "audio_cache_ptr", (intptr_t)&ffp->stat.audio_cache, 0);
@@ -3211,7 +3212,7 @@ static int read_thread(void *arg)
         }
     }
 
-    is->realtime = is_realtime(ic);
+    is->realtime = is_realtime(ic, is->filename);
 
     av_dump_format(ic, 0, is->filename, 0);
 
@@ -3380,7 +3381,7 @@ static int read_thread(void *arg)
             ret = avformat_seek_file(is->ic, -1, seek_min, seek_target, seek_max, is->seek_flags);
             if (ret < 0) {
                 av_log(NULL, AV_LOG_ERROR,
-                       "%s: error while seeking\n", is->ic->filename);
+                       "%s: error while seeking\n", is->filename);
             } else {
                 if (is->audio_stream >= 0) {
                     packet_queue_flush(&is->audioq);
@@ -3888,7 +3889,7 @@ void ffp_global_init()
     av_lockmgr_register(lockmgr);
     av_log_set_callback(ffp_log_callback_brief);
 
-    av_init_packet(&flush_pkt);
+    memset(&flush_pkt, 0, sizeof(AVPacket));
     flush_pkt.data = (uint8_t *)&flush_pkt;
 
     g_ffmpeg_global_inited = true;
@@ -3964,13 +3965,22 @@ static const AVClass *ffp_context_child_class_next(const AVClass *prev)
     return NULL;
 }
 
+static const AVClass *ffp_context_child_class_iterate(void **iter)
+{
+    const AVClass *prev = iter ? (const AVClass *)(*iter) : NULL;
+    const AVClass *next = ffp_context_child_class_next(prev);
+    if (iter)
+        *iter = (void *)next;
+    return next;
+}
+
 const AVClass ffp_context_class = {
     .class_name       = "FFPlayer",
     .item_name        = ffp_context_to_name,
     .option           = ffp_context_options,
     .version          = LIBAVUTIL_VERSION_INT,
     .child_next       = ffp_context_child_next,
-    .child_class_next = ffp_context_child_class_next,
+    .child_class_iterate = ffp_context_child_class_iterate,
 };
 
 static const char *ijk_version_info()

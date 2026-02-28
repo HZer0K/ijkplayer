@@ -6,9 +6,22 @@ android {
     compileSdkVersion rootProject.ext.compileSdkVersion
     //noinspection GroovyAssignabilityCheck
     buildToolsVersion rootProject.ext.buildToolsVersion
+    namespace "tv.danmaku.ijk.media.exo"
 
     lintOptions {
         abortOnError false
+    }
+    sourceSets {
+        main {
+            java {
+                exclude 'tv/danmaku/ijk/media/exo/demo/**'
+                exclude 'tv/danmaku/ijk/media/exo/IjkExoMediaPlayer.java'
+            }
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     defaultConfig {
         minSdkVersion 9
@@ -23,11 +36,12 @@ android {
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-
-    compile 'com.google.android.exoplayer:exoplayer:r1.5.11'
-
-    compile project(':ijkplayer-java')
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-dash:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-smoothstreaming:2.19.1'
+    implementation project(':ijkplayer-java')
     // compile 'tv.danmaku.ijk.media:ijkplayer-java:0.8.8'
 }
 

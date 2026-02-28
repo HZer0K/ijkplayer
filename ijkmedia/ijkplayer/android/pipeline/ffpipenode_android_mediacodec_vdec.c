@@ -35,6 +35,7 @@
 #include "hevc_nal.h"
 #include "mpeg4_esds.h"
 #include "ffpipeline_android.h"
+#include "ijkplayer/ff_ffinc.h"
 
 #define AMC_USE_AVBITSTREAM_FILTER 0
 #ifndef AMCTRACE

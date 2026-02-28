@@ -29,12 +29,15 @@
 #include "ijksdl/ijksdl_log.h"
 #include "ijksdl/ijksdl_vout.h"
 #include "ijksdl/gles2/internal.h"
+#ifdef __ANDROID__
+#include <android/native_window.h>
+#endif
 
 #define IJK_EGL_RENDER_BUFFER 0
 
-typedef struct IJK_EGL_Opaque {
+struct IJK_EGL_Opaque {
     IJK_GLES2_Renderer *renderer;
-} IJK_EGL_Opaque;
+};
 
 static EGLBoolean IJK_EGL_isValid(IJK_EGL* egl)
 {

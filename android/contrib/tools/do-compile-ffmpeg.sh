@@ -68,10 +68,7 @@ echo "--------------------"
 echo "[*] make NDK standalone toolchain"
 echo "--------------------"
 . ./tools/do-detect-env.sh
-FF_MAKE_TOOLCHAIN_FLAGS=$IJK_MAKE_TOOLCHAIN_FLAGS
 FF_MAKE_FLAGS=$IJK_MAKE_FLAG
-FF_GCC_VER=$IJK_GCC_VER
-FF_GCC_64_VER=$IJK_GCC_64_VER
 
 
 #----- armv7a begin -----
@@ -80,9 +77,8 @@ if [ "$FF_ARCH" = "armv7a" ]; then
     FF_BUILD_NAME_OPENSSL=openssl-armv7a
     FF_BUILD_NAME_LIBSOXR=libsoxr-armv7a
     FF_SOURCE=$FF_BUILD_ROOT/$FF_BUILD_NAME
-
-    FF_CROSS_PREFIX=arm-linux-androideabi
-    FF_TOOLCHAIN_NAME=${FF_CROSS_PREFIX}-${FF_GCC_VER}
+    API_LEVEL=21
+    TARGET_TRIPLE=armv7a-linux-androideabi${API_LEVEL}
 
     FF_CFG_FLAGS="$FF_CFG_FLAGS --arch=arm --cpu=cortex-a8"
     FF_CFG_FLAGS="$FF_CFG_FLAGS --enable-neon"
@@ -94,29 +90,17 @@ if [ "$FF_ARCH" = "armv7a" ]; then
     FF_ASSEMBLER_SUB_DIRS="arm"
 
 elif [ "$FF_ARCH" = "armv5" ]; then
-    FF_BUILD_NAME=ffmpeg-armv5
-    FF_BUILD_NAME_OPENSSL=openssl-armv5
-    FF_BUILD_NAME_LIBSOXR=libsoxr-armv5
-    FF_SOURCE=$FF_BUILD_ROOT/$FF_BUILD_NAME
-
-    FF_CROSS_PREFIX=arm-linux-androideabi
-    FF_TOOLCHAIN_NAME=${FF_CROSS_PREFIX}-${FF_GCC_VER}
-
-    FF_CFG_FLAGS="$FF_CFG_FLAGS --arch=arm"
-
-    FF_EXTRA_CFLAGS="$FF_EXTRA_CFLAGS -march=armv5te -mtune=arm9tdmi -msoft-float"
-    FF_EXTRA_LDFLAGS="$FF_EXTRA_LDFLAGS"
-
-    FF_ASSEMBLER_SUB_DIRS="arm"
+    echo "armv5 is not supported by modern NDK (r27)."
+    echo "Please build armv7a instead."
+    exit 1
 
 elif [ "$FF_ARCH" = "x86" ]; then
     FF_BUILD_NAME=ffmpeg-x86
     FF_BUILD_NAME_OPENSSL=openssl-x86
     FF_BUILD_NAME_LIBSOXR=libsoxr-x86
     FF_SOURCE=$FF_BUILD_ROOT/$FF_BUILD_NAME
-
-    FF_CROSS_PREFIX=i686-linux-android
-    FF_TOOLCHAIN_NAME=x86-${FF_GCC_VER}
+    API_LEVEL=16
+    TARGET_TRIPLE=i686-linux-android${API_LEVEL}
 
     FF_CFG_FLAGS="$FF_CFG_FLAGS --arch=x86 --cpu=i686 --enable-yasm"
 
@@ -126,15 +110,13 @@ elif [ "$FF_ARCH" = "x86" ]; then
     FF_ASSEMBLER_SUB_DIRS="x86"
 
 elif [ "$FF_ARCH" = "x86_64" ]; then
-    FF_ANDROID_PLATFORM=android-21
+    API_LEVEL=21
 
     FF_BUILD_NAME=ffmpeg-x86_64
     FF_BUILD_NAME_OPENSSL=openssl-x86_64
     FF_BUILD_NAME_LIBSOXR=libsoxr-x86_64
     FF_SOURCE=$FF_BUILD_ROOT/$FF_BUILD_NAME
-
-    FF_CROSS_PREFIX=x86_64-linux-android
-    FF_TOOLCHAIN_NAME=${FF_CROSS_PREFIX}-${FF_GCC_64_VER}
+    TARGET_TRIPLE=x86_64-linux-android${API_LEVEL}
 
     FF_CFG_FLAGS="$FF_CFG_FLAGS --arch=x86_64 --enable-yasm"
 
@@ -144,22 +126,22 @@ elif [ "$FF_ARCH" = "x86_64" ]; then
     FF_ASSEMBLER_SUB_DIRS="x86"
 
 elif [ "$FF_ARCH" = "arm64" ]; then
-    FF_ANDROID_PLATFORM=android-21
+    API_LEVEL=21
 
     FF_BUILD_NAME=ffmpeg-arm64
     FF_BUILD_NAME_OPENSSL=openssl-arm64
     FF_BUILD_NAME_LIBSOXR=libsoxr-arm64
     FF_SOURCE=$FF_BUILD_ROOT/$FF_BUILD_NAME
+    TARGET_TRIPLE=aarch64-linux-android${API_LEVEL}
 
-    FF_CROSS_PREFIX=aarch64-linux-android
-    FF_TOOLCHAIN_NAME=${FF_CROSS_PREFIX}-${FF_GCC_64_VER}
-
-    FF_CFG_FLAGS="$FF_CFG_FLAGS --arch=aarch64 --enable-yasm"
-
+    FF_CFG_FLAGS="$FF_CFG_FLAGS --arch=aarch64"
+    FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-asm"
+    FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-x86asm"
     FF_EXTRA_CFLAGS="$FF_EXTRA_CFLAGS"
     FF_EXTRA_LDFLAGS="$FF_EXTRA_LDFLAGS"
 
-    FF_ASSEMBLER_SUB_DIRS="aarch64 neon"
+    FF_ASSEMBLER_SUB_DIRS=""
+
 
 else
     echo "unknown architecture $FF_ARCH";
@@ -176,9 +158,7 @@ if [ ! -d $FF_SOURCE ]; then
 fi
 
 FF_TOOLCHAIN_PATH=$FF_BUILD_ROOT/build/$FF_BUILD_NAME/toolchain
-FF_MAKE_TOOLCHAIN_FLAGS="$FF_MAKE_TOOLCHAIN_FLAGS --install-dir=$FF_TOOLCHAIN_PATH"
-
-FF_SYSROOT=$FF_TOOLCHAIN_PATH/sysroot
+FF_SYSROOT=$IJK_LLVM_SYSROOT
 FF_PREFIX=$FF_BUILD_ROOT/build/$FF_BUILD_NAME/output
 FF_DEP_OPENSSL_INC=$FF_BUILD_ROOT/build/$FF_BUILD_NAME_OPENSSL/output/include
 FF_DEP_OPENSSL_LIB=$FF_BUILD_ROOT/build/$FF_BUILD_NAME_OPENSSL/output/lib
@@ -194,17 +174,6 @@ esac
 
 
 mkdir -p $FF_PREFIX
-# mkdir -p $FF_SYSROOT
-
-
-FF_TOOLCHAIN_TOUCH="$FF_TOOLCHAIN_PATH/touch"
-if [ ! -f "$FF_TOOLCHAIN_TOUCH" ]; then
-    $ANDROID_NDK/build/tools/make-standalone-toolchain.sh \
-        $FF_MAKE_TOOLCHAIN_FLAGS \
-        --platform=$FF_ANDROID_PLATFORM \
-        --toolchain=$FF_TOOLCHAIN_NAME
-    touch $FF_TOOLCHAIN_TOUCH;
-fi
 
 
 #--------------------
@@ -212,12 +181,18 @@ echo ""
 echo "--------------------"
 echo "[*] check ffmpeg env"
 echo "--------------------"
-export PATH=$FF_TOOLCHAIN_PATH/bin/:$PATH
-#export CC="ccache ${FF_CROSS_PREFIX}-gcc"
-export CC="${FF_CROSS_PREFIX}-gcc"
-export LD=${FF_CROSS_PREFIX}-ld
-export AR=${FF_CROSS_PREFIX}-ar
-export STRIP=${FF_CROSS_PREFIX}-strip
+export PATH=$IJK_LLVM_BIN:$PATH
+export CC="$IJK_LLVM_BIN/clang"
+export CXX="$IJK_LLVM_BIN/clang++"
+export LD="$IJK_LLVM_BIN/ld.lld"
+export AR="$IJK_LLVM_BIN/llvm-ar"
+export STRIP="$IJK_LLVM_BIN/llvm-strip"
+export NM="$IJK_LLVM_BIN/llvm-nm"
+export RANLIB="$IJK_LLVM_BIN/llvm-ranlib"
+export ASFLAGS="--target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT -fPIC -DPIC"
+export CCAS="$CC"
+export CCASFLAGS="--target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT -fPIC -DPIC"
+export AS="$CC"
 
 FF_CFLAGS="-O3 -Wall -pipe \
     -std=c99 \
@@ -225,6 +200,27 @@ FF_CFLAGS="-O3 -Wall -pipe \
     -fstrict-aliasing -Werror=strict-aliasing \
     -Wno-psabi -Wa,--noexecstack \
     -DANDROID -DNDEBUG"
+FF_CFLAGS="$FF_CFLAGS -fPIC"
+FF_CFLAGS="$FF_CFLAGS -Wno-int-conversion -Wno-unused-variable -Wno-incompatible-function-pointer-types"
+FF_CFLAGS="$FF_CFLAGS --target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT"
+FF_EXTRA_LDFLAGS="$FF_EXTRA_LDFLAGS --target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT -fuse-ld=lld"
+
+# add API-specific library search (-B) to satisfy crtbegin/crtend
+case "$FF_ARCH" in
+    armv7a)
+        FF_API_LIB_DIR="$FF_SYSROOT/usr/lib/arm-linux-androideabi/$API_LEVEL"
+    ;;
+    arm64)
+        FF_API_LIB_DIR="$FF_SYSROOT/usr/lib/aarch64-linux-android/$API_LEVEL"
+    ;;
+    x86)
+        FF_API_LIB_DIR="$FF_SYSROOT/usr/lib/i686-linux-android/$API_LEVEL"
+    ;;
+    x86_64)
+        FF_API_LIB_DIR="$FF_SYSROOT/usr/lib/x86_64-linux-android/$API_LEVEL"
+    ;;
+esac
+FF_EXTRA_LDFLAGS="$FF_EXTRA_LDFLAGS -B$FF_API_LIB_DIR"
 
 # cause av_strlcpy crash with gcc4.7, gcc4.8
 # -fmodulo-sched -fmodulo-sched-allow-regmoves
@@ -265,13 +261,12 @@ FF_CFG_FLAGS="$FF_CFG_FLAGS $COMMON_FF_CFG_FLAGS"
 FF_CFG_FLAGS="$FF_CFG_FLAGS --prefix=$FF_PREFIX"
 
 # Advanced options (experts only):
-FF_CFG_FLAGS="$FF_CFG_FLAGS --cross-prefix=${FF_CROSS_PREFIX}-"
 FF_CFG_FLAGS="$FF_CFG_FLAGS --enable-cross-compile"
-FF_CFG_FLAGS="$FF_CFG_FLAGS --target-os=linux"
+FF_CFG_FLAGS="$FF_CFG_FLAGS --target-os=android"
 FF_CFG_FLAGS="$FF_CFG_FLAGS --enable-pic"
 # FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-symver"
 
-if [ "$FF_ARCH" = "x86" ]; then
+if [ "$FF_ARCH" = "x86" ] || [ "$FF_ARCH" = "arm64" ]; then
     FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-asm"
 else
     # Optimization options (experts only):
@@ -301,8 +296,9 @@ cd $FF_SOURCE
 if [ -f "./config.h" ]; then
     echo 'reuse configure'
 else
-    which $CC
+    echo "CC=$CC"
     ./configure $FF_CFG_FLAGS \
+        --cc="$CC" --ar="$AR" --nm="$NM" --ranlib="$RANLIB" --strip="$STRIP" \
         --extra-cflags="$FF_CFLAGS $FF_EXTRA_CFLAGS" \
         --extra-ldflags="$FF_DEP_LIBS $FF_EXTRA_LDFLAGS"
     make clean

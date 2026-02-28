@@ -24,6 +24,7 @@
 #include "ijkioprotocol.h"
 #include "ijkplayer/ijkavutil/ijkutils.h"
 #include "libavutil/log.h"
+#include <inttypes.h>
 
 #include "libavutil/application.h"
 

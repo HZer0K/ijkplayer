@@ -36,6 +36,7 @@
 #include "ffmpeg_api_jni.h"
 #include "ijkplayer_android_def.h"
 #include "ijkplayer_android.h"
+#include "libavutil/application.h"
 #include "ijksdl/android/ijksdl_android_jni.h"
 #include "ijksdl/android/ijksdl_codec_android_mediadef.h"
 #include "ijkavformat/ijkavformat.h"

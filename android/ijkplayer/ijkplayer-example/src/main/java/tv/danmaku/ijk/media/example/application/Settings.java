@@ -19,7 +19,7 @@ package tv.danmaku.ijk.media.example.application;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.preference.PreferenceManager;
+import androidx.preference.PreferenceManager;
 
 import tv.danmaku.ijk.media.example.R;
 

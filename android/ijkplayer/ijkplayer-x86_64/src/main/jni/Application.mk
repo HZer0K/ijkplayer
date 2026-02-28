@@ -20,10 +20,9 @@
 APP_OPTIM := release
 APP_PLATFORM := android-21
 APP_ABI := x86_64
-NDK_TOOLCHAIN_VERSION=4.9
 APP_PIE := false
 
-APP_STL := stlport_static
+APP_STL := c++_static
 
 APP_CFLAGS := -O3 -Wall -pipe \
     -ffast-math \

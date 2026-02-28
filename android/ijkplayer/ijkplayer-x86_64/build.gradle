@@ -6,7 +6,12 @@ android {
     compileSdkVersion rootProject.ext.compileSdkVersion
     //noinspection GroovyAssignabilityCheck
     buildToolsVersion rootProject.ext.buildToolsVersion
+    namespace "tv.danmaku.ijk.media.player_x86_64"
 
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     defaultConfig {
         minSdkVersion 21
         targetSdkVersion rootProject.ext.targetSdkVersion
@@ -24,7 +29,7 @@ android {
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
 }
 
 apply from: new File(rootProject.projectDir, "tools/gradle-on-demand.gradle");
