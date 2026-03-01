@@ -40,35 +40,80 @@ fi
 
 do_sub_cmd () {
     SUB_CMD=$1
-    if [ -L "./android-ndk-prof" ]; then
-        rm android-ndk-prof
-    fi
+    rm -rf android-ndk-prof
 
     if [ "$PARAM_SUB_CMD" = 'prof' ]; then
         echo 'profiler build: YES';
-        ln -s ../../../../../../ijkprof/android-ndk-profiler/jni android-ndk-prof
+        mkdir -p android-ndk-prof
+        cp -r ../../../../../../ijkprof/android-ndk-profiler/jni/* android-ndk-prof/
     else
         echo 'profiler build: NO';
-        ln -s ../../../../../../ijkprof/android-ndk-profiler-dummy/jni android-ndk-prof
+        mkdir -p android-ndk-prof
+        cp -r ../../../../../../ijkprof/android-ndk-profiler-dummy/jni/* android-ndk-prof/
     fi
 
     # ensure ndk-build outputs to src/main/obj and src/main/libs
     NDK_OUT_DIR="$(pwd)/../obj"
     NDK_LIBS_DIR="$(pwd)/../libs"
 
+    NDK_OUT_ARG="$NDK_OUT_DIR"
+    NDK_LIBS_ARG="$NDK_LIBS_DIR"
+    USE_CMD=0
+    if [ -x "$ANDROID_NDK/ndk-build" ]; then
+        NDK_BUILD_SH="$ANDROID_NDK/ndk-build"
+    elif [ -f "$ANDROID_NDK/ndk-build.cmd" ]; then
+        USE_CMD=1
+        if command -v cygpath >/dev/null 2>&1; then
+            NDK_BUILD_WIN="$(cygpath -am "$ANDROID_NDK/ndk-build.cmd")"
+            NDK_OUT_ARG="$(cygpath -am "$NDK_OUT_DIR")"
+            NDK_LIBS_ARG="$(cygpath -am "$NDK_LIBS_DIR")"
+        else
+            NDK_BUILD_WIN="$ANDROID_NDK/ndk-build.cmd"
+        fi
+    else
+        echo "Cannot find ndk-build in ANDROID_NDK. Please ensure ANDROID_NDK is correct."
+        exit 1
+    fi
+
     case $SUB_CMD in
         prof)
-            $ANDROID_NDK/ndk-build NDK_OUT="$NDK_OUT_DIR" NDK_LIBS_OUT="$NDK_LIBS_DIR" $FF_MAKEFLAGS
+            if [ $USE_CMD -eq 1 ]; then
+                WIN_PWSH="powershell.exe -NoProfile -Command"
+                CMD_STR="& '$NDK_BUILD_WIN' NDK_OUT='$NDK_OUT_ARG' NDK_LIBS_OUT='$NDK_LIBS_ARG' $FF_MAKEFLAGS"
+                $WIN_PWSH "$CMD_STR"
+            else
+                "$NDK_BUILD_SH" NDK_OUT="$NDK_OUT_ARG" NDK_LIBS_OUT="$NDK_LIBS_ARG" $FF_MAKEFLAGS
+            fi
         ;;
         clean)
-            $ANDROID_NDK/ndk-build NDK_OUT="$NDK_OUT_DIR" NDK_LIBS_OUT="$NDK_LIBS_DIR" clean
+            if [ $USE_CMD -eq 1 ]; then
+                WIN_PWSH="powershell.exe -NoProfile -Command"
+                CMD_STR="& '$NDK_BUILD_WIN' NDK_OUT='$NDK_OUT_ARG' NDK_LIBS_OUT='$NDK_LIBS_ARG' clean"
+                $WIN_PWSH "$CMD_STR"
+            else
+                "$NDK_BUILD_SH" NDK_OUT="$NDK_OUT_ARG" NDK_LIBS_OUT="$NDK_LIBS_ARG" clean
+            fi
         ;;
         rebuild)
-            $ANDROID_NDK/ndk-build NDK_OUT="$NDK_OUT_DIR" NDK_LIBS_OUT="$NDK_LIBS_DIR" clean
-            $ANDROID_NDK/ndk-build NDK_OUT="$NDK_OUT_DIR" NDK_LIBS_OUT="$NDK_LIBS_DIR" $FF_MAKEFLAGS
+            if [ $USE_CMD -eq 1 ]; then
+                WIN_PWSH="powershell.exe -NoProfile -Command"
+                CMD_STR="& '$NDK_BUILD_WIN' NDK_OUT='$NDK_OUT_ARG' NDK_LIBS_OUT='$NDK_LIBS_ARG' clean"
+                $WIN_PWSH "$CMD_STR"
+                CMD_STR="& '$NDK_BUILD_WIN' NDK_OUT='$NDK_OUT_ARG' NDK_LIBS_OUT='$NDK_LIBS_ARG' $FF_MAKEFLAGS"
+                $WIN_PWSH "$CMD_STR"
+            else
+                "$NDK_BUILD_SH" NDK_OUT="$NDK_OUT_ARG" NDK_LIBS_OUT="$NDK_LIBS_ARG" clean
+                "$NDK_BUILD_SH" NDK_OUT="$NDK_OUT_ARG" NDK_LIBS_OUT="$NDK_LIBS_ARG" $FF_MAKEFLAGS
+            fi
         ;;
         *)
-            $ANDROID_NDK/ndk-build NDK_OUT="$NDK_OUT_DIR" NDK_LIBS_OUT="$NDK_LIBS_DIR" $FF_MAKEFLAGS
+            if [ $USE_CMD -eq 1 ]; then
+                WIN_PWSH="powershell.exe -NoProfile -Command"
+                CMD_STR="& '$NDK_BUILD_WIN' NDK_OUT='$NDK_OUT_ARG' NDK_LIBS_OUT='$NDK_LIBS_ARG' $FF_MAKEFLAGS"
+                $WIN_PWSH "$CMD_STR"
+            else
+                "$NDK_BUILD_SH" NDK_OUT="$NDK_OUT_ARG" NDK_LIBS_OUT="$NDK_LIBS_ARG" $FF_MAKEFLAGS
+            fi
         ;;
     esac
 }

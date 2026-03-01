@@ -68,6 +68,9 @@ case "$UNAME_S" in
     CYGWIN_NT-*)
         HOST_TAG=windows-x86_64
     ;;
+    MINGW64_NT*|MINGW32_NT*)
+        HOST_TAG=windows-x86_64
+    ;;
     *)
         echo "Unknown host OS: $UNAME_S"
         exit 1
