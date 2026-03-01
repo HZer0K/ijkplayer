@@ -39,6 +39,9 @@ import android.widget.TableLayout;
 import android.widget.TextView;
 import java.util.Locale;
 
+import android.widget.Toast;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 import tv.danmaku.ijk.media.player.misc.ITrackInfo;
 import tv.danmaku.ijk.media.example.R;
@@ -49,6 +52,10 @@ import tv.danmaku.ijk.media.example.widget.media.AndroidMediaController;
 import tv.danmaku.ijk.media.example.widget.media.IjkVideoView;
 import tv.danmaku.ijk.media.example.widget.media.MeasureHelper;
 
+import android.widget.EditText;
+import android.widget.Button;
+import android.text.TextUtils;
+import android.net.Uri;
 public class VideoActivity extends AppCompatActivity implements TracksFragment.ITrackHolder {
     private static final String TAG = "VideoActivity";
 
@@ -152,6 +159,49 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             return;
         }
         mVideoView.start();
+
+        final EditText urlInput = findViewById(R.id.url_input);
+        final Button btnPlay = findViewById(R.id.btn_play_url);
+        if (btnPlay != null) {
+            btnPlay.setOnClickListener(v -> {
+                String url = urlInput != null ? urlInput.getText().toString().trim() : "";
+                if (!TextUtils.isEmpty(url)) {
+                    try {
+                        if (isLikelyMediaUrl(url)) {
+                            mVideoView.stopPlayback();
+                            mVideoView.release(true);
+                            mVideoView.setVideoURI(Uri.parse(url));
+                            mVideoView.start();
+                            new RecentMediaStorage(this).saveUrlAsync(url);
+                        } else {
+                            Toast.makeText(this, "请输入直接视频链接（mp4/m3u8等），当前为网页地址", Toast.LENGTH_SHORT).show();
+                            Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                            startActivity(browser);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "play url error", e);
+                    }
+                }
+            });
+        }
+    }
+
+    private boolean isLikelyMediaUrl(String url) {
+        String lower = url.toLowerCase(Locale.US);
+        if (lower.startsWith("rtmp://") || lower.startsWith("rtsp://"))
+            return true;
+        if (lower.endsWith(".m3u8") || lower.contains(".m3u8?"))
+            return true;
+        if (lower.endsWith(".mp4") || lower.contains(".mp4?"))
+            return true;
+        if (lower.endsWith(".flv") || lower.contains(".flv?"))
+            return true;
+        if (lower.endsWith(".mov") || lower.contains(".mov?"))
+            return true;
+        // simple HLS master manifest hint
+        Pattern p = Pattern.compile("(?i)video|play|stream.*(m3u8|mp4)");
+        Matcher m = p.matcher(lower);
+        return m.find();
     }
 
     @Override

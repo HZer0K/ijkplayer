@@ -158,4 +158,12 @@ public class InfoHudViewHolder {
             }
         }
     };
+
+    public void setBufferPercentage(int percent) {
+        setRowValue(R.string.buffer_percent, String.format(Locale.US, "%d%%", percent));
+    }
+
+    public void setBuffering(String text) {
+        setRowValue(R.string.buffering, text != null ? text : "");
+    }
 }

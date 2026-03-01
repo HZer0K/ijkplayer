@@ -106,6 +106,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     private IMediaPlayer.OnCompletionListener mOnCompletionListener;
     private IMediaPlayer.OnPreparedListener mOnPreparedListener;
     private int mCurrentBufferPercentage;
+    private int mCurrentRetryCount = 0;
     private IMediaPlayer.OnErrorListener mOnErrorListener;
     private IMediaPlayer.OnInfoListener mOnInfoListener;
     private int mSeekWhenPrepared;  // recording the seek position while preparing
@@ -425,6 +426,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         public void onPrepared(IMediaPlayer mp) {
             mPrepareEndTime = System.currentTimeMillis();
             mHudViewHolder.updateLoadCost(mPrepareEndTime - mPrepareStartTime);
+            mCurrentRetryCount = 0;
             mCurrentState = STATE_PREPARED;
 
             // Get the capabilities of the player for this stream
@@ -506,9 +508,11 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                             break;
                         case IMediaPlayer.MEDIA_INFO_BUFFERING_START:
                             Log.d(TAG, "MEDIA_INFO_BUFFERING_START:");
+                            if (mHudViewHolder != null) mHudViewHolder.setBuffering("缓冲中...");
                             break;
                         case IMediaPlayer.MEDIA_INFO_BUFFERING_END:
                             Log.d(TAG, "MEDIA_INFO_BUFFERING_END:");
+                            if (mHudViewHolder != null) mHudViewHolder.setBuffering(null);
                             break;
                         case IMediaPlayer.MEDIA_INFO_NETWORK_BANDWIDTH:
                             Log.d(TAG, "MEDIA_INFO_NETWORK_BANDWIDTH: " + arg2);
@@ -550,6 +554,18 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                     mTargetState = STATE_ERROR;
                     if (mMediaController != null) {
                         mMediaController.hide();
+                    }
+
+                    if (mUri != null && mCurrentRetryCount == 0) {
+                        mCurrentRetryCount = 1;
+                        postDelayed(() -> {
+                            try {
+                                stopPlayback();
+                                release(true);
+                                setVideoURI(mUri);
+                                start();
+                            } catch (Throwable ignored) {}
+                        }, 1500);
                     }
 
                     /* If an error handler has been supplied, use it and finish. */
@@ -598,6 +614,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
             new IMediaPlayer.OnBufferingUpdateListener() {
                 public void onBufferingUpdate(IMediaPlayer mp, int percent) {
                     mCurrentBufferPercentage = percent;
+                    if (mHudViewHolder != null) mHudViewHolder.setBufferPercentage(percent);
                 }
             };
 
@@ -1048,6 +1065,18 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
     public IMediaPlayer createPlayer(int playerType) {
         IMediaPlayer mediaPlayer = null;
+
+        // prefer ExoPlayer for http/https URLs to support HTTPS/HLS robustly
+        if (mUri != null) {
+            String scheme = mUri.getScheme();
+            if (scheme != null) {
+                String lower = scheme.toLowerCase(Locale.US);
+                if (lower.equals("http") || lower.equals("https")) {
+                    IjkExoMediaPlayer2 exoPlayer = new IjkExoMediaPlayer2(mAppContext);
+                    return exoPlayer;
+                }
+            }
+        }
 
         switch (playerType) {
             case Settings.PV_PLAYER__IjkExoMediaPlayer: {
