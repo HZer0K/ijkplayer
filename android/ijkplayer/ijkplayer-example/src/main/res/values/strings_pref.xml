@@ -37,6 +37,11 @@
     <string name="pref_title_prefer_exo_http">Prefer Exo for HTTP/HTTPS</string>
     <string name="pref_summary_prefer_exo_http">Use ExoPlayer for http/https URLs, fallback to Ijk otherwise</string>
 
+    <!-- Vulkan filter -->
+    <string name="pref_key_enable_vulkan_filter">pref.enable_vulkan_filter</string>
+    <string name="pref_title_enable_vulkan_filter">Enable Vulkan scale filter</string>
+    <string name="pref_summary_enable_vulkan_filter">Try scale_vulkan; fallback automatically if unsupported</string>
+
     <!-- -->
     <string name="pref_title_ijkplayer_video">Video: ijkplayer</string>
 

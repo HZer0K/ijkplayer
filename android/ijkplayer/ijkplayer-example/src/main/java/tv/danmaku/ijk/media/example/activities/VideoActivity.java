@@ -184,6 +184,30 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 }
             });
         }
+        final Button btnHls = findViewById(R.id.btn_demo_hls);
+        if (btnHls != null) {
+            btnHls.setOnClickListener(v -> {
+                String url = "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8";
+                if (urlInput != null) urlInput.setText(url);
+                mVideoView.stopPlayback();
+                mVideoView.release(true);
+                mVideoView.setVideoURI(Uri.parse(url));
+                mVideoView.start();
+                new RecentMediaStorage(this).saveUrlAsync(url);
+            });
+        }
+        final Button btnMp4 = findViewById(R.id.btn_demo_mp4);
+        if (btnMp4 != null) {
+            btnMp4.setOnClickListener(v -> {
+                String url = "https://media.w3.org/2010/05/sintel/trailer.mp4";
+                if (urlInput != null) urlInput.setText(url);
+                mVideoView.stopPlayback();
+                mVideoView.release(true);
+                mVideoView.setVideoURI(Uri.parse(url));
+                mVideoView.start();
+                new RecentMediaStorage(this).saveUrlAsync(url);
+            });
+        }
     }
 
     private boolean isLikelyMediaUrl(String url) {

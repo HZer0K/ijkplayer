@@ -22,6 +22,12 @@
             android:persistent="true"
             android:summary="@string/pref_summary_prefer_exo_http"
             android:title="@string/pref_title_prefer_exo_http" />
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="@string/pref_key_enable_vulkan_filter"
+            android:persistent="true"
+            android:summary="@string/pref_summary_enable_vulkan_filter"
+            android:title="@string/pref_title_enable_vulkan_filter" />
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/pref_title_ijkplayer_video">
         <CheckBoxPreference

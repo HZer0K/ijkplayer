@@ -40,6 +40,16 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="播放"/>
+            <Button
+                android:id="@+id/btn_demo_hls"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="HLS样例"/>
+            <Button
+                android:id="@+id/btn_demo_mp4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="MP4样例"/>
         </LinearLayout>
 
         <TextView

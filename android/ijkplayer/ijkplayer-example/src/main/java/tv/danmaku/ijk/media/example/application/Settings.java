@@ -107,6 +107,11 @@ public class Settings {
         return mSharedPreferences.getBoolean(key, true);
     }
 
+    public boolean getEnableVulkanFilter() {
+        String key = mAppContext.getString(R.string.pref_key_enable_vulkan_filter);
+        return mSharedPreferences.getBoolean(key, false);
+    }
+
     public String getLastDirectory() {
         String key = mAppContext.getString(R.string.pref_key_last_directory);
         return mSharedPreferences.getString(key, "/");

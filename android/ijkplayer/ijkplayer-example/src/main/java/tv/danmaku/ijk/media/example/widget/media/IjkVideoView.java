@@ -41,6 +41,7 @@ import android.widget.FrameLayout;
 import android.widget.MediaController;
 import android.widget.TableLayout;
 import android.widget.TextView;
+import android.content.pm.PackageManager;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -1135,6 +1136,9 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                     ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "http-detect-range-support", 0);
 
                     ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_CODEC, "skip_loop_filter", 48);
+                    if (mSettings.getEnableVulkanFilter() && deviceSupportsVulkan()) {
+                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "vf0", "scale_vulkan=iw:ih");
+                    }
                 }
                 mediaPlayer = ijkMediaPlayer;
             }
@@ -1146,6 +1150,17 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         }
 
         return mediaPlayer;
+    }
+
+    private boolean deviceSupportsVulkan() {
+        try {
+            PackageManager pm = mAppContext.getPackageManager();
+            boolean hasLevel = pm.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL);
+            boolean hasVersion = pm.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION);
+            return hasLevel || hasVersion;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     public String captureFrame(Context context) {
