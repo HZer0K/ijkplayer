@@ -8,7 +8,6 @@ MY_APP_FFMPEG_OUTPUT_PATH := $(realpath $(MY_APP_ANDROID_ROOT)/contrib/build/ffm
 MY_APP_FFMPEG_INCLUDE_PATH := $(realpath $(MY_APP_FFMPEG_OUTPUT_PATH)/include)
 MY_APP_FFMPEG_SOURCE_PATH := $(realpath $(MY_APP_ANDROID_ROOT)/contrib/ffmpeg-arm64)
 
-include $(call all-subdir-makefiles)
-
 MY_IJKMEDIA_DIR := $(realpath $(MY_APP_ANDROID_ROOT)/../ijkmedia)
+include $(LOCAL_PATH)/ffmpeg/Android.mk
 include $(MY_IJKMEDIA_DIR)/Android.mk

@@ -39,6 +39,7 @@
 #include "libavutil/opt.h"
 #include "libavutil/version.h"
 #include "libswresample/swresample.h"
+#include "libavutil/channel_layout.h"
 
 #include "ijksdl/ijksdl.h"
 
@@ -144,6 +145,35 @@ static inline int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, 
         return 0;
     }
     return ret;
+}
+
+static inline int ijk_av_channel_layout_nb_channels(uint64_t mask) {
+    AVChannelLayout l = {0};
+    if (av_channel_layout_from_mask(&l, mask) < 0) return 0;
+    return l.nb_channels;
+}
+static inline int64_t ijk_av_get_default_channel_layout(int nb) {
+    AVChannelLayout l = {0};
+    av_channel_layout_default(&l, nb);
+    return l.u.mask;
+}
+static inline struct SwrContext* ijk_swr_alloc_set_opts(struct SwrContext* s, int64_t out_ch_layout, enum AVSampleFormat out_fmt, int out_rate, int64_t in_ch_layout, enum AVSampleFormat in_fmt, int in_rate, int log_offset, void* log_ctx) {
+    struct SwrContext *ctx = NULL;
+    AVChannelLayout outl = {0}, inl = {0};
+    av_channel_layout_from_mask(&outl, out_ch_layout);
+    av_channel_layout_from_mask(&inl, in_ch_layout);
+    if (swr_alloc_set_opts2(&ctx, &outl, out_fmt, out_rate, &inl, in_fmt, in_rate, log_offset, log_ctx) < 0) return NULL;
+    return ctx;
+}
+
+#define IJK_CODEC_PAR_CHANNELS(cp) ((cp)->ch_layout.nb_channels)
+#define IJK_CODEC_PAR_CH_LAYOUT(cp) ((cp)->ch_layout.u.mask)
+#define IJK_FRAME_CHANNELS(f) ((f)->ch_layout.nb_channels)
+#define IJK_FRAME_CH_LAYOUT(f) ((f)->ch_layout.u.mask)
+
+/* wrapper for global side data injection: safe no-op for portability */
+static inline void ijk_avformat_inject_global_side_data(AVFormatContext *ic) {
+    (void)ic;
 }
 
 #endif

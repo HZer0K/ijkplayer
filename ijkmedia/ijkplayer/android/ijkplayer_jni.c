@@ -1057,6 +1057,9 @@ LABEL_RETURN:
 void monstartup(const char *libname);
 void moncleanup(void);
 
+__attribute__((weak)) void monstartup(const char *libname) { (void)libname; }
+__attribute__((weak)) void moncleanup(void) {}
+
 static void
 IjkMediaPlayer_native_profileBegin(JNIEnv *env, jclass clazz, jstring libName)
 {

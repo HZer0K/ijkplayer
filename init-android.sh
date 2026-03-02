@@ -19,7 +19,7 @@
 # IJK_FFMPEG_UPSTREAM=git://git.videolan.org/ffmpeg.git
 IJK_FFMPEG_UPSTREAM=https://github.com/FFmpeg/FFmpeg.git
 IJK_FFMPEG_FORK=https://github.com/FFmpeg/FFmpeg.git
-IJK_FFMPEG_COMMIT=n5.1.4
+IJK_FFMPEG_COMMIT=n8.0
 IJK_FFMPEG_LOCAL_REPO=extra/ffmpeg
 
 set -e
@@ -54,10 +54,8 @@ function pull_fork()
     cd -
 }
 
-pull_fork "armv7a"
+# Only pull arm64 for current project target
 pull_fork "arm64"
-pull_fork "x86"
-pull_fork "x86_64"
 
 ./init-config.sh
 ./init-android-libyuv.sh

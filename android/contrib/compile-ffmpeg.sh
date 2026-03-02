@@ -61,18 +61,18 @@ echo_nextstep_help() {
 case "$FF_TARGET" in
     "")
         echo_archs arm64
-        sh tools/do-compile-ffmpeg.sh arm64
+        bash tools/do-compile-ffmpeg.sh arm64
     ;;
     arm64)
         echo_archs $FF_TARGET $FF_TARGET_EXTRA
-        sh tools/do-compile-ffmpeg.sh $FF_TARGET $FF_TARGET_EXTRA
+        bash tools/do-compile-ffmpeg.sh $FF_TARGET $FF_TARGET_EXTRA
         echo_nextstep_help
     ;;
     all|all64)
         echo_archs $FF_ACT_ARCHS_64
         for ARCH in $FF_ACT_ARCHS_64
         do
-            sh tools/do-compile-ffmpeg.sh $ARCH $FF_TARGET_EXTRA
+            bash tools/do-compile-ffmpeg.sh $ARCH $FF_TARGET_EXTRA
         done
         echo_nextstep_help
     ;;

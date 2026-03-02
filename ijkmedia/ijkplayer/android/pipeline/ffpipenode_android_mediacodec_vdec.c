@@ -36,6 +36,8 @@
 #include "mpeg4_esds.h"
 #include "ffpipeline_android.h"
 #include "ijkplayer/ff_ffinc.h"
+#include "libavcodec/avcodec.h"
+#include "libavcodec/profiles.h"
 
 #define AMC_USE_AVBITSTREAM_FILTER 0
 #ifndef AMCTRACE
@@ -1716,45 +1718,71 @@ int ffpipenode_config_from_android_mediacodec(FFPlayer *ffp, IJKFF_Pipeline *pip
             goto fail;
         }
         switch (opaque->codecpar->profile) {
+#if defined(FF_PROFILE_H264_BASELINE)
             case FF_PROFILE_H264_BASELINE:
                 ALOGI("%s: MediaCodec: H264_BASELINE: enabled\n", __func__);
                 break;
+#endif
+#if defined(FF_PROFILE_H264_CONSTRAINED_BASELINE)
             case FF_PROFILE_H264_CONSTRAINED_BASELINE:
                 ALOGI("%s: MediaCodec: H264_CONSTRAINED_BASELINE: enabled\n", __func__);
                 break;
+#endif
+#if defined(FF_PROFILE_H264_MAIN)
             case FF_PROFILE_H264_MAIN:
                 ALOGI("%s: MediaCodec: H264_MAIN: enabled\n", __func__);
                 break;
+#endif
+#if defined(FF_PROFILE_H264_EXTENDED)
             case FF_PROFILE_H264_EXTENDED:
                 ALOGI("%s: MediaCodec: H264_EXTENDED: enabled\n", __func__);
                 break;
+#endif
+#if defined(FF_PROFILE_H264_HIGH)
             case FF_PROFILE_H264_HIGH:
                 ALOGI("%s: MediaCodec: H264_HIGH: enabled\n", __func__);
                 break;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_10)
             case FF_PROFILE_H264_HIGH_10:
                 ALOGW("%s: MediaCodec: H264_HIGH_10: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_10_INTRA)
             case FF_PROFILE_H264_HIGH_10_INTRA:
                 ALOGW("%s: MediaCodec: H264_HIGH_10_INTRA: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_422)
             case FF_PROFILE_H264_HIGH_422:
                 ALOGW("%s: MediaCodec: H264_HIGH_10_422: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_422_INTRA)
             case FF_PROFILE_H264_HIGH_422_INTRA:
                 ALOGW("%s: MediaCodec: H264_HIGH_10_INTRA: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_444)
             case FF_PROFILE_H264_HIGH_444:
                 ALOGW("%s: MediaCodec: H264_HIGH_10_444: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_444_PREDICTIVE)
             case FF_PROFILE_H264_HIGH_444_PREDICTIVE:
                 ALOGW("%s: MediaCodec: H264_HIGH_444_PREDICTIVE: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_444_INTRA)
             case FF_PROFILE_H264_HIGH_444_INTRA:
                 ALOGW("%s: MediaCodec: H264_HIGH_444_INTRA: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_CAVLC_444)
             case FF_PROFILE_H264_CAVLC_444:
                 ALOGW("%s: MediaCodec: H264_CAVLC_444: disabled\n", __func__);
                 goto fail;
+#endif
             default:
                 ALOGW("%s: MediaCodec: (%d) unknown profile: disabled\n", __func__, opaque->codecpar->profile);
                 goto fail;
@@ -1950,45 +1978,71 @@ IJKFF_Pipenode *ffpipenode_create_video_decoder_from_android_mediacodec(FFPlayer
             goto fail;
         }
         switch (opaque->codecpar->profile) {
+#if defined(FF_PROFILE_H264_BASELINE)
             case FF_PROFILE_H264_BASELINE:
                 ALOGI("%s: MediaCodec: H264_BASELINE: enabled\n", __func__);
                 break;
+#endif
+#if defined(FF_PROFILE_H264_CONSTRAINED_BASELINE)
             case FF_PROFILE_H264_CONSTRAINED_BASELINE:
                 ALOGI("%s: MediaCodec: H264_CONSTRAINED_BASELINE: enabled\n", __func__);
                 break;
+#endif
+#if defined(FF_PROFILE_H264_MAIN)
             case FF_PROFILE_H264_MAIN:
                 ALOGI("%s: MediaCodec: H264_MAIN: enabled\n", __func__);
                 break;
+#endif
+#if defined(FF_PROFILE_H264_EXTENDED)
             case FF_PROFILE_H264_EXTENDED:
                 ALOGI("%s: MediaCodec: H264_EXTENDED: enabled\n", __func__);
                 break;
+#endif
+#if defined(FF_PROFILE_H264_HIGH)
             case FF_PROFILE_H264_HIGH:
                 ALOGI("%s: MediaCodec: H264_HIGH: enabled\n", __func__);
                 break;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_10)
             case FF_PROFILE_H264_HIGH_10:
                 ALOGW("%s: MediaCodec: H264_HIGH_10: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_10_INTRA)
             case FF_PROFILE_H264_HIGH_10_INTRA:
                 ALOGW("%s: MediaCodec: H264_HIGH_10_INTRA: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_422)
             case FF_PROFILE_H264_HIGH_422:
                 ALOGW("%s: MediaCodec: H264_HIGH_10_422: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_422_INTRA)
             case FF_PROFILE_H264_HIGH_422_INTRA:
                 ALOGW("%s: MediaCodec: H264_HIGH_10_INTRA: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_444)
             case FF_PROFILE_H264_HIGH_444:
                 ALOGW("%s: MediaCodec: H264_HIGH_10_444: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_444_PREDICTIVE)
             case FF_PROFILE_H264_HIGH_444_PREDICTIVE:
                 ALOGW("%s: MediaCodec: H264_HIGH_444_PREDICTIVE: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_HIGH_444_INTRA)
             case FF_PROFILE_H264_HIGH_444_INTRA:
                 ALOGW("%s: MediaCodec: H264_HIGH_444_INTRA: disabled\n", __func__);
                 goto fail;
+#endif
+#if defined(FF_PROFILE_H264_CAVLC_444)
             case FF_PROFILE_H264_CAVLC_444:
                 ALOGW("%s: MediaCodec: H264_CAVLC_444: disabled\n", __func__);
                 goto fail;
+#endif
             default:
                 ALOGW("%s: MediaCodec: (%d) unknown profile: disabled\n", __func__, opaque->codecpar->profile);
                 goto fail;

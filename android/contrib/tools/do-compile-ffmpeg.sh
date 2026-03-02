@@ -128,7 +128,7 @@ elif [ "$FF_ARCH" = "x86_64" ]; then
     FF_ASSEMBLER_SUB_DIRS=""
 
 elif [ "$FF_ARCH" = "arm64" ]; then
-    API_LEVEL=21
+    API_LEVEL=24
 
     FF_BUILD_NAME=ffmpeg-arm64
     FF_BUILD_NAME_OPENSSL=openssl-arm64
@@ -152,11 +152,25 @@ fi
 
 if [ ! -d $FF_SOURCE ]; then
     echo ""
-    echo "!! ERROR"
-    echo "!! Can not find FFmpeg directory for $FF_BUILD_NAME"
-    echo "!! Run 'sh init-android.sh' first"
+    echo "[*] fetch FFmpeg 8.0 source"
     echo ""
-    exit 1
+    FF_VER=8.0
+    FF_TAR=$FF_BUILD_ROOT/ffmpeg-$FF_VER.tar.gz
+    FF_URL=https://ffmpeg.org/releases/ffmpeg-$FF_VER.tar.gz
+    if command -v curl >/dev/null 2>&1; then
+        curl -L "$FF_URL" -o "$FF_TAR"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -O "$FF_TAR" "$FF_URL"
+    else
+        if [ "$UNAME_S" = "CYGWIN_NT-" ] || [[ "$UNAME_S" == MINGW* ]]; then
+            powershell.exe -NoProfile -Command "Invoke-WebRequest -Uri '$FF_URL' -OutFile '$FF_TAR'"
+        else
+            echo "No curl/wget found to download FFmpeg"
+            exit 1
+        fi
+    fi
+    tar -xzf "$FF_TAR" -C "$FF_BUILD_ROOT"
+    mv "$FF_BUILD_ROOT/ffmpeg-$FF_VER" "$FF_SOURCE"
 fi
 
 FF_TOOLCHAIN_PATH=$FF_BUILD_ROOT/build/$FF_BUILD_NAME/toolchain
@@ -259,6 +273,54 @@ fi
 
 FF_CFG_FLAGS="$FF_CFG_FLAGS $COMMON_FF_CFG_FLAGS"
 
+# Vulkan support (conditionally enable based on NDK headers)
+FF_ENABLE_VULKAN=1
+# Require vk_video AV1 headers and newer core extension macros
+if [ ! -f "$FF_SYSROOT/usr/include/vk_video/vulkan_video_codec_av1std.h" ]; then
+    FF_ENABLE_VULKAN=0
+elif ! grep -q "VK_KHR_SHADER_SUBGROUP_ROTATE_EXTENSION_NAME" "$FF_SYSROOT/usr/include/vulkan/vulkan_core.h" 2>/dev/null; then
+    FF_ENABLE_VULKAN=0
+fi
+if [ "$FF_ENABLE_VULKAN" = "1" ]; then
+    FF_CFG_FLAGS="$FF_CFG_FLAGS --enable-vulkan"
+    FF_DEP_LIBS="$FF_DEP_LIBS -lvulkan"
+    # Prefer vendored Vulkan-Headers if NDK headers are old
+    VULKAN_HEADERS_VER=1.3.280
+    VULKAN_HEADERS_DIR="$FF_BUILD_ROOT/build/vulkan-headers/vulkan-headers-$VULKAN_HEADERS_VER"
+    if [ ! -f "$FF_SYSROOT/usr/include/vk_video/vulkan_video_codec_av1std.h" ] || \
+       ! grep -q "VK_KHR_SHADER_SUBGROUP_ROTATE_EXTENSION_NAME" "$FF_SYSROOT/usr/include/vulkan/vulkan_core.h" 2>/dev/null ; then
+        echo "Fetching Vulkan-Headers v$VULKAN_HEADERS_VER"
+        mkdir -p "$FF_BUILD_ROOT/build/vulkan-headers"
+        VH_TAR="$FF_BUILD_ROOT/build/vulkan-headers/vulkan-headers-$VULKAN_HEADERS_VER.tar.gz"
+        VH_URL="https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v$VULKAN_HEADERS_VER.tar.gz"
+        if command -v curl >/dev/null 2>&1; then
+            curl -L "$VH_URL" -o "$VH_TAR"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -O "$VH_TAR" "$VH_URL"
+        else
+            echo "No curl/wget to download Vulkan-Headers"; exit 1
+        fi
+        tar -xzf "$VH_TAR" -C "$FF_BUILD_ROOT/build/vulkan-headers"
+    fi
+    if [ -d "$VULKAN_HEADERS_DIR/include" ]; then
+        FF_CFLAGS="-I$VULKAN_HEADERS_DIR/include $FF_CFLAGS"
+        echo "Using vendored Vulkan-Headers includes: $VULKAN_HEADERS_DIR/include"
+    fi
+    # Enable beta extensions for video decode headers (AV1, etc.)
+    FF_CFLAGS="$FF_CFLAGS -DVK_ENABLE_BETA_EXTENSIONS=1"
+else
+    echo "Vulkan headers not sufficient in NDK; disabling Vulkan in FFmpeg build"
+    FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-vulkan"
+fi
+
+# Android 不使用桌面/Windows 硬件解码加速，避免未定义宏导致编译失败（不影响 Vulkan 滤镜）
+FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-hwaccels"
+# 显式禁用 Vulkan video 编解码，保留 Vulkan 滤镜与设备
+FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-decoder=av1_vulkan,h264_vulkan,hevc_vulkan"
+FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-encoder=av1_vulkan,h264_vulkan,hevc_vulkan"
+# 保险起见补充相关宏为0，规避上游宏缺省（仅在某些路径仍引用时有效）
+FF_CFLAGS="$FF_CFLAGS -DCONFIG_HEVC_D3D12VA_HWACCEL=0 -DCONFIG_HEVC_VULKAN_HWACCEL=0 -DCONFIG_VULKAN_VERSION=1"
+
 #--------------------
 # Standard options:
 FF_CFG_FLAGS="$FF_CFG_FLAGS --prefix=$FF_PREFIX"
@@ -328,30 +390,20 @@ echo "[*] link ffmpeg"
 echo "--------------------"
 echo $FF_EXTRA_LDFLAGS
 
-FF_C_OBJ_FILES=
-FF_ASM_OBJ_FILES=
-for MODULE_DIR in $FF_MODULE_DIRS
-do
-    C_OBJ_FILES="$MODULE_DIR/*.o"
-    if ls $C_OBJ_FILES 1> /dev/null 2>&1; then
-        echo "link $MODULE_DIR/*.o"
-        FF_C_OBJ_FILES="$FF_C_OBJ_FILES $C_OBJ_FILES"
-    fi
-
-    for ASM_SUB_DIR in $FF_ASSEMBLER_SUB_DIRS
-    do
-        ASM_OBJ_FILES="$MODULE_DIR/$ASM_SUB_DIR/*.o"
-        if ls $ASM_OBJ_FILES 1> /dev/null 2>&1; then
-            echo "link $MODULE_DIR/$ASM_SUB_DIR/*.o"
-            FF_ASM_OBJ_FILES="$FF_ASM_OBJ_FILES $ASM_OBJ_FILES"
-        fi
-    done
-done
+# Prefer linking against static libs to include all subdir objects (FFmpeg 8 reorganized)
+FF_LIB_DIR="$FF_PREFIX/lib"
+AVCODEC_A="$FF_LIB_DIR/libavcodec.a"
+AVFILTER_A="$FF_LIB_DIR/libavfilter.a"
+AVFORMAT_A="$FF_LIB_DIR/libavformat.a"
+AVUTIL_A="$FF_LIB_DIR/libavutil.a"
+SWR_A="$FF_LIB_DIR/libswresample.a"
+SWS_A="$FF_LIB_DIR/libswscale.a"
 
 $CC -lm -lz -shared --sysroot=$FF_SYSROOT -Wl,--no-undefined -Wl,-z,noexecstack $FF_EXTRA_LDFLAGS \
     -Wl,-soname,libijkffmpeg.so \
-    $FF_C_OBJ_FILES \
-    $FF_ASM_OBJ_FILES \
+    -Wl,--whole-archive \
+    "$AVCODEC_A" "$AVFILTER_A" "$AVFORMAT_A" "$SWR_A" "$SWS_A" "$AVUTIL_A" \
+    -Wl,--no-whole-archive \
     $FF_DEP_LIBS \
     -o $FF_PREFIX/libijkffmpeg.so
 
