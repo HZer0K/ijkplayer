@@ -16,6 +16,12 @@
             android:persistent="true"
             android:title="@string/pref_title_player"
             app:entrySummaries="@array/pref_entry_summaries_player" />
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="@string/pref_key_prefer_exo_http"
+            android:persistent="true"
+            android:summary="@string/pref_summary_prefer_exo_http"
+            android:title="@string/pref_title_prefer_exo_http" />
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/pref_title_ijkplayer_video">
         <CheckBoxPreference

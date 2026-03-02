@@ -1066,8 +1066,8 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     public IMediaPlayer createPlayer(int playerType) {
         IMediaPlayer mediaPlayer = null;
 
-        // prefer ExoPlayer for http/https URLs to support HTTPS/HLS robustly
-        if (mUri != null) {
+        // optionally prefer ExoPlayer for http/https URLs to support HTTPS/HLS robustly
+        if (mUri != null && mSettings != null && mSettings.getPreferExoForHttp()) {
             String scheme = mUri.getScheme();
             if (scheme != null) {
                 String lower = scheme.toLowerCase(Locale.US);

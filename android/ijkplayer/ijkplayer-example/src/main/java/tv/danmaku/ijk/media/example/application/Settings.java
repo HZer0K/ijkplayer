@@ -102,6 +102,11 @@ public class Settings {
         return mSharedPreferences.getBoolean(key, false);
     }
 
+    public boolean getPreferExoForHttp() {
+        String key = mAppContext.getString(R.string.pref_key_prefer_exo_http);
+        return mSharedPreferences.getBoolean(key, true);
+    }
+
     public String getLastDirectory() {
         String key = mAppContext.getString(R.string.pref_key_last_directory);
         return mSharedPreferences.getString(key, "/");
