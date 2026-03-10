@@ -38,6 +38,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import tv.danmaku.ijk.media.example.R;
 import tv.danmaku.ijk.media.example.activities.VideoActivity;
@@ -71,6 +75,8 @@ public class SampleMediaListFragment extends Fragment {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, final int position, final long id) {
                 SampleMediaItem item = mAdapter.getItem(position);
+                if (item == null || item.mIsHeader)
+                    return;
                 String name = item.mName;
                 String url = item.mPlayUrl;
                 VideoActivity.intentTo(activity, url, name);
@@ -85,6 +91,7 @@ public class SampleMediaListFragment extends Fragment {
             return;
 
         try {
+            LinkedHashMap<String, List<SampleMediaItem>> grouped = new LinkedHashMap<>();
             JSONArray array = new JSONArray(json);
             for (int i = 0; i < array.length(); i++) {
                 JSONObject obj = array.optJSONObject(i);
@@ -95,24 +102,59 @@ public class SampleMediaListFragment extends Fragment {
                 String url = obj.optString("url", "");
                 String type = obj.optString("type", "");
                 String manifestRes = obj.optString("manifestRes", "");
+                String category = obj.optString("category", "");
+                String recommendedPlayer = obj.optString("recommendedPlayer", "");
+                boolean requiresExo = obj.optBoolean("requiresExo", false);
+
+                if (category == null || category.trim().isEmpty())
+                    category = "Other";
+
+                if (!grouped.containsKey(category))
+                    grouped.put(category, new ArrayList<>());
 
                 if ("ijklas_manifest".equals(type) && manifestRes != null && !manifestRes.isEmpty()) {
                     int resId = context.getResources().getIdentifier(manifestRes, "raw", context.getPackageName());
                     String manifestString = resId != 0 ? readRawText(context, resId) : null;
                     if (manifestString != null) {
-                        mAdapter.addItem(manifestString, "ijklas:(manifest_string)", name);
+                        grouped.get(category).add(SampleMediaItem.createSample(manifestString, "ijklas:(manifest_string)", formatName(name, recommendedPlayer, requiresExo)));
                     }
                     continue;
                 }
 
                 if (url != null && !url.isEmpty()) {
                     String displayUrl = obj.optString("displayUrl", url);
-                    mAdapter.addItem(url, displayUrl, name);
+                    grouped.get(category).add(SampleMediaItem.createSample(url, displayUrl, formatName(name, recommendedPlayer, requiresExo)));
+                }
+            }
+
+            for (Map.Entry<String, List<SampleMediaItem>> entry : grouped.entrySet()) {
+                String category = entry.getKey();
+                List<SampleMediaItem> items = entry.getValue();
+                if (items == null || items.isEmpty())
+                    continue;
+
+                mAdapter.add(SampleMediaItem.createHeader(category));
+                for (SampleMediaItem item : items) {
+                    mAdapter.add(item);
                 }
             }
         } catch (JSONException e) {
             // ignore
         }
+    }
+
+    private String formatName(String name, String recommendedPlayer, boolean requiresExo) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(name != null ? name : "");
+        if (recommendedPlayer != null && !recommendedPlayer.isEmpty()) {
+            sb.append("  [推荐:");
+            sb.append(recommendedPlayer.toUpperCase());
+            sb.append("]");
+        }
+        if (requiresExo) {
+            sb.append("  [需EXO]");
+        }
+        return sb.toString();
     }
 
     private String readRawText(Context context, int resId) {
@@ -142,11 +184,22 @@ public class SampleMediaListFragment extends Fragment {
         String mPlayUrl;
         String mDisplayUrl;
         String mName;
+        boolean mIsHeader;
 
         public SampleMediaItem(String playUrl, String displayUrl, String name) {
             mPlayUrl = playUrl;
             mDisplayUrl = displayUrl;
             mName = name;
+        }
+
+        public static SampleMediaItem createHeader(String title) {
+            SampleMediaItem item = new SampleMediaItem("", "", title);
+            item.mIsHeader = true;
+            return item;
+        }
+
+        public static SampleMediaItem createSample(String playUrl, String displayUrl, String name) {
+            return new SampleMediaItem(playUrl, displayUrl, name);
         }
     }
 
@@ -169,7 +222,30 @@ public class SampleMediaListFragment extends Fragment {
         }
 
         @Override
+        public int getViewTypeCount() {
+            return 2;
+        }
+
+        @Override
+        public int getItemViewType(int position) {
+            SampleMediaItem item = getItem(position);
+            return (item != null && item.mIsHeader) ? 0 : 1;
+        }
+
+        @Override
         public View getView(int position, View convertView, ViewGroup parent) {
+            SampleMediaItem item = getItem(position);
+            if (item != null && item.mIsHeader) {
+                View view = convertView;
+                if (view == null) {
+                    LayoutInflater inflater = LayoutInflater.from(parent.getContext());
+                    view = inflater.inflate(android.R.layout.simple_list_item_1, parent, false);
+                }
+                TextView textView = (TextView) view.findViewById(android.R.id.text1);
+                textView.setText(item.mName);
+                return view;
+            }
+
             View view = convertView;
             if (view == null) {
                 LayoutInflater inflater = LayoutInflater.from(parent.getContext());
@@ -183,7 +259,6 @@ public class SampleMediaListFragment extends Fragment {
                 viewHolder.mUrlTextView = (TextView) view.findViewById(android.R.id.text2);
             }
 
-            SampleMediaItem item = getItem(position);
             viewHolder.mNameTextView.setText(item.mName);
             viewHolder.mUrlTextView.setText(item.mDisplayUrl);
 
