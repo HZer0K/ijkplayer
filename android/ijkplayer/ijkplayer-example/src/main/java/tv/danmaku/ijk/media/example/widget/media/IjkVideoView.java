@@ -55,7 +55,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import tv.danmaku.ijk.media.exo.IjkExoMediaPlayer2;
+import tv.danmaku.ijk.media.exo.IjkExoMediaPlayer;
 import tv.danmaku.ijk.media.player.AndroidMediaPlayer;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
@@ -1073,7 +1073,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
             if (scheme != null) {
                 String lower = scheme.toLowerCase(Locale.US);
                 if (lower.equals("http") || lower.equals("https")) {
-                    IjkExoMediaPlayer2 exoPlayer = new IjkExoMediaPlayer2(mAppContext);
+                    IjkExoMediaPlayer exoPlayer = new IjkExoMediaPlayer(mAppContext);
                     return exoPlayer;
                 }
             }
@@ -1081,7 +1081,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
         switch (playerType) {
             case Settings.PV_PLAYER__IjkExoMediaPlayer: {
-                IjkExoMediaPlayer2 exoPlayer = new IjkExoMediaPlayer2(mAppContext);
+                IjkExoMediaPlayer exoPlayer = new IjkExoMediaPlayer(mAppContext);
                 mediaPlayer = exoPlayer;
             }
             break;

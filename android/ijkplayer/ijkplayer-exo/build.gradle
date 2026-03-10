@@ -15,7 +15,6 @@ android {
         main {
             java {
                 exclude 'tv/danmaku/ijk/media/exo/demo/**'
-                exclude 'tv/danmaku/ijk/media/exo/IjkExoMediaPlayer.java'
             }
         }
     }
