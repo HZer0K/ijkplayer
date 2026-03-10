@@ -29,6 +29,7 @@ import androidx.fragment.app.FragmentTransaction;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import android.text.TextUtils;
 import android.util.Log;
@@ -52,10 +53,6 @@ import tv.danmaku.ijk.media.example.widget.media.AndroidMediaController;
 import tv.danmaku.ijk.media.example.widget.media.IjkVideoView;
 import tv.danmaku.ijk.media.example.widget.media.MeasureHelper;
 
-import android.widget.EditText;
-import android.widget.Button;
-import android.text.TextUtils;
-import android.net.Uri;
 public class VideoActivity extends AppCompatActivity implements TracksFragment.ITrackHolder {
     private static final String TAG = "VideoActivity";
 
@@ -159,55 +156,44 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             return;
         }
         mVideoView.start();
+        mMediaController.show();
+    }
 
-        final EditText urlInput = findViewById(R.id.url_input);
-        final Button btnPlay = findViewById(R.id.btn_play_url);
-        if (btnPlay != null) {
-            btnPlay.setOnClickListener(v -> {
-                String url = urlInput != null ? urlInput.getText().toString().trim() : "";
-                if (!TextUtils.isEmpty(url)) {
-                    try {
-                        if (isLikelyMediaUrl(url)) {
-                            mVideoView.stopPlayback();
-                            mVideoView.release(true);
-                            mVideoView.setVideoURI(Uri.parse(url));
-                            mVideoView.start();
-                            new RecentMediaStorage(this).saveUrlAsync(url);
-                        } else {
-                            Toast.makeText(this, "请输入直接视频链接（mp4/m3u8等），当前为网页地址", Toast.LENGTH_SHORT).show();
-                            Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                            startActivity(browser);
-                        }
-                    } catch (Exception e) {
-                        Log.e(TAG, "play url error", e);
-                    }
-                }
-            });
-        }
-        final Button btnHls = findViewById(R.id.btn_demo_hls);
-        if (btnHls != null) {
-            btnHls.setOnClickListener(v -> {
-                String url = "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8";
-                if (urlInput != null) urlInput.setText(url);
+    private void playUrl(String url) {
+        if (TextUtils.isEmpty(url))
+            return;
+        try {
+            if (isLikelyMediaUrl(url)) {
                 mVideoView.stopPlayback();
                 mVideoView.release(true);
                 mVideoView.setVideoURI(Uri.parse(url));
                 mVideoView.start();
                 new RecentMediaStorage(this).saveUrlAsync(url);
-            });
+            } else {
+                Toast.makeText(this, "请输入直接视频链接（mp4/m3u8等），当前为网页地址", Toast.LENGTH_SHORT).show();
+                Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                startActivity(browser);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "play url error", e);
         }
-        final Button btnMp4 = findViewById(R.id.btn_demo_mp4);
-        if (btnMp4 != null) {
-            btnMp4.setOnClickListener(v -> {
-                String url = "https://media.w3.org/2010/05/sintel/trailer.mp4";
-                if (urlInput != null) urlInput.setText(url);
-                mVideoView.stopPlayback();
-                mVideoView.release(true);
-                mVideoView.setVideoURI(Uri.parse(url));
-                mVideoView.start();
-                new RecentMediaStorage(this).saveUrlAsync(url);
-            });
-        }
+    }
+
+    private void showOpenUrlDialog() {
+        final android.widget.EditText input = new android.widget.EditText(this);
+        String current = mVideoPath != null ? mVideoPath : (mVideoUri != null ? mVideoUri.toString() : "");
+        input.setText(current);
+        input.setSingleLine(true);
+
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.open_url))
+                .setView(input)
+                .setPositiveButton("播放", (d, which) -> {
+                    String url = input.getText() != null ? input.getText().toString().trim() : "";
+                    playUrl(url);
+                })
+                .setNegativeButton(getString(R.string.close), null)
+                .show();
     }
 
     private boolean isLikelyMediaUrl(String url) {
@@ -258,7 +244,16 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.action_toggle_ratio) {
+        if (id == R.id.action_open_url) {
+            showOpenUrlDialog();
+            return true;
+        } else if (id == R.id.action_demo_hls) {
+            playUrl("https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8");
+            return true;
+        } else if (id == R.id.action_demo_mp4) {
+            playUrl("https://media.w3.org/2010/05/sintel/trailer.mp4");
+            return true;
+        } else if (id == R.id.action_toggle_ratio) {
             int aspectRatio = mVideoView.toggleAspectRatio();
             String aspectRatioText = MeasureHelper.getAspectRatioText(this, aspectRatio);
             mToastTextView.setText(aspectRatioText);

@@ -16,6 +16,8 @@
     <string name="show_info">Info</string>
     <string name="vdec">vdec</string>
     <string name="open_url">Open URL</string>
+    <string name="demo_hls">HLS样例</string>
+    <string name="demo_mp4">MP4样例</string>
     <string name="playback_speed">Speed</string>
     <string name="snapshot">Snapshot</string>
     <string name="fps">fps</string>

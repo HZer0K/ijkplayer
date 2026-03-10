@@ -19,39 +19,6 @@
             android:layout_height="match_parent"
             android:layout_gravity="center"></tv.danmaku.ijk.media.example.widget.media.IjkVideoView>
 
-        <LinearLayout
-            android:id="@+id/url_bar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top"
-            android:background="@color/ijk_transparent_dark"
-            android:padding="8dp"
-            android:orientation="horizontal">
-            <EditText
-                android:id="@+id/url_input"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="输入媒体URL"
-                android:singleLine="true"
-                android:textColor="@android:color/white"/>
-            <Button
-                android:id="@+id/btn_play_url"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="播放"/>
-            <Button
-                android:id="@+id/btn_demo_hls"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="HLS样例"/>
-            <Button
-                android:id="@+id/btn_demo_mp4"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="MP4样例"/>
-        </LinearLayout>
-
         <TextView
             android:id="@+id/toast_text_view"
             android:layout_width="wrap_content"

@@ -4,6 +4,18 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context=".menu_app">
     <item
+        android:id="@+id/action_open_url"
+        android:title="@string/open_url"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_demo_hls"
+        android:title="@string/demo_hls"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_demo_mp4"
+        android:title="@string/demo_mp4"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_toggle_player"
         android:title="@string/toggle_player"
         app:showAsAction="ifRoom" />
