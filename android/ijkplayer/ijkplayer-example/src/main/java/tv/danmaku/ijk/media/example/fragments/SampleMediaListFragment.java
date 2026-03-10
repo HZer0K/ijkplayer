@@ -30,6 +30,15 @@ import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+
 import tv.danmaku.ijk.media.example.R;
 import tv.danmaku.ijk.media.example.activities.VideoActivity;
 
@@ -67,82 +76,66 @@ public class SampleMediaListFragment extends Fragment {
                 VideoActivity.intentTo(activity, url, name);
             }
         });
+        loadSamplesFromJson(activity);
+    }
 
-        String manifest_string =
-                "{\n" +
-                "    \"version\": \"1.0.0\",\n" +
-                "    \"adaptationSet\": [\n" +
-                "        {\n" +
-                "            \"duration\": 1000,\n" +
-                "            \"id\": 1,\n" +
-                "            \"representation\": [\n" +
-                "                {\n" +
-                "                    \"id\": 1,\n" +
-                "                    \"codec\": \"avc1.64001e,mp4a.40.5\",\n" +
-                "                    \"url\": \"http://las-tech.org.cn/kwai/las-test_ld500d.flv\",\n" +
-                "                    \"backupUrl\": [],\n" +
-                "                    \"host\": \"las-tech.org.cn\",\n" +
-                "                    \"maxBitrate\": 700,\n" +
-                "                    \"width\": 640,\n" +
-                "                    \"height\": 360,\n" +
-                "                    \"frameRate\": 25,\n" +
-                "                    \"qualityType\": \"SMOOTH\",\n" +
-                "                    \"qualityTypeName\": \"流畅\",\n" +
-                "                    \"hidden\": false,\n" +
-                "                    \"disabledFromAdaptive\": false,\n" +
-                "                    \"defaultSelected\": false\n" +
-                "                },\n" +
-                "                {\n" +
-                "                    \"id\": 2,\n" +
-                "                    \"codec\": \"avc1.64001f,mp4a.40.5\",\n" +
-                "                    \"url\": \"http://las-tech.org.cn/kwai/las-test_sd1000d.flv\",\n" +
-                "                    \"backupUrl\": [],\n" +
-                "                    \"host\": \"las-tech.org.cn\",\n" +
-                "                    \"maxBitrate\": 1300,\n" +
-                "                    \"width\": 960,\n" +
-                "                    \"height\": 540,\n" +
-                "                    \"frameRate\": 25,\n" +
-                "                    \"qualityType\": \"STANDARD\",\n" +
-                "                    \"qualityTypeName\": \"标清\",\n" +
-                "                    \"hidden\": false,\n" +
-                "                    \"disabledFromAdaptive\": false,\n" +
-                "                    \"defaultSelected\": true\n" +
-                "                },\n" +
-                "                {\n" +
-                "                    \"id\": 3,\n" +
-                "                    \"codec\": \"avc1.64001f,mp4a.40.5\",\n" +
-                "                    \"url\": \"http://las-tech.org.cn/kwai/las-test.flv\",\n" +
-                "                    \"backupUrl\": [],\n" +
-                "                    \"host\": \"las-tech.org.cn\",\n" +
-                "                    \"maxBitrate\": 2300,\n" +
-                "                    \"width\": 1280,\n" +
-                "                    \"height\": 720,\n" +
-                "                    \"frameRate\": 30,\n" +
-                "                    \"qualityType\": \"HIGH\",\n" +
-                "                    \"qualityTypeName\": \"高清\",\n" +
-                "                    \"hidden\": false,\n" +
-                "                    \"disabledFromAdaptive\": false,\n" +
-                "                    \"defaultSelected\": false\n" +
-                "                }\n" +
-                "            ]\n" +
-                "        }\n" +
-                "    ]\n" +
-                "}";
+    private void loadSamplesFromJson(Context context) {
+        String json = readRawText(context, R.raw.sample_media);
+        if (json == null)
+            return;
 
-        mAdapter.addItem(manifest_string, "ijklas:(manifest_string)", "las test");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8", "bipbop basic master playlist");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear1/prog_index.m3u8", "bipbop basic 400x300 @ 232 kbps");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear2/prog_index.m3u8", "bipbop basic 640x480 @ 650 kbps");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear3/prog_index.m3u8", "bipbop basic 640x480 @ 1 Mbps");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear4/prog_index.m3u8", "bipbop basic 960x720 @ 2 Mbps");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear0/prog_index.m3u8", "bipbop basic 22.050Hz stereo @ 40 kbps");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8", "bipbop advanced master playlist");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8", "bipbop advanced 416x234 @ 265 kbps");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear2/prog_index.m3u8", "bipbop advanced 640x360 @ 580 kbps");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear3/prog_index.m3u8", "bipbop advanced 960x540 @ 910 kbps");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear4/prog_index.m3u8", "bipbop advanced 1289x720 @ 1 Mbps");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear5/prog_index.m3u8", "bipbop advanced 1920x1080 @ 2 Mbps");
-        mAdapter.addItem("https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear0/prog_index.m3u8", "bipbop advanced 22.050Hz stereo @ 40 kbps");
+        try {
+            JSONArray array = new JSONArray(json);
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject obj = array.optJSONObject(i);
+                if (obj == null)
+                    continue;
+
+                String name = obj.optString("name", "");
+                String url = obj.optString("url", "");
+                String type = obj.optString("type", "");
+                String manifestRes = obj.optString("manifestRes", "");
+
+                if ("ijklas_manifest".equals(type) && manifestRes != null && !manifestRes.isEmpty()) {
+                    int resId = context.getResources().getIdentifier(manifestRes, "raw", context.getPackageName());
+                    String manifestString = resId != 0 ? readRawText(context, resId) : null;
+                    if (manifestString != null) {
+                        mAdapter.addItem(manifestString, "ijklas:(manifest_string)", name);
+                    }
+                    continue;
+                }
+
+                if (url != null && !url.isEmpty()) {
+                    String displayUrl = obj.optString("displayUrl", url);
+                    mAdapter.addItem(url, displayUrl, name);
+                }
+            }
+        } catch (JSONException e) {
+            // ignore
+        }
+    }
+
+    private String readRawText(Context context, int resId) {
+        InputStream in = null;
+        try {
+            in = context.getResources().openRawResource(resId);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append('\n');
+            }
+            return sb.toString();
+        } catch (Resources.NotFoundException | IOException e) {
+            return null;
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
     }
 
     final class SampleMediaItem {
