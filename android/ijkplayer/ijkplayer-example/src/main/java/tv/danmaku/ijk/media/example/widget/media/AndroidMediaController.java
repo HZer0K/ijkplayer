@@ -28,7 +28,9 @@ import android.widget.MediaController;
 import java.util.ArrayList;
 
 public class AndroidMediaController extends MediaController implements IMediaController {
+    private static final int DEFAULT_TIMEOUT_MS = 8000;
     private ActionBar mActionBar;
+    private int mDefaultTimeoutMs = DEFAULT_TIMEOUT_MS;
 
     public AndroidMediaController(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -50,16 +52,24 @@ public class AndroidMediaController extends MediaController implements IMediaCon
 
     public void setSupportActionBar(@Nullable ActionBar actionBar) {
         mActionBar = actionBar;
-        if (isShowing()) {
-            actionBar.show();
-        } else {
-            actionBar.hide();
-        }
+        if (mActionBar == null)
+            return;
+        if (isShowing())
+            mActionBar.show();
+        else
+            mActionBar.hide();
     }
 
     @Override
     public void show() {
-        super.show();
+        super.show(mDefaultTimeoutMs);
+        if (mActionBar != null)
+            mActionBar.show();
+    }
+
+    @Override
+    public void show(int timeout) {
+        super.show(timeout);
         if (mActionBar != null)
             mActionBar.show();
     }
@@ -83,5 +93,9 @@ public class AndroidMediaController extends MediaController implements IMediaCon
         mShowOnceArray.add(view);
         view.setVisibility(View.VISIBLE);
         show();
+    }
+
+    public void setDefaultTimeoutMs(int timeoutMs) {
+        mDefaultTimeoutMs = timeoutMs;
     }
 }

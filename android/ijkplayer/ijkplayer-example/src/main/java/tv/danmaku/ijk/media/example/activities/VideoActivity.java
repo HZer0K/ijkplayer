@@ -164,6 +164,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             return;
         try {
             if (isLikelyMediaUrl(url)) {
+                mVideoPath = url;
+                mVideoUri = Uri.parse(url);
                 mVideoView.stopPlayback();
                 mVideoView.release(true);
                 mVideoView.setVideoURI(Uri.parse(url));
@@ -177,6 +179,68 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         } catch (Exception e) {
             Log.e(TAG, "play url error", e);
         }
+    }
+
+    private String getCurrentSource() {
+        if (!TextUtils.isEmpty(mVideoPath))
+            return mVideoPath;
+        return mVideoUri != null ? mVideoUri.toString() : null;
+    }
+
+    private void rebuildAndPlayCurrent() {
+        String source = getCurrentSource();
+        if (TextUtils.isEmpty(source))
+            return;
+
+        try {
+            mVideoView.stopPlayback();
+            mVideoView.release(true);
+            if (source.contains("adaptationSet")) {
+                mVideoView.setVideoPath(source);
+            } else {
+                mVideoView.setVideoURI(Uri.parse(source));
+            }
+            mVideoView.start();
+        } catch (Exception e) {
+            Log.e(TAG, "rebuild play error", e);
+        }
+    }
+
+    private void restartSameSourceSeek0() {
+        try {
+            mVideoView.pause();
+            mVideoView.seekTo(0);
+            mVideoView.start();
+        } catch (Exception e) {
+            rebuildAndPlayCurrent();
+        }
+    }
+
+    private void toggleCoreAndRebuild() {
+        int current = mSettings.getPlayer();
+        int next;
+        boolean preferExoForHttp;
+        if (current == Settings.PV_PLAYER__IjkExoMediaPlayer) {
+            next = Settings.PV_PLAYER__IjkMediaPlayer;
+            preferExoForHttp = false;
+        } else {
+            next = Settings.PV_PLAYER__IjkExoMediaPlayer;
+            preferExoForHttp = true;
+        }
+
+        String source = getCurrentSource();
+        if (next == Settings.PV_PLAYER__IjkMediaPlayer && source != null && source.startsWith("https://")) {
+            Toast.makeText(this, "Ijk 不支持 https（未编译SSL），请用 Exo 或更换 http/本地源", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        mSettings.setPlayer(next);
+        mSettings.setPreferExoForHttp(preferExoForHttp);
+        rebuildAndPlayCurrent();
+
+        String playerText = IjkVideoView.getPlayerText(this, next);
+        mToastTextView.setText(playerText);
+        mMediaController.showOnce(mToastTextView);
     }
 
     private void showOpenUrlDialog() {
@@ -253,6 +317,12 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         } else if (id == R.id.action_demo_mp4) {
             playUrl("https://media.w3.org/2010/05/sintel/trailer.mp4");
             return true;
+        } else if (id == R.id.action_rebuild_play) {
+            rebuildAndPlayCurrent();
+            return true;
+        } else if (id == R.id.action_restart_seek0) {
+            restartSameSourceSeek0();
+            return true;
         } else if (id == R.id.action_toggle_ratio) {
             int aspectRatio = mVideoView.toggleAspectRatio();
             String aspectRatioText = MeasureHelper.getAspectRatioText(this, aspectRatio);
@@ -260,10 +330,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             mMediaController.showOnce(mToastTextView);
             return true;
         } else if (id == R.id.action_toggle_player) {
-            int player = mVideoView.togglePlayer();
-            String playerText = IjkVideoView.getPlayerText(this, player);
-            mToastTextView.setText(playerText);
-            mMediaController.showOnce(mToastTextView);
+            toggleCoreAndRebuild();
             return true;
         } else if (id == R.id.action_toggle_render) {
             int render = mVideoView.toggleRender();

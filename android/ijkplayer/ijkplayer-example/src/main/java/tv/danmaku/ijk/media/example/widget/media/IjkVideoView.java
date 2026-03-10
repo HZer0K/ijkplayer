@@ -554,10 +554,33 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                     mCurrentState = STATE_ERROR;
                     mTargetState = STATE_ERROR;
                     if (mMediaController != null) {
-                        mMediaController.hide();
+                        mMediaController.show(0);
                     }
 
                     if (mUri != null && mCurrentRetryCount == 0) {
+                        String scheme = mUri.getScheme();
+                        boolean isIjkPlayer = false;
+                        if (mp instanceof IjkMediaPlayer) {
+                            isIjkPlayer = true;
+                        } else if (mp instanceof MediaPlayerProxy && ((MediaPlayerProxy) mp).getInternalMediaPlayer() instanceof IjkMediaPlayer) {
+                            isIjkPlayer = true;
+                        }
+
+                        if (isIjkPlayer && scheme != null && scheme.equalsIgnoreCase("https")) {
+                            mCurrentRetryCount = 1;
+                            post(() -> {
+                                try {
+                                    mSettings.setPlayer(Settings.PV_PLAYER__IjkExoMediaPlayer);
+                                    mSettings.setPreferExoForHttp(true);
+                                    stopPlayback();
+                                    release(true);
+                                    setVideoURI(mUri);
+                                    start();
+                                } catch (Throwable ignored) {}
+                            });
+                            return true;
+                        }
+
                         mCurrentRetryCount = 1;
                         postDelayed(() -> {
                             try {
@@ -766,7 +789,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
-        if (isInPlaybackState() && mMediaController != null) {
+        if (mMediaController != null) {
             toggleMediaControlsVisiblity();
         }
         return false;
@@ -774,7 +797,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
     @Override
     public boolean onTrackballEvent(MotionEvent ev) {
-        if (isInPlaybackState() && mMediaController != null) {
+        if (mMediaController != null) {
             toggleMediaControlsVisiblity();
         }
         return false;

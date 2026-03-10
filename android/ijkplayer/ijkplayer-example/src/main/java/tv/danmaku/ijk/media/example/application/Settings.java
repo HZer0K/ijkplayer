@@ -52,6 +52,11 @@ public class Settings {
         }
     }
 
+    public void setPlayer(int player) {
+        String key = mAppContext.getString(R.string.pref_key_player);
+        mSharedPreferences.edit().putString(key, String.valueOf(player)).apply();
+    }
+
     public boolean getUsingMediaCodec() {
         String key = mAppContext.getString(R.string.pref_key_using_media_codec);
         return mSharedPreferences.getBoolean(key, false);
@@ -105,6 +110,11 @@ public class Settings {
     public boolean getPreferExoForHttp() {
         String key = mAppContext.getString(R.string.pref_key_prefer_exo_http);
         return mSharedPreferences.getBoolean(key, true);
+    }
+
+    public void setPreferExoForHttp(boolean enable) {
+        String key = mAppContext.getString(R.string.pref_key_prefer_exo_http);
+        mSharedPreferences.edit().putBoolean(key, enable).apply();
     }
 
     public boolean getEnableVulkanFilter() {

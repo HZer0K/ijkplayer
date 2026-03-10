@@ -16,6 +16,14 @@
         android:title="@string/demo_mp4"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_rebuild_play"
+        android:title="@string/rebuild_play"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_restart_seek0"
+        android:title="@string/restart_seek0"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_toggle_player"
         android:title="@string/toggle_player"
         app:showAsAction="ifRoom" />
