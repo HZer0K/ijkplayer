@@ -26,6 +26,7 @@ import android.os.Build;
 import android.os.Bundle;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
@@ -137,6 +138,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mRightDrawer = (ViewGroup) findViewById(R.id.right_drawer);
 
         mDrawerLayout.setScrimColor(Color.TRANSPARENT);
+        mDrawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED, GravityCompat.END);
 
         // init player
         IjkMediaPlayer.loadLibrariesOnce(null);
@@ -226,12 +228,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         } else {
             next = Settings.PV_PLAYER__IjkExoMediaPlayer;
             preferExoForHttp = true;
-        }
-
-        String source = getCurrentSource();
-        if (next == Settings.PV_PLAYER__IjkMediaPlayer && source != null && source.startsWith("https://")) {
-            Toast.makeText(this, "Ijk 不支持 https（未编译SSL），请用 Exo 或更换 http/本地源", Toast.LENGTH_SHORT).show();
-            return;
         }
 
         mSettings.setPlayer(next);

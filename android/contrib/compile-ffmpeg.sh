@@ -30,6 +30,22 @@ FF_ACT_ARCHS_32=""
 FF_ACT_ARCHS_64="arm64"
 FF_ACT_ARCHS_ALL=$FF_ACT_ARCHS_64
 
+maybe_build_openssl() {
+    local ARCH="$1"
+    if [ "${IJK_ENABLE_OPENSSL:-1}" != "1" ]; then
+        return 0
+    fi
+    local SSL_LIB="./build/openssl-${ARCH}/output/lib/libssl.a"
+    if [ -f "$SSL_LIB" ]; then
+        return 0
+    fi
+    echo ""
+    echo "--------------------"
+    echo "[*] build openssl for $ARCH (HTTPS support)"
+    echo "--------------------"
+    bash compile-openssl.sh "$ARCH"
+}
+
 echo_archs() {
     echo "===================="
     echo "[*] check archs"
@@ -61,10 +77,12 @@ echo_nextstep_help() {
 case "$FF_TARGET" in
     "")
         echo_archs arm64
+        maybe_build_openssl arm64
         bash tools/do-compile-ffmpeg.sh arm64
     ;;
     arm64)
         echo_archs $FF_TARGET $FF_TARGET_EXTRA
+        maybe_build_openssl $FF_TARGET
         bash tools/do-compile-ffmpeg.sh $FF_TARGET $FF_TARGET_EXTRA
         echo_nextstep_help
     ;;
@@ -72,6 +90,7 @@ case "$FF_TARGET" in
         echo_archs $FF_ACT_ARCHS_64
         for ARCH in $FF_ACT_ARCHS_64
         do
+            maybe_build_openssl $ARCH
             bash tools/do-compile-ffmpeg.sh $ARCH $FF_TARGET_EXTRA
         done
         echo_nextstep_help

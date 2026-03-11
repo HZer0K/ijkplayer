@@ -97,6 +97,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     // All the stuff we need for playing and showing a video
     private IRenderView.ISurfaceHolder mSurfaceHolder = null;
     private IMediaPlayer mMediaPlayer = null;
+    private boolean mRetryForceExoForHttpsError = false;
     // private int         mAudioSession;
     private int mVideoWidth;
     private int mVideoHeight;
@@ -570,8 +571,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                             mCurrentRetryCount = 1;
                             post(() -> {
                                 try {
-                                    mSettings.setPlayer(Settings.PV_PLAYER__IjkExoMediaPlayer);
-                                    mSettings.setPreferExoForHttp(true);
+                                    mRetryForceExoForHttpsError = true;
                                     stopPlayback();
                                     release(true);
                                     setVideoURI(mUri);
@@ -1089,6 +1089,11 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
     public IMediaPlayer createPlayer(int playerType) {
         IMediaPlayer mediaPlayer = null;
+
+        if (mRetryForceExoForHttpsError) {
+            mRetryForceExoForHttpsError = false;
+            return new IjkExoMediaPlayer(mAppContext);
+        }
 
         // optionally prefer ExoPlayer for http/https URLs to support HTTPS/HLS robustly
         if (mUri != null && mSettings != null && mSettings.getPreferExoForHttp()) {
