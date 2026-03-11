@@ -6,9 +6,8 @@ ChangeLog
 
 FFmpeg
 -----------------------
-* Build and test iOS and Android demo locally
-* Modify ffmpeg version in init-ios.sh and init-android.sh
-* Modify ffmpeg version in `IJKFFMoviePlayerController` (by running `sh init-ios.sh`)
+* Build and test Android demo locally
+* Modify ffmpeg version in init-android.sh
 * Commit and push
 
 OpenSSL
@@ -23,7 +22,7 @@ ijkplayer
 
 Travis-ci
 -----------------------
-* Modify ijk version in `.travis.yaml` in iOS and Android ci repo.
+* Modify ijk version in `.travis.yaml` in Android ci repo.
 * Ensure compile task has been started on travis-ci.
 * Ensure Andoird release has been released in bintray.
 
