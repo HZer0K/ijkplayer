@@ -34,6 +34,7 @@
 #include <limits.h>
 #include <signal.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "libavutil/avstring.h"
 #include "libavutil/eval.h"
@@ -646,6 +647,16 @@ typedef struct FFPlayer {
     Uint32 overlay_format;
 
     int last_error;
+    int last_http_code;
+    char last_error_url[1024];
+    char last_error_detail[1024];
+    char last_final_url[1024];
+    int last_resp_http_code;
+    int64_t last_resp_content_length;
+    char last_resp_http_version[32];
+    char last_resp_mime_type[256];
+    char last_resp_set_cookie[512];
+    char last_resp_icy_headers[512];
     int prepared;
     int auto_resume;
     int error;
@@ -790,6 +801,16 @@ inline static void ffp_reset_internal(FFPlayer *ffp)
     ffp->overlay_format         = SDL_FCC_RV32;
 
     ffp->last_error             = 0;
+    ffp->last_http_code         = 0;
+    memset(ffp->last_error_url, 0, sizeof(ffp->last_error_url));
+    memset(ffp->last_error_detail, 0, sizeof(ffp->last_error_detail));
+    memset(ffp->last_final_url, 0, sizeof(ffp->last_final_url));
+    ffp->last_resp_http_code = 0;
+    ffp->last_resp_content_length = -1;
+    memset(ffp->last_resp_http_version, 0, sizeof(ffp->last_resp_http_version));
+    memset(ffp->last_resp_mime_type, 0, sizeof(ffp->last_resp_mime_type));
+    memset(ffp->last_resp_set_cookie, 0, sizeof(ffp->last_resp_set_cookie));
+    memset(ffp->last_resp_icy_headers, 0, sizeof(ffp->last_resp_icy_headers));
     ffp->prepared               = 0;
     ffp->auto_resume            = 0;
     ffp->error                  = 0;

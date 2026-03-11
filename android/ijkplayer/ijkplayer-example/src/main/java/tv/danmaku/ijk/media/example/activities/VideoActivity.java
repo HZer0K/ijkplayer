@@ -50,6 +50,7 @@ import tv.danmaku.ijk.media.example.R;
 import tv.danmaku.ijk.media.example.application.Settings;
 import tv.danmaku.ijk.media.example.content.RecentMediaStorage;
 import tv.danmaku.ijk.media.example.fragments.TracksFragment;
+import tv.danmaku.ijk.media.example.util.DebugEventLog;
 import tv.danmaku.ijk.media.example.widget.media.AndroidMediaController;
 import tv.danmaku.ijk.media.example.widget.media.IjkVideoView;
 import tv.danmaku.ijk.media.example.widget.media.MeasureHelper;
@@ -147,6 +148,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mVideoView = (IjkVideoView) findViewById(R.id.video_view);
         mVideoView.setMediaController(mMediaController);
         mVideoView.setHudView(mHudView);
+        DebugEventLog.add("VideoActivity: onCreate, source=" + (mVideoPath != null ? mVideoPath : (mVideoUri != null ? mVideoUri.toString() : "null")));
+        DebugEventLog.add("VideoActivity: pref.player=" + mSettings.getPlayer() + ", preferExoForHttp=" + mSettings.getPreferExoForHttp());
         // prefer mVideoPath
         if (mVideoPath != null)
             mVideoView.setVideoPath(mVideoPath);
@@ -166,6 +169,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             return;
         try {
             if (isLikelyMediaUrl(url)) {
+                DebugEventLog.add("playUrl: " + url);
                 mVideoPath = url;
                 mVideoUri = Uri.parse(url);
                 mVideoView.stopPlayback();
@@ -195,6 +199,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             return;
 
         try {
+            DebugEventLog.add("rebuildAndPlayCurrent: " + source);
             mVideoView.stopPlayback();
             mVideoView.release(true);
             if (source.contains("adaptationSet")) {
@@ -230,6 +235,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             preferExoForHttp = true;
         }
 
+        DebugEventLog.add("toggleCore: " + current + " -> " + next + ", preferExoForHttp=" + preferExoForHttp);
         mSettings.setPlayer(next);
         mSettings.setPreferExoForHttp(preferExoForHttp);
         rebuildAndPlayCurrent();

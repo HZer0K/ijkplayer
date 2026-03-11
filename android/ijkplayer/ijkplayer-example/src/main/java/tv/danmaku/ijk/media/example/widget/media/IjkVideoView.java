@@ -21,6 +21,8 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.media.AudioManager;
@@ -33,6 +35,7 @@ import androidx.appcompat.app.AlertDialog;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.security.NetworkSecurityPolicy;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -69,6 +72,7 @@ import tv.danmaku.ijk.media.player.misc.IjkMediaFormat;
 import tv.danmaku.ijk.media.example.R;
 import tv.danmaku.ijk.media.example.application.Settings;
 import tv.danmaku.ijk.media.example.services.MediaPlayerService;
+import tv.danmaku.ijk.media.example.util.DebugEventLog;
 
 public class IjkVideoView extends FrameLayout implements MediaController.MediaPlayerControl {
     private String TAG = "IjkVideoView";
@@ -266,8 +270,10 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     public void setVideoPath(String path) {
         if (path.contains("adaptationSet")){
             mManifestString = path;
+            DebugEventLog.add("setVideoPath: LAS manifest_string (" + path.length() + " chars)");
             setVideoURI(Uri.parse("ijklas:"));
         } else {
+            DebugEventLog.add("setVideoPath: " + path);
             setVideoURI(Uri.parse(path));
         }
     }
@@ -295,6 +301,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         mUri = uri;
         mHeaders = headers;
         mSeekWhenPrepared = 0;
+        DebugEventLog.add("setVideoURI: " + String.valueOf(uri));
         openVideo();
         requestLayout();
         invalidate();
@@ -331,7 +338,9 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
 
         try {
+            DebugEventLog.add("openVideo: start, pref.player=" + mSettings.getPlayer() + ", preferExoForHttp=" + mSettings.getPreferExoForHttp());
             mMediaPlayer = createPlayer(mSettings.getPlayer());
+            DebugEventLog.add("openVideo: created player=" + (mMediaPlayer != null ? mMediaPlayer.getClass().getSimpleName() : "null"));
 
             // TODO: create SubtitleController in MediaPlayer, but we need
             // a context for the subtitle renderers
@@ -349,12 +358,26 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
             mMediaPlayer.setOnTimedTextListener(mOnTimedTextListener);
             mCurrentBufferPercentage = 0;
             String scheme = mUri.getScheme();
+            if (scheme != null) {
+                DebugEventLog.add("openVideo: scheme=" + scheme);
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
                     mSettings.getUsingMediaDataSource() &&
                     (TextUtils.isEmpty(scheme) || scheme.equalsIgnoreCase("file"))) {
                 IMediaDataSource dataSource = new FileMediaDataSource(new File(mUri.toString()));
                 mMediaPlayer.setDataSource(dataSource);
             }  else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && "http".equalsIgnoreCase(scheme)) {
+                    try {
+                        Uri u = mUri;
+                        String host = u != null ? u.getHost() : null;
+                        boolean permitted = host != null ? NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted(host) : NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted();
+                        if (!permitted) {
+                            DebugEventLog.add("openVideo: cleartext blocked by NetworkSecurityPolicy");
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
                 mMediaPlayer.setDataSource(mAppContext, mUri, mHeaders);
             } else {
                 mMediaPlayer.setDataSource(mUri.toString());
@@ -552,6 +575,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
             new IMediaPlayer.OnErrorListener() {
                 public boolean onError(IMediaPlayer mp, int framework_err, int impl_err) {
                     Log.d(TAG, "Error: " + framework_err + "," + impl_err);
+                    DebugEventLog.add("onError: fw=" + framework_err + ", impl=" + impl_err + ", player=" + (mp != null ? mp.getClass().getSimpleName() : "null"));
                     mCurrentState = STATE_ERROR;
                     mTargetState = STATE_ERROR;
                     if (mMediaController != null) {
@@ -605,34 +629,131 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                      * longer have a window, don't bother showing the user an error.
                      */
                     if (getWindowToken() != null) {
-                        Resources r = mAppContext.getResources();
-                        int messageId;
-
-                        if (framework_err == MediaPlayer.MEDIA_ERROR_NOT_VALID_FOR_PROGRESSIVE_PLAYBACK) {
-                            messageId = R.string.VideoView_error_text_invalid_progressive_playback;
-                        } else {
-                            messageId = R.string.VideoView_error_text_unknown;
-                        }
-
+                        String message = buildErrorMessage(mp, framework_err, impl_err);
                         new AlertDialog.Builder(getContext())
-                                .setMessage(messageId)
-                                .setPositiveButton(R.string.VideoView_error_button,
-                                        new DialogInterface.OnClickListener() {
-                                            public void onClick(DialogInterface dialog, int whichButton) {
-                                            /* If we get here, there is no onError listener, so
-                                             * at least inform them that the video is over.
-                                             */
-                                                if (mOnCompletionListener != null) {
-                                                    mOnCompletionListener.onCompletion(mMediaPlayer);
-                                                }
-                                            }
-                                        })
-                                .setCancelable(false)
+                                .setTitle("播放失败")
+                                .setMessage(message)
+                                .setPositiveButton("关闭", (dialog, whichButton) -> {
+                                    if (mOnCompletionListener != null) {
+                                        mOnCompletionListener.onCompletion(mMediaPlayer);
+                                    }
+                                })
+                                .setNeutralButton("复制", (dialog, which) -> {
+                                    try {
+                                        ClipboardManager cm = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                                        if (cm != null) {
+                                            cm.setPrimaryClip(ClipData.newPlainText("ijk_error", message));
+                                        }
+                                    } catch (Throwable ignored) {
+                                    }
+                                })
+                                .setCancelable(true)
                                 .show();
                     }
                     return true;
                 }
             };
+
+    private String buildErrorMessage(IMediaPlayer mp, int framework_err, int impl_err) {
+        String url = mUri != null ? String.valueOf(mUri) : "";
+        String scheme = mUri != null ? mUri.getScheme() : null;
+        String host = mUri != null ? mUri.getHost() : null;
+        String playerName = mp != null ? mp.getClass().getSimpleName() : "null";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("错误码: ").append(framework_err).append(", ").append(impl_err).append('\n');
+        sb.append("播放器: ").append(playerName).append('\n');
+        sb.append("源: ").append(url).append('\n');
+
+        String hint = classifyErrorHint(mp, framework_err, impl_err, scheme, host, url);
+        if (!TextUtils.isEmpty(hint)) {
+            sb.append('\n').append("提示: ").append(hint).append('\n');
+        }
+
+        IjkMediaPlayer ijk = MediaPlayerCompat.getIjkMediaPlayer(mp);
+        if (ijk != null) {
+            String nativeDetail = ijk.getLastErrorDetail();
+            if (!TextUtils.isEmpty(nativeDetail)) {
+                sb.append('\n').append("网络细节:").append('\n');
+                sb.append(nativeDetail).append('\n');
+            }
+        }
+
+        sb.append('\n').append("关键日志(最近20行):").append('\n');
+        List<String> tail = DebugEventLog.tail(20);
+        for (String line : tail) {
+            sb.append(line).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private String classifyErrorHint(IMediaPlayer mp, int framework_err, int impl_err, String scheme, String host, String url) {
+        int httpCode = 0;
+        IjkMediaPlayer ijk = MediaPlayerCompat.getIjkMediaPlayer(mp);
+        if (ijk != null) {
+            String detail = ijk.getLastErrorDetail();
+            if (detail != null) {
+                int idx = detail.indexOf("http_code=");
+                if (idx >= 0) {
+                    int end = detail.indexOf('\n', idx);
+                    String line = end > idx ? detail.substring(idx, end) : detail.substring(idx);
+                    int eq = line.indexOf('=');
+                    if (eq >= 0 && eq + 1 < line.length()) {
+                        try {
+                            httpCode = Integer.parseInt(line.substring(eq + 1).trim());
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                }
+            }
+        }
+
+        if (httpCode == 401) {
+            return "HTTP 401 未授权：需要鉴权/Token/Cookie。";
+        } else if (httpCode == 403) {
+            return "HTTP 403 禁止访问：鉴权失败或无权限。";
+        } else if (httpCode == 404) {
+            return "HTTP 404 未找到：URL 路径错误或资源已下线。";
+        } else if (httpCode == 410) {
+            return "HTTP 410 资源已删除：资源永久不可用。";
+        } else if (httpCode >= 500 && httpCode < 600) {
+            return "HTTP " + httpCode + " 服务端错误：可尝试换源或稍后重试。";
+        }
+
+        if (!TextUtils.isEmpty(scheme) && scheme.equalsIgnoreCase("http") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                boolean permitted = host != null ? NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted(host) : NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted();
+                if (!permitted) {
+                    return "HTTP 明文被系统禁止。请改用 https，或为应用配置 networkSecurityConfig/usesCleartextTraffic。";
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        if (!TextUtils.isEmpty(scheme) && scheme.equalsIgnoreCase("https")) {
+            boolean isIjkPlayer = false;
+            if (mp instanceof IjkMediaPlayer) {
+                isIjkPlayer = true;
+            } else if (mp instanceof MediaPlayerProxy && ((MediaPlayerProxy) mp).getInternalMediaPlayer() instanceof IjkMediaPlayer) {
+                isIjkPlayer = true;
+            }
+            if (isIjkPlayer) {
+                return "HTTPS/TLS 失败或协议未启用。确认 FFmpeg 已开启 OpenSSL(https 协议)，并检查设备时间/证书链。";
+            } else {
+                return "HTTPS/TLS 失败。检查网络、证书链、设备时间或服务端 TLS 配置。";
+            }
+        }
+
+        if (framework_err == MediaPlayer.MEDIA_ERROR_NOT_VALID_FOR_PROGRESSIVE_PLAYBACK) {
+            return "媒体格式不支持渐进式播放或封装异常，尝试换源/换容器/使用 Exo。";
+        }
+
+        if (!TextUtils.isEmpty(url) && (url.contains(".m3u8") || url.contains("m3u8"))) {
+            return "HLS 播放失败。可能是 404/403、CORS/鉴权、TLS、或解码器缺失。可切换 Exo/更换样例源验证。";
+        }
+
+        return "可能原因: 404/403、格式不支持、解码器缺失、网络不可达或权限限制。";
+    }
 
     private IMediaPlayer.OnBufferingUpdateListener mBufferingUpdateListener =
             new IMediaPlayer.OnBufferingUpdateListener() {

@@ -903,6 +903,12 @@ public final class IjkMediaPlayer extends AbstractMediaPlayer {
     private native String _getVideoCodecInfo();
     private native String _getAudioCodecInfo();
 
+    private native String _getLastErrorDetail();
+
+    public String getLastErrorDetail() {
+        return _getLastErrorDetail();
+    }
+
     public void setOption(int category, String name, String value)
     {
         _setOption(category, name, value);

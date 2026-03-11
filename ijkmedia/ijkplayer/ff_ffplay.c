@@ -36,8 +36,96 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "libavutil/avstring.h"
+#include "libavutil/error.h"
+#include "libavformat/url.h"
+#include "libavformat/httpauth.h"
+#if CONFIG_ZLIB
+#include <zlib.h>
+#endif
+
+typedef struct HTTPContext {
+    const AVClass *class;
+    URLContext *hd;
+    unsigned char buffer[BUFFER_SIZE], *buf_ptr, *buf_end;
+    int line_count;
+    int http_code;
+    uint64_t chunksize;
+    int chunkend;
+    uint64_t off, end_off, filesize, range_end;
+    char *uri;
+    char *location;
+    HTTPAuthState auth_state;
+    HTTPAuthState proxy_auth_state;
+    char *http_proxy;
+    char *headers;
+    char *mime_type;
+    char *http_version;
+    char *user_agent;
+    char *referer;
+    char *content_type;
+    int willclose;
+    int seekable;
+    int chunked_post;
+    int end_chunked_post;
+    int end_header;
+    int multiple_requests;
+    uint8_t *post_data;
+    int post_datalen;
+    int is_akamai;
+    int is_mediagateway;
+    char *cookies;
+    AVDictionary *cookie_dict;
+    int icy;
+    uint64_t icy_data_read;
+    uint64_t icy_metaint;
+    char *icy_metadata_headers;
+    char *icy_metadata_packet;
+    AVDictionary *metadata;
+#if CONFIG_ZLIB
+    int compressed;
+    z_stream inflate_stream;
+    uint8_t *inflate_buffer;
+#endif
+    AVDictionary *chained_options;
+    int send_expect_100;
+    char *method;
+    int reconnect;
+    int reconnect_at_eof;
+    int reconnect_on_network_error;
+    int reconnect_streamed;
+    int reconnect_delay_max;
+    char *reconnect_on_http_error;
+    int listen;
+    char *resource;
+    int reply_code;
+    int is_multi_client;
+    HandshakeState handshake_step;
+    int is_connected_server;
+    int short_seek_size;
+    int64_t expires;
+    char *new_location;
+    AVDictionary *redirect_cache;
+    uint64_t filesize_from_content_range;
+    int respect_retry_after;
+    unsigned int retry_after;
+    int reconnect_max_retries;
+    int reconnect_delay_total_max;
+    uint64_t initial_request_size;
+    uint64_t request_size;
+    int initial_requests;
+    int nb_connections;
+    int nb_requests;
+    int nb_retries;
+    int nb_reconnects;
+    int nb_redirects;
+    int sum_latency;
+    int max_latency;
+    int max_redirects;
+} HTTPContext;
 #include "libavutil/eval.h"
 #include "libavutil/mathematics.h"
 #include "libavutil/pixdesc.h"
@@ -3058,6 +3146,87 @@ static int is_realtime(AVFormatContext *s, const char *filename)
     return 0;
 }
 
+static int ffp_averror_to_http_status(int err)
+{
+    int tag = -err;
+    if ((tag & 0xFF) != 0xF8)
+        return 0;
+    int h = (tag >> 8) & 0xFF;
+    int t = (tag >> 16) & 0xFF;
+    int o = (tag >> 24) & 0xFF;
+    if (h < '0' || h > '9' || t < '0' || t > '9' || o < '0' || o > '9')
+        return 0;
+    return (h - '0') * 100 + (t - '0') * 10 + (o - '0');
+}
+
+static void ffp_set_last_error_detail(FFPlayer *ffp, const char *url, int err, const char *stage)
+{
+    if (!ffp)
+        return;
+    ffp->last_error = err;
+    ffp->last_http_code = ffp_averror_to_http_status(err);
+    if (url) {
+        snprintf(ffp->last_error_url, sizeof(ffp->last_error_url), "%s", url);
+    } else {
+        ffp->last_error_url[0] = '\0';
+    }
+
+    char errbuf[128];
+    errbuf[0] = '\0';
+    av_strerror(err, errbuf, sizeof(errbuf));
+    if (!errbuf[0]) {
+        snprintf(errbuf, sizeof(errbuf), "%s", ffp_get_error_string(err));
+    }
+
+    if (ffp->last_http_code > 0) {
+        snprintf(ffp->last_error_detail, sizeof(ffp->last_error_detail),
+                 "%s: http=%d, err=%d (%s)", stage ? stage : "error", ffp->last_http_code, err, errbuf);
+    } else {
+        snprintf(ffp->last_error_detail, sizeof(ffp->last_error_detail),
+                 "%s: err=%d (%s)", stage ? stage : "error", err, errbuf);
+    }
+}
+
+static void ffp_capture_http_response_fields(FFPlayer *ffp, AVFormatContext *ic)
+{
+    if (!ffp || !ic || !ic->pb)
+        return;
+    URLContext *uc = (URLContext *)ic->pb->opaque;
+    if (!uc || !uc->prot || !uc->prot->name)
+        return;
+    const char *p = uc->prot->name;
+    if (strcmp(p, "http") && strcmp(p, "https"))
+        return;
+
+    HTTPContext *s = (HTTPContext *)uc->priv_data;
+    if (!s)
+        return;
+
+    if (s->location && s->location[0]) {
+        snprintf(ffp->last_final_url, sizeof(ffp->last_final_url), "%s", s->location);
+    }
+
+    ffp->last_resp_http_code = s->http_code;
+    if (s->filesize != UINT64_MAX) {
+        ffp->last_resp_content_length = (int64_t)s->filesize;
+    } else {
+        ffp->last_resp_content_length = -1;
+    }
+
+    if (s->http_version && s->http_version[0]) {
+        snprintf(ffp->last_resp_http_version, sizeof(ffp->last_resp_http_version), "%s", s->http_version);
+    }
+    if (s->mime_type && s->mime_type[0]) {
+        snprintf(ffp->last_resp_mime_type, sizeof(ffp->last_resp_mime_type), "%s", s->mime_type);
+    }
+    if (s->cookies && s->cookies[0]) {
+        snprintf(ffp->last_resp_set_cookie, sizeof(ffp->last_resp_set_cookie), "%s", s->cookies);
+    }
+    if (s->icy_metadata_headers && s->icy_metadata_headers[0]) {
+        snprintf(ffp->last_resp_icy_headers, sizeof(ffp->last_resp_icy_headers), "%s", s->icy_metadata_headers);
+    }
+}
+
 /* this thread gets the stream from the disk or the network */
 static int read_thread(void *arg)
 {
@@ -3123,9 +3292,12 @@ static int read_thread(void *arg)
     err = avformat_open_input(&ic, is->filename, is->iformat, &ffp->format_opts);
     if (err < 0) {
         print_error(is->filename, err);
-        ret = -1;
+        ffp_set_last_error_detail(ffp, is->filename, err, "open_input");
+        last_error = err;
+        ret = err;
         goto fail;
     }
+    ffp_capture_http_response_fields(ffp, ic);
     ffp_notify_msg1(ffp, FFP_MSG_OPEN_INPUT);
 
     if (scan_all_pmts_set)
@@ -3178,7 +3350,10 @@ static int read_thread(void *arg)
         if (err < 0) {
             av_log(NULL, AV_LOG_WARNING,
                    "%s: could not find codec parameters\n", is->filename);
-            ret = -1;
+            ffp_capture_http_response_fields(ffp, ic);
+            ffp_set_last_error_detail(ffp, is->filename, err, "find_stream_info");
+            last_error = err;
+            ret = err;
             goto fail;
         }
     }
@@ -3553,6 +3728,9 @@ static int read_thread(void *arg)
                 is->eof = 1;
                 ffp->error = pb_error;
                 av_log(ffp, AV_LOG_ERROR, "av_read_frame error: %s\n", ffp_get_error_string(ffp->error));
+                ffp_capture_http_response_fields(ffp, ic);
+                ffp_set_last_error_detail(ffp, is->filename, pb_error, "read_frame");
+                last_error = pb_error;
                 // break;
             } else {
                 ffp->error = 0;
@@ -3632,7 +3810,9 @@ static int read_thread(void *arg)
         avformat_close_input(&ic);
 
     if (!ffp->prepared || !is->abort_request) {
-        ffp->last_error = last_error;
+        if (last_error != 0 && ffp->last_error != last_error) {
+            ffp_set_last_error_detail(ffp, is->filename, last_error, "failed");
+        }
         ffp_notify_msg2(ffp, FFP_MSG_ERROR, last_error);
     }
     SDL_DestroyMutex(wait_mutex);

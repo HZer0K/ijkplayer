@@ -634,6 +634,28 @@ LABEL_RETURN:
     return jcodec_info;
 }
 
+static jstring
+IjkMediaPlayer_getLastErrorDetail(JNIEnv *env, jobject thiz)
+{
+    MPTRACE("%s\n", __func__);
+    jstring jdetail = NULL;
+    char *detail = NULL;
+    IjkMediaPlayer *mp = jni_get_media_player(env, thiz);
+    JNI_CHECK_GOTO(mp, env, "java/lang/IllegalStateException", "mpjni: getLastErrorDetail: null mp", LABEL_RETURN);
+
+    int ret = ijkmp_get_last_error_detail(mp, &detail);
+    if (ret < 0 || !detail)
+        goto LABEL_RETURN;
+
+    jdetail = (*env)->NewStringUTF(env, detail);
+
+LABEL_RETURN:
+    if (detail)
+        free(detail);
+    ijkmp_dec_ref_p(&mp);
+    return jdetail;
+}
+
 inline static void fillMetaInternal(JNIEnv *env, jobject jbundle, IjkMediaMeta *meta, const char *key, const char *default_value)
 {
     const char *value = ijkmeta_get_string_l(meta, key);
@@ -1170,6 +1192,7 @@ static JNINativeMethod g_methods[] = {
     { "_getColorFormatName",    "(I)Ljava/lang/String;",    (void *) IjkMediaPlayer_getColorFormatName },
     { "_getVideoCodecInfo",     "()Ljava/lang/String;",     (void *) IjkMediaPlayer_getVideoCodecInfo },
     { "_getAudioCodecInfo",     "()Ljava/lang/String;",     (void *) IjkMediaPlayer_getAudioCodecInfo },
+    { "_getLastErrorDetail",    "()Ljava/lang/String;",     (void *) IjkMediaPlayer_getLastErrorDetail },
     { "_getMediaMeta",          "()Landroid/os/Bundle;",    (void *) IjkMediaPlayer_getMediaMeta },
     { "_setLoopCount",          "(I)V",                     (void *) IjkMediaPlayer_setLoopCount },
     { "_getLoopCount",          "()I",                      (void *) IjkMediaPlayer_getLoopCount },

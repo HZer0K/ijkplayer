@@ -24,6 +24,9 @@
 #include "ijkplayer.h"
 #include "ijkplayer_internal.h"
 #include "ijkversion.h"
+#include <stdio.h>
+#include <string.h>
+#include <inttypes.h>
 
 #define MP_RET_IF_FAILED(ret) \
     do { \
@@ -210,6 +213,64 @@ int ijkmp_get_audio_codec_info(IjkMediaPlayer *mp, char **codec_info)
     pthread_mutex_unlock(&mp->mutex);
     MPTRACE("%s()=void\n", __func__);
     return ret;
+}
+
+int ijkmp_get_last_error_detail(IjkMediaPlayer *mp, char **detail)
+{
+    assert(mp);
+    if (!detail)
+        return EIJK_NULL_IS_PTR;
+
+    *detail = NULL;
+    pthread_mutex_lock(&mp->mutex);
+    FFPlayer *ffp = mp->ffplayer;
+    if (!ffp) {
+        pthread_mutex_unlock(&mp->mutex);
+        return EIJK_NULL_IS_PTR;
+    }
+
+    int err = ffp->last_error;
+    int http_code = ffp->last_http_code;
+    const char *url = ffp->last_error_url[0] ? ffp->last_error_url : NULL;
+    const char *msg = ffp->last_error_detail[0] ? ffp->last_error_detail : NULL;
+    const char *final_url = ffp->last_final_url[0] ? ffp->last_final_url : NULL;
+
+    char buf[2300];
+    buf[0] = '\0';
+    if (http_code > 0) {
+        snprintf(buf, sizeof(buf),
+                 "http_code=%d\nffmpeg_err=%d\nurl=%s\nfinal_url=%s\nresp_http_code=%d\nresp_http_version=%s\nresp_mime_type=%s\nresp_content_length=%"PRId64"\nresp_set_cookie=%s\nresp_icy_headers=%s\ndetail=%s",
+                 http_code,
+                 err,
+                 url ? url : "",
+                 final_url ? final_url : "",
+                 ffp->last_resp_http_code,
+                 ffp->last_resp_http_version,
+                 ffp->last_resp_mime_type,
+                 ffp->last_resp_content_length,
+                 ffp->last_resp_set_cookie,
+                 ffp->last_resp_icy_headers,
+                 msg ? msg : "");
+    } else {
+        snprintf(buf, sizeof(buf),
+                 "ffmpeg_err=%d\nurl=%s\nfinal_url=%s\nresp_http_code=%d\nresp_http_version=%s\nresp_mime_type=%s\nresp_content_length=%"PRId64"\nresp_set_cookie=%s\nresp_icy_headers=%s\ndetail=%s",
+                 err,
+                 url ? url : "",
+                 final_url ? final_url : "",
+                 ffp->last_resp_http_code,
+                 ffp->last_resp_http_version,
+                 ffp->last_resp_mime_type,
+                 ffp->last_resp_content_length,
+                 ffp->last_resp_set_cookie,
+                 ffp->last_resp_icy_headers,
+                 msg ? msg : "");
+    }
+
+    *detail = strdup(buf);
+    pthread_mutex_unlock(&mp->mutex);
+    if (!*detail)
+        return AVERROR(ENOMEM);
+    return 0;
 }
 
 void ijkmp_set_playback_rate(IjkMediaPlayer *mp, float rate)
