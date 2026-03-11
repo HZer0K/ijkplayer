@@ -58,7 +58,6 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import tv.danmaku.ijk.media.exo.IjkExoMediaPlayer;
 import tv.danmaku.ijk.media.player.AndroidMediaPlayer;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
@@ -71,6 +70,9 @@ import tv.danmaku.ijk.media.player.misc.ITrackInfo;
 import tv.danmaku.ijk.media.player.misc.IjkMediaFormat;
 import tv.danmaku.ijk.media.example.R;
 import tv.danmaku.ijk.media.example.application.Settings;
+import tv.danmaku.ijk.media.example.player.DefaultPlaybackPolicy;
+import tv.danmaku.ijk.media.example.player.PlaybackPolicy;
+import tv.danmaku.ijk.media.example.player.PlayerFactory;
 import tv.danmaku.ijk.media.example.services.MediaPlayerService;
 import tv.danmaku.ijk.media.example.util.DebugEventLog;
 
@@ -102,6 +104,8 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     private IRenderView.ISurfaceHolder mSurfaceHolder = null;
     private IMediaPlayer mMediaPlayer = null;
     private boolean mRetryForceExoForHttpsError = false;
+    private PlaybackPolicy mPlaybackPolicy;
+    private PlayerFactory mPlayerFactory;
     // private int         mAudioSession;
     private int mVideoWidth;
     private int mVideoHeight;
@@ -173,6 +177,8 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     private void initVideoView(Context context) {
         mAppContext = context.getApplicationContext();
         mSettings = new Settings(mAppContext);
+        mPlaybackPolicy = new DefaultPlaybackPolicy();
+        mPlayerFactory = new PlayerFactory(mAppContext);
 
         initBackground();
         initRenders();
@@ -1209,95 +1215,15 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     }
 
     public IMediaPlayer createPlayer(int playerType) {
-        IMediaPlayer mediaPlayer = null;
-
-        if (mRetryForceExoForHttpsError) {
+        boolean forceExoOnce = mRetryForceExoForHttpsError;
+        if (forceExoOnce) {
             mRetryForceExoForHttpsError = false;
-            return new IjkExoMediaPlayer(mAppContext);
         }
 
-        // optionally prefer ExoPlayer for http/https URLs to support HTTPS/HLS robustly
-        if (mUri != null && mSettings != null && mSettings.getPreferExoForHttp()) {
-            String scheme = mUri.getScheme();
-            if (scheme != null) {
-                String lower = scheme.toLowerCase(Locale.US);
-                if (lower.equals("http") || lower.equals("https")) {
-                    IjkExoMediaPlayer exoPlayer = new IjkExoMediaPlayer(mAppContext);
-                    return exoPlayer;
-                }
-            }
-        }
-
-        switch (playerType) {
-            case Settings.PV_PLAYER__IjkExoMediaPlayer: {
-                IjkExoMediaPlayer exoPlayer = new IjkExoMediaPlayer(mAppContext);
-                mediaPlayer = exoPlayer;
-            }
-            break;
-            case Settings.PV_PLAYER__AndroidMediaPlayer: {
-                AndroidMediaPlayer androidMediaPlayer = new AndroidMediaPlayer();
-                mediaPlayer = androidMediaPlayer;
-            }
-            break;
-            case Settings.PV_PLAYER__IjkMediaPlayer:
-            default: {
-                IjkMediaPlayer ijkMediaPlayer = null;
-                if (mUri != null) {
-                    ijkMediaPlayer = new IjkMediaPlayer();
-                    ijkMediaPlayer.native_setLogLevel(IjkMediaPlayer.IJK_LOG_DEBUG);
-
-                    if (mManifestString != null) {
-                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "iformat", "ijklas");
-                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "find_stream_info", 0);
-                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "manifest_string", mManifestString);
-                    }
-                    if (mSettings.getUsingMediaCodec()) {
-                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 1);
-                        if (mSettings.getUsingMediaCodecAutoRotate()) {
-                            ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-auto-rotate", 1);
-                        } else {
-                            ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-auto-rotate", 0);
-                        }
-                        if (mSettings.getMediaCodecHandleResolutionChange()) {
-                            ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-handle-resolution-change", 1);
-                        } else {
-                            ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-handle-resolution-change", 0);
-                        }
-                    } else {
-                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 0);
-                    }
-
-                    if (mSettings.getUsingOpenSLES()) {
-                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "opensles", 1);
-                    } else {
-                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "opensles", 0);
-                    }
-
-                    String pixelFormat = mSettings.getPixelFormat();
-                    if (TextUtils.isEmpty(pixelFormat)) {
-                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "overlay-format", IjkMediaPlayer.SDL_FCC_RV32);
-                    } else {
-                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "overlay-format", pixelFormat);
-                    }
-                    ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "framedrop", 1);
-                    ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "start-on-prepared", 0);
-
-                    ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "http-detect-range-support", 0);
-
-                    ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_CODEC, "skip_loop_filter", 48);
-                    if (mSettings.getEnableVulkanFilter() && deviceSupportsVulkan()) {
-                        ijkMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "vf0", "scale_vulkan=iw:ih");
-                    }
-                }
-                mediaPlayer = ijkMediaPlayer;
-            }
-            break;
-        }
-
-        if (mSettings.getEnableDetachedSurfaceTextureView()) {
-            mediaPlayer = new TextureMediaPlayer(mediaPlayer);
-        }
-
+        int resolvedType = mPlaybackPolicy.resolvePlayerType(playerType, mUri, mSettings, forceExoOnce);
+        IMediaPlayer mediaPlayer = mPlayerFactory.create(resolvedType);
+        mediaPlayer = mPlayerFactory.configure(mediaPlayer, mSettings, mUri, mManifestString, mSettings.getEnableVulkanFilter(), deviceSupportsVulkan());
+        mediaPlayer = mPlayerFactory.wrapIfNeeded(mediaPlayer, mSettings);
         return mediaPlayer;
     }
 
