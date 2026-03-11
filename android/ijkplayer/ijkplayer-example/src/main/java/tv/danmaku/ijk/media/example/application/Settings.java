@@ -35,6 +35,20 @@ public class Settings {
     public Settings(Context context) {
         mAppContext = context.getApplicationContext();
         mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(mAppContext);
+        migrateRenderDefaultsIfNeeded();
+    }
+
+    private void migrateRenderDefaultsIfNeeded() {
+        String surfaceKey = mAppContext.getString(R.string.pref_key_enable_surface_view);
+        String textureKey = mAppContext.getString(R.string.pref_key_enable_texture_view);
+        boolean surface = mSharedPreferences.getBoolean(surfaceKey, true);
+        boolean texture = mSharedPreferences.getBoolean(textureKey, true);
+        if (!surface && !texture) {
+            mSharedPreferences.edit()
+                    .putBoolean(surfaceKey, true)
+                    .putBoolean(textureKey, true)
+                    .apply();
+        }
     }
 
     public boolean getEnableBackgroundPlay() {
@@ -89,12 +103,12 @@ public class Settings {
 
     public boolean getEnableSurfaceView() {
         String key = mAppContext.getString(R.string.pref_key_enable_surface_view);
-        return mSharedPreferences.getBoolean(key, false);
+        return mSharedPreferences.getBoolean(key, true);
     }
 
     public boolean getEnableTextureView() {
         String key = mAppContext.getString(R.string.pref_key_enable_texture_view);
-        return mSharedPreferences.getBoolean(key, false);
+        return mSharedPreferences.getBoolean(key, true);
     }
 
     public boolean getEnableDetachedSurfaceTextureView() {

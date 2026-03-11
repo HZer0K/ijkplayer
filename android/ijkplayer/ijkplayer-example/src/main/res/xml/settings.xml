@@ -73,13 +73,13 @@
             android:summary="@string/pref_summary_enable_no_view"
             android:title="@string/pref_title_enable_no_view" />
         <CheckBoxPreference
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="@string/pref_key_enable_surface_view"
             android:persistent="true"
             android:summary="@string/pref_summary_enable_surface_view"
             android:title="@string/pref_title_enable_surface_view" />
         <CheckBoxPreference
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="@string/pref_key_enable_texture_view"
             android:persistent="true"
             android:summary="@string/pref_summary_enable_texture_view"
