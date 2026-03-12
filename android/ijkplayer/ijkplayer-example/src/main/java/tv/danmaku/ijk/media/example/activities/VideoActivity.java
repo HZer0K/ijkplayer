@@ -41,14 +41,14 @@ import android.widget.TextView;
 import java.util.Locale;
 
 import android.widget.Toast;
-import java.util.regex.Pattern;
-import java.util.regex.Matcher;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 import tv.danmaku.ijk.media.player.misc.ITrackInfo;
 import tv.danmaku.ijk.media.example.R;
 import tv.danmaku.ijk.media.example.application.Settings;
 import tv.danmaku.ijk.media.example.content.RecentMediaStorage;
 import tv.danmaku.ijk.media.example.fragments.TracksFragment;
+import tv.danmaku.ijk.media.example.player.MediaSourceUtil;
+import tv.danmaku.ijk.media.example.player.PlayerToggle;
 import tv.danmaku.ijk.media.example.util.DebugEventLog;
 import tv.danmaku.ijk.media.example.widget.media.AndroidMediaController;
 import tv.danmaku.ijk.media.example.widget.media.IjkVideoView;
@@ -214,7 +214,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         if (TextUtils.isEmpty(url))
             return;
         try {
-            if (isLikelyMediaUrl(url)) {
+            if (MediaSourceUtil.isLikelyMediaUrl(url)) {
                 DebugEventLog.add("playUrl: " + url);
                 mVideoPath = url;
                 mVideoUri = Uri.parse(url);
@@ -234,9 +234,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     }
 
     private String getCurrentSource() {
-        if (!TextUtils.isEmpty(mVideoPath))
-            return mVideoPath;
-        return mVideoUri != null ? mVideoUri.toString() : null;
+        return MediaSourceUtil.getCurrentSource(mVideoPath, mVideoUri);
     }
 
     private void rebuildAndPlayCurrent() {
@@ -248,7 +246,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             DebugEventLog.add("rebuildAndPlayCurrent: " + source);
             mVideoView.stopPlayback();
             mVideoView.release(true);
-            if (source.contains("adaptationSet")) {
+            if (MediaSourceUtil.isManifestStringSource(source)) {
                 mVideoView.setVideoPath(source);
             } else {
                 mVideoView.setVideoURI(Uri.parse(source));
@@ -271,15 +269,9 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
     private void toggleCoreAndRebuild() {
         int current = mSettings.getPlayer();
-        int next;
-        boolean preferExoForHttp;
-        if (current == Settings.PV_PLAYER__IjkExoMediaPlayer) {
-            next = Settings.PV_PLAYER__IjkMediaPlayer;
-            preferExoForHttp = false;
-        } else {
-            next = Settings.PV_PLAYER__IjkExoMediaPlayer;
-            preferExoForHttp = true;
-        }
+        PlayerToggle.ToggleResult result = PlayerToggle.toggleCore(current);
+        int next = result.nextPlayer;
+        boolean preferExoForHttp = result.preferExoForHttp;
 
         DebugEventLog.add("toggleCore: " + current + " -> " + next + ", preferExoForHttp=" + preferExoForHttp);
         mSettings.setPlayer(next);
@@ -306,24 +298,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 })
                 .setNegativeButton(getString(R.string.close), null)
                 .show();
-    }
-
-    private boolean isLikelyMediaUrl(String url) {
-        String lower = url.toLowerCase(Locale.US);
-        if (lower.startsWith("rtmp://") || lower.startsWith("rtsp://"))
-            return true;
-        if (lower.endsWith(".m3u8") || lower.contains(".m3u8?"))
-            return true;
-        if (lower.endsWith(".mp4") || lower.contains(".mp4?"))
-            return true;
-        if (lower.endsWith(".flv") || lower.contains(".flv?"))
-            return true;
-        if (lower.endsWith(".mov") || lower.contains(".mov?"))
-            return true;
-        // simple HLS master manifest hint
-        Pattern p = Pattern.compile("(?i)video|play|stream.*(m3u8|mp4)");
-        Matcher m = p.matcher(lower);
-        return m.find();
     }
 
     @Override
