@@ -20,14 +20,11 @@ package tv.danmaku.ijk.media.example.activities;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
-import androidx.core.view.GravityCompat;
-import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AlertDialog;
@@ -36,6 +33,9 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.TableLayout;
 import android.widget.TextView;
@@ -65,11 +65,15 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     private IjkVideoView mVideoView;
     private TextView mToastTextView;
     private TableLayout mHudView;
-    private DrawerLayout mDrawerLayout;
-    private ViewGroup mRightDrawer;
 
     private Settings mSettings;
     private boolean mBackPressed;
+    private boolean mEdgeBackActive;
+    private float mEdgeBackDownX;
+    private float mEdgeBackDownY;
+    private float mEdgeBackEdgeSizePx;
+    private float mEdgeBackTriggerPx;
+    private int mEdgeBackTouchSlop;
 
     public static Intent newIntent(Context context, String videoPath, String videoTitle) {
         Intent intent = new Intent(context, VideoActivity.class);
@@ -135,11 +139,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
         mToastTextView = (TextView) findViewById(R.id.toast_text_view);
         mHudView = (TableLayout) findViewById(R.id.hud_view);
-        mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
-        mRightDrawer = (ViewGroup) findViewById(R.id.right_drawer);
-
-        mDrawerLayout.setScrimColor(Color.TRANSPARENT);
-        mDrawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED, GravityCompat.END);
 
         // init player
         IjkMediaPlayer.loadLibrariesOnce(null);
@@ -148,6 +147,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mVideoView = (IjkVideoView) findViewById(R.id.video_view);
         mVideoView.setMediaController(mMediaController);
         mVideoView.setHudView(mHudView);
+        installEdgeBackHelper();
         DebugEventLog.add("VideoActivity: onCreate, source=" + (mVideoPath != null ? mVideoPath : (mVideoUri != null ? mVideoUri.toString() : "null")));
         DebugEventLog.add("VideoActivity: pref.player=" + mSettings.getPlayer() + ", preferExoForHttp=" + mSettings.getPreferExoForHttp());
         // prefer mVideoPath
@@ -162,6 +162,57 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         }
         mVideoView.start();
         mMediaController.show();
+    }
+
+    private void installEdgeBackHelper() {
+        float density = getResources().getDisplayMetrics().density;
+        mEdgeBackEdgeSizePx = 32f * density;
+        mEdgeBackTriggerPx = 72f * density;
+        mEdgeBackTouchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
+
+        View root = findViewById(android.R.id.content);
+        if (root == null) {
+            root = mVideoView;
+        }
+        if (root == null) {
+            return;
+        }
+
+        root.setOnTouchListener((v, event) -> {
+            if (event == null) {
+                return false;
+            }
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                mEdgeBackDownX = event.getX();
+                mEdgeBackDownY = event.getY();
+                int width = v.getWidth();
+                mEdgeBackActive = width > 0 && (mEdgeBackDownX <= mEdgeBackEdgeSizePx || mEdgeBackDownX >= width - mEdgeBackEdgeSizePx);
+                return false;
+            } else if (action == MotionEvent.ACTION_MOVE) {
+                if (!mEdgeBackActive) {
+                    return false;
+                }
+                float dx = event.getX() - mEdgeBackDownX;
+                float dy = event.getY() - mEdgeBackDownY;
+                if (Math.abs(dy) > Math.abs(dx)) {
+                    return false;
+                }
+                if (Math.abs(dx) < mEdgeBackTouchSlop) {
+                    return false;
+                }
+                if (Math.abs(dx) >= mEdgeBackTriggerPx) {
+                    getOnBackPressedDispatcher().onBackPressed();
+                    mEdgeBackActive = false;
+                    return true;
+                }
+                return false;
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                mEdgeBackActive = false;
+                return false;
+            }
+            return false;
+        });
     }
 
     private void playUrl(String url) {
@@ -343,20 +394,13 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         } else if (id == R.id.action_show_info) {
             mVideoView.showMediaInfo();
         } else if (id == R.id.action_show_tracks) {
-            if (mDrawerLayout.isDrawerOpen(mRightDrawer)) {
-                Fragment f = getSupportFragmentManager().findFragmentById(R.id.right_drawer);
-                if (f != null) {
-                    FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-                    transaction.remove(f);
-                    transaction.commit();
-                }
-                mDrawerLayout.closeDrawer(mRightDrawer);
+            String tag = "tracks_sheet";
+            Fragment existing = getSupportFragmentManager().findFragmentByTag(tag);
+            if (existing != null) {
+                getSupportFragmentManager().beginTransaction().remove(existing).commit();
             } else {
-                Fragment f = TracksFragment.newInstance();
-                FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-                transaction.replace(R.id.right_drawer, f);
-                transaction.commit();
-                mDrawerLayout.openDrawer(mRightDrawer);
+                tv.danmaku.ijk.media.example.fragments.TracksBottomSheetDialogFragment.newInstance()
+                        .show(getSupportFragmentManager(), tag);
             }
         } else if (id == R.id.action_toggle_speed) {
             float speed = mVideoView.toggleSpeed();

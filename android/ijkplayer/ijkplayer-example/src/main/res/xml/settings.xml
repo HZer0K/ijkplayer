@@ -1,7 +1,7 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <PreferenceCategory android:title="@string/pref_title_general">
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:disableDependentsState="true"
             android:key="@string/pref_key_enable_background_play"
@@ -16,13 +16,13 @@
             android:persistent="true"
             android:title="@string/pref_title_player"
             app:entrySummaries="@array/pref_entry_summaries_player" />
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="true"
             android:key="@string/pref_key_prefer_exo_http"
             android:persistent="true"
             android:summary="@string/pref_summary_prefer_exo_http"
             android:title="@string/pref_title_prefer_exo_http" />
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="@string/pref_key_enable_vulkan_filter"
             android:persistent="true"
@@ -30,19 +30,19 @@
             android:title="@string/pref_title_enable_vulkan_filter" />
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/pref_title_ijkplayer_video">
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="@string/pref_key_using_media_codec"
             android:persistent="true"
             android:summary="@string/pref_summary_using_media_codec"
             android:title="@string/pref_title_using_media_codec" />
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="@string/pref_key_using_media_codec_auto_rotate"
             android:persistent="true"
             android:summary="@string/pref_summary_using_media_codec_auto_rotate"
             android:title="@string/pref_title_using_media_codec_auto_rotate" />
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="@string/pref_key_media_codec_handle_resolution_change"
             android:persistent="true"
@@ -58,7 +58,7 @@
             app:entrySummaries="@array/pref_entry_summaries_pixel_format" />
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/pref_title_ijkplayer_audio">
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="@string/pref_key_using_opensl_es"
             android:persistent="true"
@@ -66,25 +66,25 @@
             android:title="@string/pref_title_using_opensl_es" />
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/pref_title_render_view">
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="@string/pref_key_enable_no_view"
             android:persistent="true"
             android:summary="@string/pref_summary_enable_no_view"
             android:title="@string/pref_title_enable_no_view" />
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="true"
             android:key="@string/pref_key_enable_surface_view"
             android:persistent="true"
             android:summary="@string/pref_summary_enable_surface_view"
             android:title="@string/pref_title_enable_surface_view" />
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="true"
             android:key="@string/pref_key_enable_texture_view"
             android:persistent="true"
             android:summary="@string/pref_summary_enable_texture_view"
             android:title="@string/pref_title_enable_texture_view" />
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="@string/pref_key_enable_detached_surface_texture"
             android:persistent="true"
@@ -92,7 +92,7 @@
             android:title="@string/pref_title_enable_detached_surface_texture" />
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/pref_title_misc">
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="@string/pref_key_using_mediadatasource"
             android:persistent="true"

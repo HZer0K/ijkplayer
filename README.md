@@ -6,17 +6,6 @@ Video player based on [ffplay](http://ffmpeg.org)
 
 这是基于 bilibili/ijkplayer 的改造版，重点面向 **Android arm64** 的本地构建与 Demo 可用性（调试信息、内核切换、样例数据源等）。
 
-## 主要变化（相对上游）
-
-- Android 仅保留/优先支持 arm64（简化构建与调试）
-- FFmpeg 构建链路支持 OpenSSL（用于 Ijk 播放 https/hls），并在构建脚本中自动触发 OpenSSL 编译
-- Demo 播放页 UI 调整：顶部工具栏菜单整合入口（Open URL / HLS / MP4 / 重建播放 / 同源重开 / Player 切内核等）
-- 播放控制栏默认显示更久（避免一闪而过）
-- 错误弹窗增强：统一展示 errorCode + 分类提示 + 最近关键日志；并补全 IJK(FFmpeg) 网络错误细节（HTTP 状态码/最终 URL/部分响应字段）支持一键复制
-- Demo 边缘返回手势冲突修复：禁用右侧 Drawer 边缘滑动打开，避免抢占系统返回手势
-- 样例列表从 JSON 数据源加载并按分类展示（`res/raw/sample_media.json`）
-- 增加设置项：Prefer Exo for HTTP/HTTPS、Vulkan filter 等（用于功能验证与对比）
-
 ## Android 构建（推荐 Linux / WSL2）
 
 ### 环境依赖
@@ -75,7 +64,15 @@ cd android/ijkplayer
 - 顶部工具栏菜单：Open URL / HLS 样例 / MP4 样例 / 清空并播放（重建）/ 同源重开(Seek=0)
 - Player 按钮：Ijk ↔ Exo 内核切换并重建播放
 - 失败弹窗：错误码 + 分类提示 + 网络细节（HTTP 状态码/最终 URL/部分响应字段）+ 最近 20 行关键日志（可复制）
-- 返回手势：右侧 Drawer 不再抢占边缘返回（Tracks 仅通过菜单打开）
+- 返回手势：Tracks 使用 BottomSheet，避免 DrawerLayout 抢占边缘返回
+
+## UI/Theme（Material3 + Preference 方案）
+- Demo UI 使用 `Theme.Material3.DayNight.NoActionBar` 作为全局主题，并替换 Toolbar 为 `MaterialToolbar`
+- 设置页继续使用 `androidx.preference`（`PreferenceFragmentCompat` + `SwitchPreferenceCompat`）
+- `PreferenceThemeOverlay.Material3/MaterialComponents` 这类 style 在当前依赖组合中并不存在，因此采用 `PreferenceThemeOverlay`（androidx.preference）配合全局 Material3 主题统一观感
+- 如果需要“完整 Material3 的 Preference 组件级样式一致性”，建议两条路线：
+  - 方案 A：为 preference 自定义 layout（switch widget / list item）并用 Material 组件实现
+  - 方案 B：迁移设置页到 Jetpack Compose（Material3），彻底统一控件体系
 
 ## License
 ```text
