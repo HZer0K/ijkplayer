@@ -34,7 +34,6 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
-import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.TableLayout;
@@ -69,6 +68,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     private Settings mSettings;
     private boolean mBackPressed;
     private boolean mEdgeBackActive;
+    private boolean mEdgeBackFromLeft;
     private float mEdgeBackDownX;
     private float mEdgeBackDownY;
     private float mEdgeBackEdgeSizePx;
@@ -169,50 +169,45 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mEdgeBackEdgeSizePx = 32f * density;
         mEdgeBackTriggerPx = 72f * density;
         mEdgeBackTouchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
+    }
 
-        View root = findViewById(android.R.id.content);
-        if (root == null) {
-            root = mVideoView;
-        }
-        if (root == null) {
-            return;
-        }
-
-        root.setOnTouchListener((v, event) -> {
-            if (event == null) {
-                return false;
-            }
-            int action = event.getActionMasked();
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (ev != null && ev.getPointerCount() == 1) {
+            int action = ev.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN) {
-                mEdgeBackDownX = event.getX();
-                mEdgeBackDownY = event.getY();
-                int width = v.getWidth();
-                mEdgeBackActive = width > 0 && (mEdgeBackDownX <= mEdgeBackEdgeSizePx || mEdgeBackDownX >= width - mEdgeBackEdgeSizePx);
-                return false;
-            } else if (action == MotionEvent.ACTION_MOVE) {
-                if (!mEdgeBackActive) {
-                    return false;
-                }
-                float dx = event.getX() - mEdgeBackDownX;
-                float dy = event.getY() - mEdgeBackDownY;
-                if (Math.abs(dy) > Math.abs(dx)) {
-                    return false;
-                }
-                if (Math.abs(dx) < mEdgeBackTouchSlop) {
-                    return false;
-                }
-                if (Math.abs(dx) >= mEdgeBackTriggerPx) {
-                    getOnBackPressedDispatcher().onBackPressed();
+                mEdgeBackDownX = ev.getX();
+                mEdgeBackDownY = ev.getY();
+                int width = getWindow() != null && getWindow().getDecorView() != null ? getWindow().getDecorView().getWidth() : 0;
+                if (width > 0) {
+                    boolean fromLeft = mEdgeBackDownX <= mEdgeBackEdgeSizePx;
+                    boolean fromRight = mEdgeBackDownX >= width - mEdgeBackEdgeSizePx;
+                    mEdgeBackActive = fromLeft || fromRight;
+                    mEdgeBackFromLeft = fromLeft;
+                } else {
                     mEdgeBackActive = false;
-                    return true;
                 }
-                return false;
+            } else if (action == MotionEvent.ACTION_MOVE) {
+                if (mEdgeBackActive) {
+                    float dx = ev.getX() - mEdgeBackDownX;
+                    float dy = ev.getY() - mEdgeBackDownY;
+                    if (Math.abs(dy) <= Math.abs(dx) && Math.abs(dx) >= mEdgeBackTouchSlop) {
+                        if (mEdgeBackFromLeft && dx >= mEdgeBackTriggerPx) {
+                            mEdgeBackActive = false;
+                            getOnBackPressedDispatcher().onBackPressed();
+                            return true;
+                        } else if (!mEdgeBackFromLeft && dx <= -mEdgeBackTriggerPx) {
+                            mEdgeBackActive = false;
+                            getOnBackPressedDispatcher().onBackPressed();
+                            return true;
+                        }
+                    }
+                }
             } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 mEdgeBackActive = false;
-                return false;
             }
-            return false;
-        });
+        }
+        return super.dispatchTouchEvent(ev);
     }
 
     private void playUrl(String url) {

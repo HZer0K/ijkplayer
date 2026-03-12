@@ -22,9 +22,9 @@ ijkplayer
 
 Travis-ci
 -----------------------
-* Modify ijk version in `.travis.yaml` in Android ci repo.
-* Ensure compile task has been started on travis-ci.
-* Ensure Andoird release has been released in bintray.
+* Update CI pipeline version references (repository-specific).
+* Ensure Android build task runs successfully.
+* Ensure Android release artifact is published (if applicable).
 
 Take off
 -----------------------
