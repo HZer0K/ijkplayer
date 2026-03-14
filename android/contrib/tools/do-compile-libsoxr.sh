@@ -114,5 +114,5 @@ echo ""
 echo "--------------------"
 echo "[*] compile libsoxr"
 echo "--------------------"
-make -j4
-make install
+"$IJK_MAKE" ${IJK_MAKE_FLAG:--j4}
+"$IJK_MAKE" install

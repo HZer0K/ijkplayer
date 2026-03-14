@@ -1,4 +1,4 @@
-#! /usr/bin/env bash
+#!/usr/bin/env bash
 #
 # Copyright (C) 2014 Miguel Botón <waninkoko@gmail.com>
 # Copyright (C) 2014 Zhang Rui <bbcallen@gmail.com>
@@ -16,7 +16,6 @@
 # limitations under the License.
 #
 
-#--------------------
 set -e
 
 if [ -z "$ANDROID_NDK" ]; then
@@ -85,12 +84,137 @@ else
     cp -R "$OPENSSL_SRC_DIR/." "$FF_WORK_DIR/"
 fi
 
+PERL5LIB_SEP=":"
+case "$(uname -s)" in
+    CYGWIN_NT-*|MINGW64_NT*|MINGW32_NT*)
+        PERL5LIB_SEP=";"
+    ;;
+esac
+export PERL5LIB="$FF_WORK_DIR/util/perl${PERL5LIB:+${PERL5LIB_SEP}$PERL5LIB}"
+export PERL5OPT="-I$FF_WORK_DIR/util/perl${PERL5OPT:+ $PERL5OPT}"
+
+if ! perl -MLocale::Maketext::Simple=Style,gettext,loc -e 1 >/dev/null 2>&1; then
+    mkdir -p "$FF_WORK_DIR/util/perl/Locale/Maketext"
+    cat > "$FF_WORK_DIR/util/perl/Locale/Maketext/Simple.pm" <<'EOF'
+package Locale::Maketext::Simple;
+use strict;
+use warnings;
+use Exporter 'import';
+our @EXPORT = qw(loc gettext Style);
+our %EXPORT_TAGS = (all => \@EXPORT);
+our @EXPORT_OK = @EXPORT;
+sub loc { return @_ ? $_[0] : '' }
+sub gettext { return @_ ? $_[0] : '' }
+sub Style { return }
+1;
+EOF
+fi
+
+if ! perl -MExtUtils::MakeMaker -e 'exit(MM->can("maybe_command") ? 0 : 1)' >/dev/null 2>&1; then
+    mkdir -p "$FF_WORK_DIR/util/perl/ExtUtils"
+    cat > "$FF_WORK_DIR/util/perl/ExtUtils/MakeMaker.pm" <<'EOF'
+package ExtUtils::MakeMaker;
+use strict;
+use warnings;
+use Exporter 'import';
+our $VERSION = '0.00';
+our @EXPORT = qw(prompt);
+our %EXPORT_TAGS = (all => \@EXPORT);
+our @EXPORT_OK = @EXPORT;
+sub prompt {
+    my ($mess, $def) = @_;
+    return defined $def ? $def : '';
+}
+1;
+
+package MM;
+use strict;
+use warnings;
+sub maybe_command {
+    my ($class, $cmd) = @_;
+    return unless defined $cmd && length($cmd);
+    if ($cmd =~ m{[\\/]} && -x $cmd) {
+        return $cmd;
+    }
+    for my $dir (split(/:/, $ENV{PATH} || '')) {
+        my $path = "$dir/$cmd";
+        return $path if -x $path;
+    }
+    return;
+}
+1;
+EOF
+fi
+
+mkdir -p "$FF_WORK_DIR/util/perl/Pod"
+cat > "$FF_WORK_DIR/util/perl/Pod/Usage.pm" <<'EOF'
+package Pod::Usage;
+use strict;
+use warnings;
+use Exporter 'import';
+our @EXPORT = qw(pod2usage);
+our %EXPORT_TAGS = (all => \@EXPORT);
+our @EXPORT_OK = @EXPORT;
+sub pod2usage {
+    return 1;
+}
+1;
+EOF
+
 export ANDROID_NDK_HOME="$ANDROID_NDK"
-export ANDROID_NDK_ROOT="$ANDROID_NDK"
+export ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-$ANDROID_NDK}"
 export PATH="$IJK_LLVM_BIN:$PATH"
+export CC="$IJK_LLVM_BIN/aarch64-linux-android${API_LEVEL}-clang"
+export CXX="$IJK_LLVM_BIN/aarch64-linux-android${API_LEVEL}-clang++"
+if [ ! -x "$CC" ]; then
+    echo "Missing clang wrapper: $CC"
+    echo "Please ensure ANDROID_NDK points to an NDK that provides aarch64-linux-android${API_LEVEL}-clang (NDK r23+)."
+    exit 1
+fi
+
+SHIM_RECORD="$FF_WORK_DIR/ndk-toolchain-shim.created"
+rm -f "$SHIM_RECORD"
+
+create_ndk_bin_shim () {
+    local name="$1"
+    local target="$2"
+    local out="$IJK_LLVM_BIN/$name"
+    if [ -e "$out" ]; then
+        return 0
+    fi
+    cat > "$out" <<EOF
+#!/usr/bin/env sh
+exec "$target" "\$@"
+EOF
+    chmod +x "$out"
+    echo "$out" >> "$SHIM_RECORD"
+}
+
+create_ndk_bin_shim "aarch64-linux-android-gcc" "$CC"
+create_ndk_bin_shim "aarch64-linux-android-g++" "$CXX"
+create_ndk_bin_shim "aarch64-linux-android-ar" "$IJK_LLVM_BIN/llvm-ar"
+create_ndk_bin_shim "aarch64-linux-android-ranlib" "$IJK_LLVM_BIN/llvm-ranlib"
+create_ndk_bin_shim "aarch64-linux-android-strip" "$IJK_LLVM_BIN/llvm-strip"
+
+cleanup_ndk_bin_shims () {
+    if [ -f "$SHIM_RECORD" ]; then
+        while IFS= read -r f; do
+            rm -f "$f" || true
+        done < "$SHIM_RECORD"
+        rm -f "$SHIM_RECORD" || true
+    fi
+}
+trap cleanup_ndk_bin_shims EXIT
+
 export AR="$IJK_LLVM_BIN/llvm-ar"
 export RANLIB="$IJK_LLVM_BIN/llvm-ranlib"
 export STRIP="$IJK_LLVM_BIN/llvm-strip"
+
+echo "PATH(head)=$IJK_LLVM_BIN"
+echo "CC=$CC"
+echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
+command -v clang || true
+command -v aarch64-linux-android-gcc || true
 
 echo ""
 echo "--------------------"
@@ -99,7 +223,7 @@ echo "--------------------"
 cd "$FF_WORK_DIR"
 
 if [ -f "./Makefile" ]; then
-    make clean || true
+    "$IJK_MAKE" clean || true
 fi
 
 echo "./Configure $OPENSSL_TARGET -D__ANDROID_API__=$API_LEVEL no-shared no-tests --prefix=$FF_PREFIX --openssldir=$FF_PREFIX"
@@ -110,11 +234,11 @@ echo "--------------------"
 echo "[*] compile openssl ($FF_ARCH)"
 echo "--------------------"
 if command -v nproc >/dev/null 2>&1; then
-    make -j"$(nproc)"
+    "$IJK_MAKE" -j"$(nproc)"
 else
-    make -j4
+    "$IJK_MAKE" -j4
 fi
-make install_sw
+"$IJK_MAKE" install_sw
 
 echo ""
 echo "--------------------"

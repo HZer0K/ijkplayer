@@ -26,6 +26,13 @@ FF_TARGET_EXTRA=$2
 set -e
 set +x
 
+LOG_DIR="${IJK_LOG_DIR:-$UNI_BUILD_ROOT/build/logs}"
+mkdir -p "$LOG_DIR"
+LOG_TS="$(date +%Y%m%d_%H%M%S)"
+LOG_FILE="${IJK_LOG_FILE:-$LOG_DIR/compile-ffmpeg_${FF_TARGET:-default}_${LOG_TS}.log}"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "[*] log: $LOG_FILE"
+
 FF_ACT_ARCHS_32=""
 FF_ACT_ARCHS_64="arm64"
 FF_ACT_ARCHS_ALL=$FF_ACT_ARCHS_64

@@ -41,21 +41,31 @@
 
 #include "libavutil/avstring.h"
 #include "libavutil/error.h"
+#include "libavformat/internal.h"
 #include "libavformat/url.h"
+#include "libavformat/http.h"
 #include "libavformat/httpauth.h"
+#include "libavutil/dict.h"
 #if CONFIG_ZLIB
 #include <zlib.h>
 #endif
 
+typedef enum {
+    LOWER_PROTO,
+    READ_HEADERS,
+    WRITE_REPLY_HEADERS,
+    FINISH
+} HandshakeState;
+
 typedef struct HTTPContext {
     const AVClass *class;
     URLContext *hd;
-    unsigned char buffer[BUFFER_SIZE], *buf_ptr, *buf_end;
+    unsigned char buffer[(MAX_URL_SIZE + HTTP_HEADERS_SIZE)], *buf_ptr, *buf_end;
     int line_count;
     int http_code;
     uint64_t chunksize;
     int chunkend;
-    uint64_t off, end_off, filesize, range_end;
+    uint64_t off, end_off, filesize;
     char *uri;
     char *location;
     HTTPAuthState auth_state;
@@ -110,27 +120,11 @@ typedef struct HTTPContext {
     char *new_location;
     AVDictionary *redirect_cache;
     uint64_t filesize_from_content_range;
-    int respect_retry_after;
-    unsigned int retry_after;
-    int reconnect_max_retries;
-    int reconnect_delay_total_max;
-    uint64_t initial_request_size;
-    uint64_t request_size;
-    int initial_requests;
-    int nb_connections;
-    int nb_requests;
-    int nb_retries;
-    int nb_reconnects;
-    int nb_redirects;
-    int sum_latency;
-    int max_latency;
-    int max_redirects;
 } HTTPContext;
 #include "libavutil/eval.h"
 #include "libavutil/mathematics.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/imgutils.h"
-#include "libavutil/dict.h"
 #include "libavutil/parseutils.h"
 #include "libavutil/samplefmt.h"
 #include "libavutil/avassert.h"

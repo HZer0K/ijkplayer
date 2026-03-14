@@ -1,5 +1,11 @@
 apply plugin: 'com.android.library'
 
+def ndkHome = System.getenv("ANDROID_NDK_HOME")
+if (ndkHome == null || ndkHome.trim().isEmpty()) {
+    ndkHome = System.getenv("ANDROID_NDK_ROOT")
+}
+def enablePrefabPublishing = ndkHome != null && file(ndkHome).exists()
+
 android {
     // http://tools.android.com/tech-docs/new-build-system/tips
     //noinspection GroovyAssignabilityCheck
@@ -20,6 +26,22 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    buildFeatures {
+        prefabPublishing enablePrefabPublishing
+    }
+    if (enablePrefabPublishing) {
+        prefab {
+            ijkplayer {
+                headers "src/main/prefab/ijkplayer/include"
+            }
+            ijkffmpeg {
+                headers "src/main/prefab/ijkffmpeg/include"
+            }
+            ijksdl {
+                headers "src/main/prefab/ijksdl/include"
+            }
         }
     }
     sourceSets.main {

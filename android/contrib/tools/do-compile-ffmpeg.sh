@@ -369,7 +369,7 @@ else
         --cc="$CC" --ar="$AR" --nm="$NM" --ranlib="$RANLIB" --strip="$STRIP" \
         --extra-cflags="$FF_CFLAGS $FF_EXTRA_CFLAGS" \
         --extra-ldflags="$FF_DEP_LIBS $FF_EXTRA_LDFLAGS"
-    make clean
+    "$IJK_MAKE" clean
 fi
 
 #--------------------
@@ -378,8 +378,8 @@ echo "--------------------"
 echo "[*] compile ffmpeg"
 echo "--------------------"
 cp config.* $FF_PREFIX
-make $FF_MAKE_FLAGS > /dev/null
-make install
+"$IJK_MAKE" $FF_MAKE_FLAGS > /dev/null
+"$IJK_MAKE" install
 mkdir -p $FF_PREFIX/include/libffmpeg
 cp -f config.h $FF_PREFIX/include/libffmpeg/config.h
 

@@ -35,6 +35,24 @@ if [ -z "$ANDROID_NDK" ]; then
     exit 1
 fi
 
+case "$UNAME_S" in
+    CYGWIN_NT-*|MINGW64_NT*|MINGW32_NT*)
+        if command -v cygpath >/dev/null 2>&1; then
+            ANDROID_NDK="$(cygpath -u "$ANDROID_NDK")"
+            export ANDROID_NDK
+            export ANDROID_NDK_ROOT="$ANDROID_NDK"
+            echo "ANDROID_NDK(normalized)=$ANDROID_NDK"
+        else
+            if cd "$ANDROID_NDK" >/dev/null 2>&1; then
+                ANDROID_NDK="$(pwd -P)"
+                export ANDROID_NDK
+                export ANDROID_NDK_ROOT="$ANDROID_NDK"
+                echo "ANDROID_NDK(normalized)=$ANDROID_NDK"
+            fi
+        fi
+    ;;
+esac
+
 
 # make flags (parallel build)
 export IJK_MAKE_FLAG=
@@ -51,6 +69,20 @@ case "$UNAME_S" in
         :
     ;;
 esac
+
+if command -v make >/dev/null 2>&1; then
+    export IJK_MAKE=make
+elif command -v gmake >/dev/null 2>&1; then
+    export IJK_MAKE=gmake
+elif command -v mingw32-make >/dev/null 2>&1; then
+    export IJK_MAKE=mingw32-make
+else
+    echo "make not found in PATH."
+    echo "Please install make and re-run."
+    echo "Windows (recommended): install MSYS2 and run in MSYS2 MinGW64 shell, then: pacman -S --needed base-devel make"
+    exit 1
+fi
+echo "IJK_MAKE=$IJK_MAKE"
 
 # detect NDK (LLVM toolchain)
 export IJK_NDK_REL=$(grep -o '^Pkg\.Revision.*=[0-9]*.*' "$ANDROID_NDK/source.properties" 2>/dev/null | sed 's/[[:space:]]*//g' | cut -d "=" -f 2)

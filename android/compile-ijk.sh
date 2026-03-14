@@ -24,138 +24,162 @@ fi
 
 REQUEST_TARGET=$1
 REQUEST_SUB_CMD=$2
-ACT_ABI_32=""
 ACT_ABI_64="arm64"
 ACT_ABI_ALL=$ACT_ABI_64
-UNAME_S=$(uname -s)
 
-FF_MAKEFLAGS=
-if which nproc >/dev/null
-then
-    FF_MAKEFLAGS=-j`nproc`
-elif [ "$UNAME_S" = "Darwin" ] && which sysctl >/dev/null
-then
-    FF_MAKEFLAGS=-j`sysctl -n machdep.cpu.thread_count`
-fi
+ANDROID_ROOT="$(cd "$(dirname "$0")" && pwd)"
+LOG_DIR="${IJK_LOG_DIR:-$ANDROID_ROOT/build/logs}"
+mkdir -p "$LOG_DIR"
+LOG_TS="$(date +%Y%m%d_%H%M%S)"
+LOG_FILE="${IJK_LOG_FILE:-$LOG_DIR/compile-ijk_${REQUEST_TARGET:-default}_${LOG_TS}.log}"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "[*] log: $LOG_FILE"
 
-do_sub_cmd () {
-    SUB_CMD=$1
-    rm -rf android-ndk-prof
-
-    if [ "$PARAM_SUB_CMD" = 'prof' ]; then
-        echo 'profiler build: YES';
-        mkdir -p android-ndk-prof
-        cp -r ../../../../../../ijkprof/android-ndk-profiler/jni/* android-ndk-prof/
-    else
-        echo 'profiler build: NO';
-        mkdir -p android-ndk-prof
-        cp -r ../../../../../../ijkprof/android-ndk-profiler-dummy/jni/* android-ndk-prof/
-    fi
-
-    # ensure ndk-build outputs to src/main/obj and src/main/libs
-    NDK_OUT_DIR="$(pwd)/../obj"
-    NDK_LIBS_DIR="$(pwd)/../libs"
-
-    NDK_OUT_ARG="$NDK_OUT_DIR"
-    NDK_LIBS_ARG="$NDK_LIBS_DIR"
-    USE_CMD=0
-    if [ -x "$ANDROID_NDK/ndk-build" ]; then
-        NDK_BUILD_SH="$ANDROID_NDK/ndk-build"
-    elif [ -f "$ANDROID_NDK/ndk-build.cmd" ]; then
-        USE_CMD=1
-        if command -v cygpath >/dev/null 2>&1; then
-            NDK_BUILD_WIN="$(cygpath -am "$ANDROID_NDK/ndk-build.cmd")"
-            NDK_OUT_ARG="$(cygpath -am "$NDK_OUT_DIR")"
-            NDK_LIBS_ARG="$(cygpath -am "$NDK_LIBS_DIR")"
-        else
-            NDK_BUILD_WIN="$ANDROID_NDK/ndk-build.cmd"
+find_cmake_bin () {
+    if [ -n "$ANDROID_SDK" ] && [ -d "$ANDROID_SDK/cmake" ]; then
+        local LATEST
+        LATEST=$(ls -1 "$ANDROID_SDK/cmake" | sort -V | tail -n 1)
+        if [ -n "$LATEST" ] && [ -x "$ANDROID_SDK/cmake/$LATEST/bin/cmake" ]; then
+            echo "$ANDROID_SDK/cmake/$LATEST/bin/cmake"
+            return 0
         fi
-    else
-        echo "Cannot find ndk-build in ANDROID_NDK. Please ensure ANDROID_NDK is correct."
+    fi
+    if command -v cmake >/dev/null 2>&1; then
+        command -v cmake
+        return 0
+    fi
+    return 1
+}
+
+find_ninja_bin () {
+    if [ -n "$ANDROID_SDK" ] && [ -d "$ANDROID_SDK/cmake" ]; then
+        local LATEST
+        LATEST=$(ls -1 "$ANDROID_SDK/cmake" | sort -V | tail -n 1)
+        if [ -n "$LATEST" ] && [ -x "$ANDROID_SDK/cmake/$LATEST/bin/ninja" ]; then
+            echo "$ANDROID_SDK/cmake/$LATEST/bin/ninja"
+            return 0
+        fi
+    fi
+    if command -v ninja >/dev/null 2>&1; then
+        command -v ninja
+        return 0
+    fi
+    return 1
+}
+
+find_make_bin () {
+    if command -v make >/dev/null 2>&1; then
+        command -v make
+        return 0
+    fi
+    if command -v gmake >/dev/null 2>&1; then
+        command -v gmake
+        return 0
+    fi
+    if command -v mingw32-make >/dev/null 2>&1; then
+        command -v mingw32-make
+        return 0
+    fi
+    return 1
+}
+
+do_cmake_build () {
+    local ABI_NAME=$1
+    local SUB_CMD=$2
+
+    if [ "$ABI_NAME" != "arm64" ]; then
+        echo "Unsupported ABI: $ABI_NAME"
         exit 1
     fi
 
-    case $SUB_CMD in
-        prof)
-            if [ $USE_CMD -eq 1 ]; then
-                WIN_PWSH="powershell.exe -NoProfile -Command"
-                CMD_STR="& '$NDK_BUILD_WIN' NDK_OUT='$NDK_OUT_ARG' NDK_LIBS_OUT='$NDK_LIBS_ARG' $FF_MAKEFLAGS"
-                $WIN_PWSH "$CMD_STR"
-            else
-                "$NDK_BUILD_SH" NDK_OUT="$NDK_OUT_ARG" NDK_LIBS_OUT="$NDK_LIBS_ARG" $FF_MAKEFLAGS
-            fi
-        ;;
-        clean)
-            if [ $USE_CMD -eq 1 ]; then
-                WIN_PWSH="powershell.exe -NoProfile -Command"
-                CMD_STR="& '$NDK_BUILD_WIN' NDK_OUT='$NDK_OUT_ARG' NDK_LIBS_OUT='$NDK_LIBS_ARG' clean"
-                $WIN_PWSH "$CMD_STR"
-            else
-                "$NDK_BUILD_SH" NDK_OUT="$NDK_OUT_ARG" NDK_LIBS_OUT="$NDK_LIBS_ARG" clean
-            fi
-        ;;
-        rebuild)
-            if [ $USE_CMD -eq 1 ]; then
-                WIN_PWSH="powershell.exe -NoProfile -Command"
-                CMD_STR="& '$NDK_BUILD_WIN' NDK_OUT='$NDK_OUT_ARG' NDK_LIBS_OUT='$NDK_LIBS_ARG' clean"
-                $WIN_PWSH "$CMD_STR"
-                CMD_STR="& '$NDK_BUILD_WIN' NDK_OUT='$NDK_OUT_ARG' NDK_LIBS_OUT='$NDK_LIBS_ARG' $FF_MAKEFLAGS"
-                $WIN_PWSH "$CMD_STR"
-            else
-                "$NDK_BUILD_SH" NDK_OUT="$NDK_OUT_ARG" NDK_LIBS_OUT="$NDK_LIBS_ARG" clean
-                "$NDK_BUILD_SH" NDK_OUT="$NDK_OUT_ARG" NDK_LIBS_OUT="$NDK_LIBS_ARG" $FF_MAKEFLAGS
-            fi
-        ;;
-        *)
-            if [ $USE_CMD -eq 1 ]; then
-                WIN_PWSH="powershell.exe -NoProfile -Command"
-                CMD_STR="& '$NDK_BUILD_WIN' NDK_OUT='$NDK_OUT_ARG' NDK_LIBS_OUT='$NDK_LIBS_ARG' $FF_MAKEFLAGS"
-                $WIN_PWSH "$CMD_STR"
-            else
-                "$NDK_BUILD_SH" NDK_OUT="$NDK_OUT_ARG" NDK_LIBS_OUT="$NDK_LIBS_ARG" $FF_MAKEFLAGS
-            fi
-        ;;
-    esac
-}
+    local ABI_DIR="arm64-v8a"
+    local REPO_ROOT
+    REPO_ROOT="$(cd "$ANDROID_ROOT/.." && pwd)"
+    local MODULE_DIR="$ANDROID_ROOT/ijkplayer/ijkplayer-arm64"
+    local CMAKE_DIR="$MODULE_DIR/src/main/cpp"
+    local BUILD_DIR="$MODULE_DIR/build/cmake/$ABI_DIR"
+    local OUT_LIB_DIR="$MODULE_DIR/src/main/libs/$ABI_DIR"
 
-do_ndk_build () {
-    PARAM_TARGET=$1
-    PARAM_SUB_CMD=$2
-    case "$PARAM_TARGET" in
-        arm64)
-            cd "ijkplayer/ijkplayer-$PARAM_TARGET/src/main/jni"
-            if [ "$PARAM_SUB_CMD" = 'prof' ]; then PARAM_SUB_CMD=''; fi
-            do_sub_cmd $PARAM_SUB_CMD
-            ABI_DIR="arm64-v8a"
-            OBJ_LIB_DIR="$(pwd)/../obj/local/$ABI_DIR"
-            OUT_LIB_DIR="$(pwd)/../libs/$ABI_DIR"
-            mkdir -p "$OUT_LIB_DIR"
-            if ls "$OBJ_LIB_DIR"/lib*.so 1> /dev/null 2>&1; then
-                cp -f "$OBJ_LIB_DIR"/lib*.so "$OUT_LIB_DIR"/
-            fi
-            cd -
-        ;;
-    esac
+    local FFMPEG_SOURCE_DIR="$ANDROID_ROOT/contrib/ffmpeg-arm64"
+    local FFMPEG_OUTPUT_DIR="$ANDROID_ROOT/contrib/build/ffmpeg-arm64/output"
+
+    if [ "$SUB_CMD" = "clean" ]; then
+        rm -rf "$BUILD_DIR"
+        return 0
+    fi
+
+    if [ ! -d "$FFMPEG_SOURCE_DIR" ] || [ ! -d "$FFMPEG_OUTPUT_DIR/include" ]; then
+        echo "FFmpeg source/output not found."
+        echo "Please run: cd android/contrib && ./compile-ffmpeg.sh arm64"
+        exit 1
+    fi
+
+    local CMAKE_BIN
+    CMAKE_BIN="$(find_cmake_bin)" || { echo "cmake not found"; exit 1; }
+    local GENERATOR
+    local MAKE_BIN
+    local MAKE_PROGRAM_ARGS=()
+    local NINJA_BIN
+    if NINJA_BIN="$(find_ninja_bin)"; then
+        GENERATOR="Ninja"
+        MAKE_PROGRAM_ARGS=(-DCMAKE_MAKE_PROGRAM="$NINJA_BIN")
+    else
+        MAKE_BIN="$(find_make_bin)" || { echo "ninja not found and make not found"; exit 1; }
+        case "$(basename "$MAKE_BIN")" in
+            mingw32-make*)
+                GENERATOR="MinGW Makefiles"
+            ;;
+            *)
+                GENERATOR="Unix Makefiles"
+            ;;
+        esac
+        MAKE_PROGRAM_ARGS=(-DCMAKE_MAKE_PROGRAM="$MAKE_BIN")
+        echo "[*] ninja not found, fallback to generator: $GENERATOR ($MAKE_BIN)"
+    fi
+
+    mkdir -p "$BUILD_DIR"
+    mkdir -p "$OUT_LIB_DIR"
+
+    "$CMAKE_BIN" -S "$CMAKE_DIR" -B "$BUILD_DIR" -G "$GENERATOR" \
+        "${MAKE_PROGRAM_ARGS[@]}" \
+        -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+        -DANDROID_ABI="$ABI_DIR" \
+        -DANDROID_PLATFORM=android-21 \
+        -DIJK_FFMPEG_SOURCE_DIR="$FFMPEG_SOURCE_DIR" \
+        -DIJK_FFMPEG_OUTPUT_DIR="$FFMPEG_OUTPUT_DIR" \
+        -DCMAKE_BUILD_TYPE=Release
+
+    "$CMAKE_BIN" --build "$BUILD_DIR" --target ijksdl ijkplayer
+
+    if [ -f "$BUILD_DIR/libijksdl.so" ]; then
+        cp -f "$BUILD_DIR/libijksdl.so" "$OUT_LIB_DIR/"
+    elif [ -f "$BUILD_DIR/lib/libijksdl.so" ]; then
+        cp -f "$BUILD_DIR/lib/libijksdl.so" "$OUT_LIB_DIR/"
+    fi
+
+    if [ -f "$BUILD_DIR/libijkplayer.so" ]; then
+        cp -f "$BUILD_DIR/libijkplayer.so" "$OUT_LIB_DIR/"
+    elif [ -f "$BUILD_DIR/lib/libijkplayer.so" ]; then
+        cp -f "$BUILD_DIR/lib/libijkplayer.so" "$OUT_LIB_DIR/"
+    fi
 }
 
 
 case "$REQUEST_TARGET" in
     "")
-        do_ndk_build arm64;
+        do_cmake_build arm64;
     ;;
     arm64)
-        do_ndk_build $REQUEST_TARGET $REQUEST_SUB_CMD;
+        do_cmake_build $REQUEST_TARGET $REQUEST_SUB_CMD;
     ;;
     all|all64)
-        for ABI in $ACT_ABI_64
-        do
-            do_ndk_build "$ABI" $REQUEST_SUB_CMD;
+        for ABI in $ACT_ABI_64; do
+            do_cmake_build "$ABI" $REQUEST_SUB_CMD;
         done
     ;;
     clean)
-        for ABI in $ACT_ABI_ALL
-        do
-            do_ndk_build "$ABI" clean;
+        for ABI in $ACT_ABI_ALL; do
+            do_cmake_build "$ABI" clean;
         done
     ;;
     *)
@@ -165,4 +189,3 @@ case "$REQUEST_TARGET" in
         echo "  compile-ijk.sh clean"
     ;;
 esac
-
