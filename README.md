@@ -16,6 +16,12 @@ Video player based on [ffplay](http://ffmpeg.org)
 - curl 或 wget（若本地没有 OpenSSL 源码时会自动下载）
 - NDK r23+ 不再提供 gcc，OpenSSL/FFmpeg 构建使用 clang（脚本会自动指定对应 clang wrapper）
 
+在 Linux / WSL 中请确保用 export 导出环境变量（否则脚本子进程拿不到）：
+```bash
+export ANDROID_SDK=/path/to/Android/Sdk
+export ANDROID_NDK=/path/to/android-ndk-r27
+```
+
 ### 选择 FFmpeg 模块配置（可选）
 默认使用 [config/module-lite.sh](config/module-lite.sh)。
 

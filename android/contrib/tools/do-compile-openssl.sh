@@ -19,6 +19,11 @@
 set -e
 
 if [ -z "$ANDROID_NDK" ]; then
+    ANDROID_NDK="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-}}"
+    export ANDROID_NDK
+fi
+
+if [ -z "$ANDROID_NDK" ]; then
     echo "You must define ANDROID_NDK before starting."
     echo "They must point to your NDK directories."
     echo ""
