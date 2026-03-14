@@ -173,6 +173,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mVideoView = (IjkVideoView) findViewById(R.id.video_view);
         mVideoView.setMediaController(mMediaController);
         mVideoView.setHudView(mHudView);
+        mVideoView.setMirrorHorizontal(mSettings.getVideoMirrorHorizontal());
         String vf0 = getIntent() != null ? getIntent().getStringExtra(EXTRA_VF0) : null;
         if (!TextUtils.isEmpty(vf0)) {
             mVideoView.setVideoFilterVf0(vf0);
@@ -358,6 +359,15 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     }
 
     @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        MenuItem mirror = menu.findItem(R.id.action_toggle_mirror);
+        if (mirror != null) {
+            mirror.setChecked(mSettings.getVideoMirrorHorizontal());
+        }
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
         if (id == R.id.action_open_url) {
@@ -404,6 +414,14 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         } else if (id == R.id.action_toggle_speed) {
             float speed = mVideoView.toggleSpeed();
             mToastTextView.setText(String.format(Locale.US, "%s: %.1fx", getString(R.string.playback_speed), speed));
+            mMediaController.showOnce(mToastTextView);
+            return true;
+        } else if (id == R.id.action_toggle_mirror) {
+            boolean next = !mSettings.getVideoMirrorHorizontal();
+            mSettings.setVideoMirrorHorizontal(next);
+            mVideoView.setMirrorHorizontal(next);
+            item.setChecked(next);
+            mToastTextView.setText(getString(next ? R.string.mirror_on : R.string.mirror_off));
             mMediaController.showOnce(mToastTextView);
             return true;
         } else if (id == R.id.action_snapshot) {

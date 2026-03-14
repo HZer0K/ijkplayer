@@ -105,6 +105,8 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     private IMediaPlayer mMediaPlayer = null;
     private boolean mRetryForceExoForHttpsError = false;
     private String mVf0Override;
+    private boolean mMirrorHorizontal = false;
+    private int mMirrorRestoreRender = -1;
     private PlaybackPolicy mPlaybackPolicy;
     private PlayerFactory mPlayerFactory;
     // private int         mAudioSession;
@@ -236,9 +238,18 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
         mRenderView.addRenderCallback(mSHCallback);
         mRenderView.setVideoRotation(mVideoRotationDegree);
+        applyMirrorToRenderView();
     }
 
     public void setRender(int render) {
+        if (render == RENDER_SURFACE_VIEW && mMirrorHorizontal && mAllRenders.contains(RENDER_TEXTURE_VIEW)) {
+            render = RENDER_TEXTURE_VIEW;
+            mCurrentRender = render;
+            int idx = mAllRenders.indexOf(render);
+            if (idx >= 0) {
+                mCurrentRenderIndex = idx;
+            }
+        }
         switch (render) {
             case RENDER_NONE:
                 setRenderView(null);
@@ -267,6 +278,45 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
     public void setHudView(TableLayout tableLayout) {
         mHudViewHolder = new InfoHudViewHolder(getContext(), tableLayout);
+    }
+
+    public void setMirrorHorizontal(boolean enable) {
+        mMirrorHorizontal = enable;
+        if (mMirrorHorizontal) {
+            if (mCurrentRender == RENDER_SURFACE_VIEW && mAllRenders.contains(RENDER_TEXTURE_VIEW)) {
+                if (mMirrorRestoreRender == -1) {
+                    mMirrorRestoreRender = mCurrentRender;
+                }
+                setRenderAndSyncIndex(RENDER_TEXTURE_VIEW);
+                return;
+            }
+        } else {
+            if (mMirrorRestoreRender == RENDER_SURFACE_VIEW && mCurrentRender == RENDER_TEXTURE_VIEW && mAllRenders.contains(RENDER_SURFACE_VIEW)) {
+                setRenderAndSyncIndex(RENDER_SURFACE_VIEW);
+                mMirrorRestoreRender = -1;
+                return;
+            }
+            mMirrorRestoreRender = -1;
+        }
+        applyMirrorToRenderView();
+    }
+
+    private void setRenderAndSyncIndex(int render) {
+        mCurrentRender = render;
+        int idx = mAllRenders.indexOf(render);
+        if (idx >= 0) {
+            mCurrentRenderIndex = idx;
+        }
+        setRender(render);
+    }
+
+    private void applyMirrorToRenderView() {
+        if (mRenderView == null)
+            return;
+        View view = mRenderView.getView();
+        if (view == null)
+            return;
+        view.setScaleX(mMirrorHorizontal ? -1.0f : 1.0f);
     }
 
     /**

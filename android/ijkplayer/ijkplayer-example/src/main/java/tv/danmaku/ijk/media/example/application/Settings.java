@@ -136,6 +136,16 @@ public class Settings {
         return mSharedPreferences.getBoolean(key, false);
     }
 
+    public boolean getVideoMirrorHorizontal() {
+        String key = mAppContext.getString(R.string.pref_key_video_mirror_horizontal);
+        return mSharedPreferences.getBoolean(key, false);
+    }
+
+    public void setVideoMirrorHorizontal(boolean enable) {
+        String key = mAppContext.getString(R.string.pref_key_video_mirror_horizontal);
+        mSharedPreferences.edit().putBoolean(key, enable).apply();
+    }
+
     public String getLastDirectory() {
         String key = mAppContext.getString(R.string.pref_key_last_directory);
         return mSharedPreferences.getString(key, "/");
