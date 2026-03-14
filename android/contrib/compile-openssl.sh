@@ -21,6 +21,11 @@ FF_TARGET=$1
 set -e
 set +x
 
+if [ -z "$ANDROID_NDK" ]; then
+    ANDROID_NDK="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-}}"
+    export ANDROID_NDK
+fi
+
 FF_ACT_ARCHS_64="arm64"
 FF_ACT_ARCHS_ALL=$FF_ACT_ARCHS_64
 

@@ -26,6 +26,11 @@ FF_TARGET_EXTRA=$2
 set -e
 set +x
 
+if [ -z "$ANDROID_NDK" ]; then
+    ANDROID_NDK="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-}}"
+    export ANDROID_NDK
+fi
+
 LOG_DIR="${IJK_LOG_DIR:-$UNI_BUILD_ROOT/build/logs}"
 mkdir -p "$LOG_DIR"
 LOG_TS="$(date +%Y%m%d_%H%M%S)"

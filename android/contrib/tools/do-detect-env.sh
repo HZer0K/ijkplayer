@@ -26,6 +26,11 @@ UNAME_S=$(uname -s)
 UNAME_SM=$(uname -sm)
 echo "build on $UNAME_SM"
 
+if [ -z "$ANDROID_NDK" ]; then
+    ANDROID_NDK="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-}}"
+    export ANDROID_NDK
+fi
+
 echo "ANDROID_NDK=$ANDROID_NDK"
 
 if [ -z "$ANDROID_NDK" ]; then
@@ -34,6 +39,8 @@ if [ -z "$ANDROID_NDK" ]; then
     echo ""
     exit 1
 fi
+
+export ANDROID_NDK_ROOT="$ANDROID_NDK"
 
 case "$UNAME_S" in
     CYGWIN_NT-*|MINGW64_NT*|MINGW32_NT*)
