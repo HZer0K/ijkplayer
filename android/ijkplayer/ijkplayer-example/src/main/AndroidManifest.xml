@@ -48,6 +48,18 @@
             android:screenOrientation="user"
             android:theme="@style/AppTheme" />
         <activity
+            android:name="tv.danmaku.ijk.media.example.activities.TestHubActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:label="@string/test_hub_activity_title"
+            android:screenOrientation="user"
+            android:theme="@style/AppTheme" />
+        <activity
+            android:name="tv.danmaku.ijk.media.example.activities.TestCaseListActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:label="@string/test_hub_feature_title"
+            android:screenOrientation="user"
+            android:theme="@style/AppTheme" />
+        <activity
             android:name="tv.danmaku.ijk.media.example.activities.VideoActivity"
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:label="@string/app_name"

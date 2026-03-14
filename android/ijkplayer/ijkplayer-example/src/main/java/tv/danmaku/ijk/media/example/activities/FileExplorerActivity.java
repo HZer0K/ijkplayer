@@ -21,6 +21,8 @@ import android.os.Bundle;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 import android.text.TextUtils;
+import android.view.Menu;
+import android.view.MenuItem;
 
 import com.squareup.otto.Subscribe;
 
@@ -65,8 +67,25 @@ public class FileExplorerActivity extends AppActivity {
         FileExplorerEvents.getBus().unregister(this);
     }
 
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        boolean show = super.onPrepareOptionsMenu(menu);
+        if (!show)
+            return show;
+
+        MenuItem recent = menu.findItem(R.id.action_recent);
+        if (recent != null)
+            recent.setVisible(false);
+
+        MenuItem sample = menu.findItem(R.id.action_sample);
+        if (sample != null)
+            sample.setVisible(false);
+
+        return true;
+    }
+
     private void doOpenDirectory(String path, boolean addToBackStack) {
-        Fragment newFragment = FileListFragment.newInstance(path);
+        Fragment newFragment = FileListFragment.newInstance(path, true);
         FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
 
         transaction.replace(R.id.body, newFragment);

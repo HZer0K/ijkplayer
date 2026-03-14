@@ -48,11 +48,16 @@ import tv.danmaku.ijk.media.example.R;
 import tv.danmaku.ijk.media.example.activities.VideoActivity;
 
 public class SampleMediaListFragment extends Fragment {
+    private static final String ARG_GROUP_BY = "group_by";
     private ListView mFileListView;
     private SampleMediaAdapter mAdapter;
 
-    public static SampleMediaListFragment newInstance() {
+    public static SampleMediaListFragment newInstance(String groupBy) {
         SampleMediaListFragment f = new SampleMediaListFragment();
+        Bundle args = new Bundle();
+        if (groupBy != null)
+            args.putString(ARG_GROUP_BY, groupBy);
+        f.setArguments(args);
         return f;
     }
 
@@ -92,6 +97,14 @@ public class SampleMediaListFragment extends Fragment {
             return;
 
         try {
+            String groupBy = "category";
+            Bundle args = getArguments();
+            if (args != null) {
+                String value = args.getString(ARG_GROUP_BY);
+                if (value != null && !value.trim().isEmpty())
+                    groupBy = value;
+            }
+
             LinkedHashMap<String, List<SampleMediaItem>> grouped = new LinkedHashMap<>();
             JSONArray array = new JSONArray(json);
             for (int i = 0; i < array.length(); i++) {
@@ -107,24 +120,28 @@ public class SampleMediaListFragment extends Fragment {
                 String recommendedPlayer = obj.optString("recommendedPlayer", "");
                 boolean requiresExo = obj.optBoolean("requiresExo", false);
 
-                if (category == null || category.trim().isEmpty())
-                    category = "Other";
+                String groupKey = category;
+                if ("type".equalsIgnoreCase(groupBy)) {
+                    groupKey = formatTypeGroup(type);
+                }
+                if (groupKey == null || groupKey.trim().isEmpty())
+                    groupKey = "Other";
 
-                if (!grouped.containsKey(category))
-                    grouped.put(category, new ArrayList<>());
+                if (!grouped.containsKey(groupKey))
+                    grouped.put(groupKey, new ArrayList<>());
 
                 if ("ijklas_manifest".equals(type) && manifestRes != null && !manifestRes.isEmpty()) {
                     int resId = context.getResources().getIdentifier(manifestRes, "raw", context.getPackageName());
                     String manifestString = resId != 0 ? readRawText(context, resId) : null;
                     if (manifestString != null) {
-                        grouped.get(category).add(SampleMediaItem.createSample(manifestString, "ijklas:(manifest_string)", formatName(name, recommendedPlayer, requiresExo)));
+                        grouped.get(groupKey).add(SampleMediaItem.createSample(manifestString, "ijklas:(manifest_string)", formatName(name, recommendedPlayer, requiresExo)));
                     }
                     continue;
                 }
 
                 if (url != null && !url.isEmpty()) {
                     String displayUrl = obj.optString("displayUrl", url);
-                    grouped.get(category).add(SampleMediaItem.createSample(url, displayUrl, formatName(name, recommendedPlayer, requiresExo)));
+                    grouped.get(groupKey).add(SampleMediaItem.createSample(url, displayUrl, formatName(name, recommendedPlayer, requiresExo)));
                 }
             }
 
@@ -142,6 +159,19 @@ public class SampleMediaListFragment extends Fragment {
         } catch (JSONException e) {
             // ignore
         }
+    }
+
+    private String formatTypeGroup(String type) {
+        if (type == null)
+            return "Other";
+        String lower = type.toLowerCase();
+        if (lower.startsWith("ijklas"))
+            return "LAS";
+        if ("hls".equals(lower))
+            return "HLS";
+        if ("mp4".equals(lower))
+            return "MP4";
+        return type.toUpperCase();
     }
 
     private String formatName(String name, String recommendedPlayer, boolean requiresExo) {

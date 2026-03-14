@@ -30,8 +30,18 @@ import tv.danmaku.ijk.media.example.application.AppActivity;
 import tv.danmaku.ijk.media.example.fragments.SampleMediaListFragment;
 
 public class SampleMediaActivity extends AppActivity  {
+    public static final String EXTRA_GROUP_BY = "extra_group_by";
+    public static final String GROUP_BY_CATEGORY = "category";
+    public static final String GROUP_BY_TYPE = "type";
+
     public static Intent newIntent(Context context) {
         Intent intent = new Intent(context, SampleMediaActivity.class);
+        return intent;
+    }
+
+    public static Intent newIntent(Context context, String groupBy) {
+        Intent intent = new Intent(context, SampleMediaActivity.class);
+        intent.putExtra(EXTRA_GROUP_BY, groupBy);
         return intent;
     }
 
@@ -39,11 +49,16 @@ public class SampleMediaActivity extends AppActivity  {
         context.startActivity(newIntent(context));
     }
 
+    public static void intentToByGroup(Context context, String groupBy) {
+        context.startActivity(newIntent(context, groupBy));
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Fragment newFragment = SampleMediaListFragment.newInstance();
+        String groupBy = getIntent() != null ? getIntent().getStringExtra(EXTRA_GROUP_BY) : null;
+        Fragment newFragment = SampleMediaListFragment.newInstance(groupBy);
         FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
 
         transaction.replace(R.id.body, newFragment);

@@ -104,6 +104,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     private IRenderView.ISurfaceHolder mSurfaceHolder = null;
     private IMediaPlayer mMediaPlayer = null;
     private boolean mRetryForceExoForHttpsError = false;
+    private String mVf0Override;
     private PlaybackPolicy mPlaybackPolicy;
     private PlayerFactory mPlayerFactory;
     // private int         mAudioSession;
@@ -1214,6 +1215,10 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         return text;
     }
 
+    public void setVideoFilterVf0(String vf0) {
+        mVf0Override = vf0;
+    }
+
     public IMediaPlayer createPlayer(int playerType) {
         boolean forceExoOnce = mRetryForceExoForHttpsError;
         if (forceExoOnce) {
@@ -1222,7 +1227,8 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
         int resolvedType = mPlaybackPolicy.resolvePlayerType(playerType, mUri, mSettings, forceExoOnce);
         IMediaPlayer mediaPlayer = mPlayerFactory.create(resolvedType);
-        mediaPlayer = mPlayerFactory.configure(mediaPlayer, mSettings, mUri, mManifestString, mSettings.getEnableVulkanFilter(), deviceSupportsVulkan());
+        boolean enableVulkan = mSettings.getEnableVulkanFilter() || !TextUtils.isEmpty(mVf0Override);
+        mediaPlayer = mPlayerFactory.configure(mediaPlayer, mSettings, mUri, mManifestString, enableVulkan, deviceSupportsVulkan(), mVf0Override);
         mediaPlayer = mPlayerFactory.wrapIfNeeded(mediaPlayer, mSettings);
         return mediaPlayer;
     }

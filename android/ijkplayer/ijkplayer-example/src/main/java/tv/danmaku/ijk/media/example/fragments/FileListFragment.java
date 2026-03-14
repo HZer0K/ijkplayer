@@ -38,24 +38,32 @@ import android.widget.TextView;
 import java.io.File;
 
 import tv.danmaku.ijk.media.example.R;
+import tv.danmaku.ijk.media.example.activities.TestCaseListActivity;
+import tv.danmaku.ijk.media.example.activities.TestHubActivity;
 import tv.danmaku.ijk.media.example.content.PathCursor;
 import tv.danmaku.ijk.media.example.content.PathCursorLoader;
 import tv.danmaku.ijk.media.example.eventbus.FileExplorerEvents;
 
 public class FileListFragment extends Fragment implements LoaderManager.LoaderCallbacks<Cursor> {
     private static final String ARG_PATH = "path";
+    private static final String ARG_SHOW_TEST_HEADER = "show_test_header";
 
-    private TextView mPathView;
     private ListView mFileListView;
     private VideoAdapter mAdapter;
     private String mPath;
+    private boolean mShowTestHeader = true;
 
     public static FileListFragment newInstance(String path) {
+        return newInstance(path, true);
+    }
+
+    public static FileListFragment newInstance(String path, boolean showTestHeader) {
         FileListFragment f = new FileListFragment();
 
         // Supply index input as an argument.
         Bundle args = new Bundle();
         args.putString(ARG_PATH, path);
+        args.putBoolean(ARG_SHOW_TEST_HEADER, showTestHeader);
         f.setArguments(args);
 
         return f;
@@ -65,10 +73,7 @@ public class FileListFragment extends Fragment implements LoaderManager.LoaderCa
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         ViewGroup viewGroup = (ViewGroup) inflater.inflate(R.layout.fragment_file_list, container, false);
-        mPathView = (TextView) viewGroup.findViewById(R.id.path_view);
         mFileListView = (ListView) viewGroup.findViewById(R.id.file_list_view);
-
-        mPathView.setVisibility(View.VISIBLE);
 
         return viewGroup;
     }
@@ -83,15 +88,26 @@ public class FileListFragment extends Fragment implements LoaderManager.LoaderCa
         if (bundle != null) {
             mPath = bundle.getString(ARG_PATH);
             mPath = new File(mPath).getAbsolutePath();
-            mPathView.setText(mPath);
+            mShowTestHeader = bundle.getBoolean(ARG_SHOW_TEST_HEADER, true);
         }
 
         mAdapter = new VideoAdapter(activity);
+        if (mShowTestHeader) {
+            View header = LayoutInflater.from(activity).inflate(R.layout.header_test_hub, mFileListView, false);
+            View btnContent = header.findViewById(R.id.btn_test_hub_content);
+            View btnFeature = header.findViewById(R.id.btn_test_hub_feature);
+            btnContent.setOnClickListener(v -> TestHubActivity.intentTo(activity, TestHubActivity.MODE_CONTENT));
+            btnFeature.setOnClickListener(v -> TestCaseListActivity.intentTo(activity, R.raw.test_feature_cases, activity.getString(R.string.test_hub_feature_title)));
+            mFileListView.addHeaderView(header, null, false);
+        }
         mFileListView.setAdapter(mAdapter);
         mFileListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, final int position, final long id) {
-                String path = mAdapter.getFilePath(position);
+                int adapterPosition = position - mFileListView.getHeaderViewsCount();
+                if (adapterPosition < 0)
+                    return;
+                String path = mAdapter.getFilePath(adapterPosition);
                 if (TextUtils.isEmpty(path))
                     return;
                 FileExplorerEvents.getBus().post(new FileExplorerEvents.OnClickFile(path));

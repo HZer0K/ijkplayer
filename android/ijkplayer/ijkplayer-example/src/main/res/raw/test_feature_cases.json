@@ -1,0 +1,33 @@
+[
+  {
+    "group": "播放器内核",
+    "name": "内核切换（Ijk/Exo）",
+    "url": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+    "hint": "播放后从右上角菜单切换内核（Ijk/Exo）"
+  },
+  {
+    "group": "渲染/Surface",
+    "name": "渲染切换（Surface/Texture）",
+    "url": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+    "hint": "播放后从右上角菜单切换渲染方式（Surface/Texture）"
+  },
+  {
+    "group": "解码/选项",
+    "name": "MediaCodec 开关（软硬解对比）",
+    "url": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+    "hint": "播放后从右上角菜单切换硬解（MediaCodec）并观察日志与稳定性"
+  },
+  {
+    "group": "画面/调试",
+    "name": "截图与统计信息",
+    "url": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+    "hint": "播放后从右上角菜单进行截图、查看统计信息与错误弹窗"
+  },
+  {
+    "group": "Vulkan",
+    "name": "Vulkan 滤镜（scale_vulkan）",
+    "url": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+    "vf0": "scale_vulkan=iw:ih",
+    "hint": "仅 Ijk 内核生效；若设备支持 Vulkan，会通过 vf0 使用 Vulkan 过滤链路"
+  }
+]

@@ -33,7 +33,7 @@ public final class PlayerFactory {
         }
     }
 
-    public IMediaPlayer configure(IMediaPlayer mediaPlayer, Settings settings, Uri uri, String manifestString, boolean enableVulkan, boolean deviceSupportsVulkan) {
+    public IMediaPlayer configure(IMediaPlayer mediaPlayer, Settings settings, Uri uri, String manifestString, boolean enableVulkan, boolean deviceSupportsVulkan, String vf0Override) {
         if (!(mediaPlayer instanceof IjkMediaPlayer) || settings == null) {
             return mediaPlayer;
         }
@@ -69,7 +69,8 @@ public final class PlayerFactory {
         ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_CODEC, "skip_loop_filter", 48);
 
         if (enableVulkan && deviceSupportsVulkan && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "vf0", "scale_vulkan=iw:ih");
+            String vf0 = !TextUtils.isEmpty(vf0Override) ? vf0Override : "scale_vulkan=iw:ih";
+            ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "vf0", vf0);
         }
 
         if (uri != null) {
@@ -95,4 +96,3 @@ public final class PlayerFactory {
         return mediaPlayer;
     }
 }
-

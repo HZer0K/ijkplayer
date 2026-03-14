@@ -56,6 +56,8 @@ import tv.danmaku.ijk.media.example.widget.media.MeasureHelper;
 
 public class VideoActivity extends AppCompatActivity implements TracksFragment.ITrackHolder {
     private static final String TAG = "VideoActivity";
+    private static final String EXTRA_TEST_HINT = "testHint";
+    private static final String EXTRA_VF0 = "vf0";
 
     private String mVideoPath;
     private Uri    mVideoUri;
@@ -84,6 +86,25 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
     public static void intentTo(Context context, String videoPath, String videoTitle) {
         context.startActivity(newIntent(context, videoPath, videoTitle));
+    }
+
+    public static void intentToWithHint(Context context, String videoPath, String videoTitle, String hint) {
+        Intent intent = newIntent(context, videoPath, videoTitle);
+        if (!TextUtils.isEmpty(hint)) {
+            intent.putExtra(EXTRA_TEST_HINT, hint);
+        }
+        context.startActivity(intent);
+    }
+
+    public static void intentToWithHintAndVf0(Context context, String videoPath, String videoTitle, String hint, String vf0) {
+        Intent intent = newIntent(context, videoPath, videoTitle);
+        if (!TextUtils.isEmpty(hint)) {
+            intent.putExtra(EXTRA_TEST_HINT, hint);
+        }
+        if (!TextUtils.isEmpty(vf0)) {
+            intent.putExtra(EXTRA_VF0, vf0);
+        }
+        context.startActivity(intent);
     }
 
     @Override
@@ -139,6 +160,11 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
         mToastTextView = (TextView) findViewById(R.id.toast_text_view);
         mHudView = (TableLayout) findViewById(R.id.hud_view);
+        String testHint = getIntent() != null ? getIntent().getStringExtra(EXTRA_TEST_HINT) : null;
+        if (!TextUtils.isEmpty(testHint)) {
+            mToastTextView.setText(testHint);
+            mMediaController.showOnce(mToastTextView);
+        }
 
         // init player
         IjkMediaPlayer.loadLibrariesOnce(null);
@@ -147,6 +173,10 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mVideoView = (IjkVideoView) findViewById(R.id.video_view);
         mVideoView.setMediaController(mMediaController);
         mVideoView.setHudView(mHudView);
+        String vf0 = getIntent() != null ? getIntent().getStringExtra(EXTRA_VF0) : null;
+        if (!TextUtils.isEmpty(vf0)) {
+            mVideoView.setVideoFilterVf0(vf0);
+        }
         installEdgeBackHelper();
         DebugEventLog.add("VideoActivity: onCreate, source=" + (mVideoPath != null ? mVideoPath : (mVideoUri != null ? mVideoUri.toString() : "null")));
         DebugEventLog.add("VideoActivity: pref.player=" + mSettings.getPlayer() + ", preferExoForHttp=" + mSettings.getPreferExoForHttp());
