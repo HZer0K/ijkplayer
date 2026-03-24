@@ -46,6 +46,10 @@
         app:showAsAction="never">
         <menu>
             <item
+                android:id="@+id/action_toggle_orientation"
+                android:title="@string/toggle_orientation"
+                app:showAsAction="never" />
+            <item
                 android:id="@+id/action_toggle_player"
                 android:title="@string/toggle_player"
                 app:showAsAction="never" />

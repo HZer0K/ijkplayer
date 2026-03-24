@@ -95,6 +95,11 @@
     <string name="menu_playback">播放</string>
     <string name="menu_display">显示</string>
     <string name="menu_tools">工具</string>
+    <string name="toggle_orientation">屏幕方向</string>
+    <string name="orientation_auto">自动</string>
+    <string name="orientation_portrait">竖屏</string>
+    <string name="orientation_landscape">横屏</string>
+    <string name="pref_key_player_orientation">pref_key_player_orientation</string>
     <string name="debug_log">调试日志</string>
 
     <string name="test_hub_title">测试用例</string>

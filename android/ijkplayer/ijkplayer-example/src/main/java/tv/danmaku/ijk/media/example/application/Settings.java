@@ -32,6 +32,10 @@ public class Settings {
     public static final int PV_PLAYER__IjkMediaPlayer = 2;
     public static final int PV_PLAYER__IjkExoMediaPlayer = 3;
 
+    public static final int ORIENTATION__Auto = 0;
+    public static final int ORIENTATION__Portrait = 1;
+    public static final int ORIENTATION__Landscape = 2;
+
     public Settings(Context context) {
         mAppContext = context.getApplicationContext();
         mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(mAppContext);
@@ -144,6 +148,21 @@ public class Settings {
     public void setVideoMirrorHorizontal(boolean enable) {
         String key = mAppContext.getString(R.string.pref_key_video_mirror_horizontal);
         mSharedPreferences.edit().putBoolean(key, enable).apply();
+    }
+
+    public int getPlayerOrientation() {
+        String key = mAppContext.getString(R.string.pref_key_player_orientation);
+        String value = mSharedPreferences.getString(key, "");
+        try {
+            return Integer.valueOf(value).intValue();
+        } catch (NumberFormatException e) {
+            return ORIENTATION__Auto;
+        }
+    }
+
+    public void setPlayerOrientation(int orientation) {
+        String key = mAppContext.getString(R.string.pref_key_player_orientation);
+        mSharedPreferences.edit().putString(key, String.valueOf(orientation)).apply();
     }
 
     public String getLastDirectory() {

@@ -25,6 +25,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.app.DownloadManager;
@@ -137,6 +138,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         setContentView(R.layout.activity_player);
 
         mSettings = new Settings(this);
+        applyPlayerOrientation(mSettings.getPlayerOrientation());
 
         // handle arguments
         mVideoPath = getIntent().getStringExtra("videoPath");
@@ -559,19 +561,18 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     }
 
     @Override
-    public boolean onPrepareOptionsMenu(Menu menu) {
-        MenuItem mirror = menu.findItem(R.id.action_toggle_mirror);
-        if (mirror != null) {
-            mirror.setChecked(mSettings.getVideoMirrorHorizontal());
-        }
-        return super.onPrepareOptionsMenu(menu);
-    }
-
-    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
         if (id == R.id.action_open_url) {
             showOpenUrlDialog();
+            return true;
+        } else if (id == R.id.action_toggle_orientation) {
+            int next = nextOrientation(mSettings.getPlayerOrientation());
+            mSettings.setPlayerOrientation(next);
+            applyPlayerOrientation(next);
+            mToastTextView.setText(getString(R.string.toggle_orientation) + ": " + getOrientationText(next));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
             return true;
         } else if (id == R.id.action_demo_hls) {
             playUrl("https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8");
@@ -635,6 +636,20 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         return super.onOptionsItemSelected(item);
     }
 
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        MenuItem orientation = menu != null ? menu.findItem(R.id.action_toggle_orientation) : null;
+        if (orientation != null) {
+            int current = mSettings != null ? mSettings.getPlayerOrientation() : Settings.ORIENTATION__Auto;
+            orientation.setTitle(getString(R.string.toggle_orientation) + ": " + getOrientationText(current));
+        }
+        MenuItem mirror = menu != null ? menu.findItem(R.id.action_toggle_mirror) : null;
+        if (mirror != null) {
+            mirror.setChecked(mSettings.getVideoMirrorHorizontal());
+        }
+        return super.onPrepareOptionsMenu(menu);
+    }
+
     private void showDebugLogDialog() {
         StringBuilder sb = new StringBuilder();
         for (String line : DebugEventLog.tail(200)) {
@@ -656,6 +671,39 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 })
                 .setCancelable(true)
                 .show();
+    }
+
+    private int nextOrientation(int current) {
+        if (current == Settings.ORIENTATION__Auto) {
+            return Settings.ORIENTATION__Landscape;
+        }
+        if (current == Settings.ORIENTATION__Landscape) {
+            return Settings.ORIENTATION__Portrait;
+        }
+        return Settings.ORIENTATION__Auto;
+    }
+
+    private String getOrientationText(int orientation) {
+        if (orientation == Settings.ORIENTATION__Landscape) {
+            return getString(R.string.orientation_landscape);
+        }
+        if (orientation == Settings.ORIENTATION__Portrait) {
+            return getString(R.string.orientation_portrait);
+        }
+        return getString(R.string.orientation_auto);
+    }
+
+    private void applyPlayerOrientation(int orientation) {
+        int requested;
+        if (orientation == Settings.ORIENTATION__Landscape) {
+            requested = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        } else if (orientation == Settings.ORIENTATION__Portrait) {
+            requested = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
+        } else {
+            requested = ActivityInfo.SCREEN_ORIENTATION_USER;
+        }
+        DebugEventLog.add("VideoActivity: applyOrientation=" + orientation + ", requested=" + requested);
+        setRequestedOrientation(requested);
     }
 
     private void takeSnapshot() {
