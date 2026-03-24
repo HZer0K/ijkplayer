@@ -44,6 +44,7 @@ import android.widget.FrameLayout;
 import android.widget.MediaController;
 import android.widget.TableLayout;
 import android.widget.TextView;
+import android.content.pm.FeatureInfo;
 import android.content.pm.PackageManager;
 
 import java.io.File;
@@ -104,9 +105,11 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     private IRenderView.ISurfaceHolder mSurfaceHolder = null;
     private IMediaPlayer mMediaPlayer = null;
     private boolean mRetryForceExoForHttpsError = false;
+    private static volatile boolean sIjkNetworkProtocolMissing = false;
     private String mVf0Override;
     private boolean mMirrorHorizontal = false;
     private int mMirrorRestoreRender = -1;
+    private Integer mForcePlayerTypeOnce;
     private PlaybackPolicy mPlaybackPolicy;
     private PlayerFactory mPlayerFactory;
     // private int         mAudioSession;
@@ -301,6 +304,10 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         applyMirrorToRenderView();
     }
 
+    public boolean isMirrorHorizontal() {
+        return mMirrorHorizontal;
+    }
+
     private void setRenderAndSyncIndex(int render) {
         mCurrentRender = render;
         int idx = mAllRenders.indexOf(render);
@@ -396,6 +403,7 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
         try {
             DebugEventLog.add("openVideo: start, pref.player=" + mSettings.getPlayer() + ", preferExoForHttp=" + mSettings.getPreferExoForHttp());
+            DebugEventLog.add("openVideo: uri=" + String.valueOf(mUri) + ", vf0=" + (!TextUtils.isEmpty(mVf0Override)) + ", ijkNetMissing=" + sIjkNetworkProtocolMissing);
             mMediaPlayer = createPlayer(mSettings.getPlayer());
             DebugEventLog.add("openVideo: created player=" + (mMediaPlayer != null ? mMediaPlayer.getClass().getSimpleName() : "null"));
 
@@ -431,6 +439,8 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                         boolean permitted = host != null ? NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted(host) : NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted();
                         if (!permitted) {
                             DebugEventLog.add("openVideo: cleartext blocked by NetworkSecurityPolicy");
+                        } else {
+                            DebugEventLog.add("openVideo: cleartext permitted by NetworkSecurityPolicy");
                         }
                     } catch (Throwable ignored) {
                     }
@@ -455,11 +465,13 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
             attachMediaController();
         } catch (IOException ex) {
             Log.w(TAG, "Unable to open content: " + mUri, ex);
+            DebugEventLog.add("openVideo: IOException " + ex.getClass().getSimpleName());
             mCurrentState = STATE_ERROR;
             mTargetState = STATE_ERROR;
             mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
         } catch (IllegalArgumentException ex) {
             Log.w(TAG, "Unable to open content: " + mUri, ex);
+            DebugEventLog.add("openVideo: IllegalArgumentException " + ex.getClass().getSimpleName());
             mCurrentState = STATE_ERROR;
             mTargetState = STATE_ERROR;
             mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
@@ -648,10 +660,21 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                             isIjkPlayer = true;
                         }
 
-                        if (isIjkPlayer && scheme != null && scheme.equalsIgnoreCase("https")) {
+                        if (isIjkPlayer && impl_err == -1330794744) {
+                            sIjkNetworkProtocolMissing = true;
+                            DebugEventLog.add("onError: mark ijkNetMissing=true (Protocol not found)");
+                        }
+
+                        if (scheme != null && scheme.equalsIgnoreCase("https") && (isIjkPlayer || impl_err == -1330794744)) {
                             mCurrentRetryCount = 1;
                             post(() -> {
                                 try {
+                                    DebugEventLog.add("onError: https fail -> retry with Exo once");
+                                    if (!TextUtils.isEmpty(mVf0Override)) {
+                                        mVf0Override = null;
+                                        DebugEventLog.add("onError: clear vf0 for Exo retry");
+                                    }
+                                    mForcePlayerTypeOnce = null;
                                     mRetryForceExoForHttpsError = true;
                                     stopPlayback();
                                     release(true);
@@ -1159,6 +1182,21 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         return mCurrentAspectRatio;
     }
 
+    public void setAspectRatio(int aspectRatio) {
+        mCurrentAspectRatio = aspectRatio;
+        int idx = 0;
+        for (int i = 0; i < s_allAspectRatio.length; i++) {
+            if (s_allAspectRatio[i] == aspectRatio) {
+                idx = i;
+                break;
+            }
+        }
+        mCurrentAspectRatioIndex = idx;
+        if (mRenderView != null) {
+            mRenderView.setAspectRatio(mCurrentAspectRatio);
+        }
+    }
+
     private static final float[] s_allSpeed = new float[]{0.5f, 1.0f, 1.5f, 2.0f};
     private int mCurrentSpeedIndex = 1;
     public float toggleSpeed() {
@@ -1209,6 +1247,10 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
         mCurrentRender = mAllRenders.get(mCurrentRenderIndex);
         setRender(mCurrentRender);
+        return mCurrentRender;
+    }
+
+    public int getRender() {
         return mCurrentRender;
     }
 
@@ -1267,6 +1309,11 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
 
     public void setVideoFilterVf0(String vf0) {
         mVf0Override = vf0;
+        DebugEventLog.add("setVideoFilterVf0: " + (TextUtils.isEmpty(vf0) ? "null" : ("len=" + vf0.length())));
+    }
+
+    public void forcePlayerTypeOnce(int playerType) {
+        mForcePlayerTypeOnce = playerType;
     }
 
     public IMediaPlayer createPlayer(int playerType) {
@@ -1276,10 +1323,57 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         }
 
         int resolvedType = mPlaybackPolicy.resolvePlayerType(playerType, mUri, mSettings, forceExoOnce);
+        String resolveReason = "policy";
+        if (mForcePlayerTypeOnce != null) {
+            resolvedType = mForcePlayerTypeOnce;
+            mForcePlayerTypeOnce = null;
+            resolveReason = "forceOnce";
+            if (mUri != null) {
+                String scheme = mUri.getScheme();
+                if (scheme != null && (scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https")) && sIjkNetworkProtocolMissing && resolvedType == Settings.PV_PLAYER__IjkMediaPlayer) {
+                    resolvedType = Settings.PV_PLAYER__IjkExoMediaPlayer;
+                    resolveReason = "forceOnce->ijkNetMissing";
+                    if (!TextUtils.isEmpty(mVf0Override)) {
+                        mVf0Override = null;
+                        DebugEventLog.add("createPlayer: clear vf0 for Exo fallback");
+                    }
+                }
+            }
+        } else if (!TextUtils.isEmpty(mVf0Override)) {
+            resolvedType = Settings.PV_PLAYER__IjkMediaPlayer;
+            resolveReason = "vf0";
+        } else if (forceExoOnce) {
+            resolvedType = Settings.PV_PLAYER__IjkExoMediaPlayer;
+            resolveReason = "forceExoOnce";
+        } else if (mUri != null) {
+            String scheme = mUri.getScheme();
+            if (scheme != null && (scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https")) && sIjkNetworkProtocolMissing) {
+                resolvedType = Settings.PV_PLAYER__IjkExoMediaPlayer;
+                resolveReason = "ijkNetMissing";
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && scheme != null && scheme.equalsIgnoreCase("http")) {
+                try {
+                    String host = mUri.getHost();
+                    boolean permitted = host != null ? NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted(host) : NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted();
+                    if (!permitted) {
+                        resolvedType = Settings.PV_PLAYER__IjkExoMediaPlayer;
+                        resolveReason = "cleartextBlocked";
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+        }
         IMediaPlayer mediaPlayer = mPlayerFactory.create(resolvedType);
         boolean enableVulkan = mSettings.getEnableVulkanFilter() || !TextUtils.isEmpty(mVf0Override);
         mediaPlayer = mPlayerFactory.configure(mediaPlayer, mSettings, mUri, mManifestString, enableVulkan, deviceSupportsVulkan(), mVf0Override);
         mediaPlayer = mPlayerFactory.wrapIfNeeded(mediaPlayer, mSettings);
+
+        String backendName = mediaPlayer != null ? mediaPlayer.getClass().getSimpleName() : "null";
+        if (mediaPlayer instanceof MediaPlayerProxy) {
+            IMediaPlayer internal = ((MediaPlayerProxy) mediaPlayer).getInternalMediaPlayer();
+            backendName = backendName + "(" + (internal != null ? internal.getClass().getSimpleName() : "null") + ")";
+        }
+        DebugEventLog.add("createPlayer: requested=" + playerType + ", forceExoOnce=" + forceExoOnce + ", resolved=" + resolvedType + ", reason=" + resolveReason + ", backend=" + backendName);
         return mediaPlayer;
     }
 
@@ -1288,13 +1382,29 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
             PackageManager pm = mAppContext.getPackageManager();
             boolean hasLevel = pm.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL);
             boolean hasVersion = pm.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION);
-            return hasLevel || hasVersion;
+            if (hasLevel || hasVersion) {
+                return true;
+            }
+
+            FeatureInfo[] features = pm.getSystemAvailableFeatures();
+            if (features != null) {
+                for (FeatureInfo f : features) {
+                    if (f != null && f.name != null && f.name.startsWith("android.hardware.vulkan")) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         } catch (Throwable t) {
             return false;
         }
     }
 
-    public String captureFrame(Context context) {
+    public boolean isDeviceSupportsVulkan() {
+        return deviceSupportsVulkan();
+    }
+
+    public Bitmap captureFrameBitmap() {
         if (mCurrentRender != RENDER_TEXTURE_VIEW) {
             return null;
         }
@@ -1302,7 +1412,11 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         if (!(view instanceof TextureRenderView)) {
             return null;
         }
-        Bitmap bitmap = ((TextureRenderView) view).getBitmap();
+        return ((TextureRenderView) view).getBitmap();
+    }
+
+    public String captureFrame(Context context) {
+        Bitmap bitmap = captureFrameBitmap();
         if (bitmap == null) {
             return null;
         }

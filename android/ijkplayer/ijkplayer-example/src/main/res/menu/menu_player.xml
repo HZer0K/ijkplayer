@@ -4,56 +4,87 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context=".menu_app">
     <item
-        android:id="@+id/action_open_url"
-        android:title="@string/open_url"
-        app:showAsAction="never" />
+        android:title="@string/menu_sources"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_open_url"
+                android:title="@string/open_url"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_demo_hls"
+                android:title="@string/demo_hls"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_demo_mp4"
+                android:title="@string/demo_mp4"
+                app:showAsAction="never" />
+        </menu>
+    </item>
+
     <item
-        android:id="@+id/action_demo_hls"
-        android:title="@string/demo_hls"
-        app:showAsAction="never" />
+        android:title="@string/menu_playback"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_toggle_speed"
+                android:title="@string/playback_speed"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_rebuild_play"
+                android:title="@string/rebuild_play"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_restart_seek0"
+                android:title="@string/restart_seek0"
+                app:showAsAction="never" />
+        </menu>
+    </item>
+
     <item
-        android:id="@+id/action_demo_mp4"
-        android:title="@string/demo_mp4"
-        app:showAsAction="never" />
+        android:title="@string/menu_display"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_toggle_player"
+                android:title="@string/toggle_player"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_toggle_render"
+                android:title="@string/toggle_render"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_toggle_ratio"
+                android:title="@string/toggle_ratio"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_toggle_mirror"
+                android:checkable="true"
+                android:title="@string/toggle_mirror"
+                app:showAsAction="never" />
+        </menu>
+    </item>
+
     <item
-        android:id="@+id/action_rebuild_play"
-        android:title="@string/rebuild_play"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/action_restart_seek0"
-        android:title="@string/restart_seek0"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/action_toggle_player"
-        android:title="@string/toggle_player"
-        app:showAsAction="ifRoom" />
-    <item
-        android:id="@+id/action_toggle_render"
-        android:title="@string/toggle_render"
-        app:showAsAction="ifRoom" />
-    <item
-        android:id="@+id/action_toggle_ratio"
-        android:title="@string/toggle_ratio"
-        app:showAsAction="ifRoom" />
-    <item
-        android:id="@+id/action_show_info"
-        android:title="@string/show_info"
-        app:showAsAction="ifRoom" />
-    <item
-        android:id="@+id/action_show_tracks"
-        android:title="@string/tracks"
-        app:showAsAction="ifRoom" />
-    <item
-        android:id="@+id/action_toggle_speed"
-        android:title="@string/playback_speed"
-        app:showAsAction="ifRoom" />
-    <item
-        android:id="@+id/action_toggle_mirror"
-        android:checkable="true"
-        android:title="@string/toggle_mirror"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/action_snapshot"
-        android:title="@string/snapshot"
-        app:showAsAction="ifRoom" />
+        android:title="@string/menu_tools"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_snapshot"
+                android:title="@string/snapshot"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_show_info"
+                android:title="@string/show_info"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_show_tracks"
+                android:title="@string/tracks"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_show_debug_log"
+                android:title="@string/debug_log"
+                app:showAsAction="never" />
+        </menu>
+    </item>
 </menu>

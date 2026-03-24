@@ -2,32 +2,88 @@
   {
     "group": "播放器内核",
     "name": "内核切换（Ijk/Exo）",
-    "url": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "hint": "播放后从右上角菜单切换内核（Ijk/Exo）"
   },
   {
     "group": "渲染/Surface",
     "name": "渲染切换（Surface/Texture）",
-    "url": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "hint": "播放后从右上角菜单切换渲染方式（Surface/Texture）"
   },
   {
     "group": "解码/选项",
     "name": "MediaCodec 开关（软硬解对比）",
-    "url": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "hint": "播放后从右上角菜单切换硬解（MediaCodec）并观察日志与稳定性"
   },
   {
     "group": "画面/调试",
     "name": "截图与统计信息",
-    "url": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "hint": "播放后从右上角菜单进行截图、查看统计信息与错误弹窗"
   },
   {
+    "group": "滤镜/自检",
+    "name": "滤镜链路自检（hflip 软件）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hflip",
+    "hint": "用于确认 vf0 过滤链路是否生效；应看到画面左右翻转"
+  },
+  {
     "group": "Vulkan",
-    "name": "Vulkan 滤镜（scale_vulkan）",
-    "url": "https://media.w3.org/2010/05/sintel/trailer.mp4",
-    "vf0": "scale_vulkan=iw:ih",
-    "hint": "仅 Ijk 内核生效；若设备支持 Vulkan，会通过 vf0 使用 Vulkan 过滤链路"
+    "name": "Vulkan 缩放（scale_vulkan 原尺寸）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,scale_vulkan=w=iw:h=ih,hwdownload,format=yuv420p",
+    "hint": "仅 Ijk 内核生效；需要设备支持 Vulkan；通过 vf0 走 Vulkan filtergraph"
+  },
+  {
+    "group": "Vulkan",
+    "name": "Vulkan 缩放（scale_vulkan 半尺寸）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,scale_vulkan=w=iw/2:h=ih/2,hwdownload,format=yuv420p,pad=w=iw*2:h=ih*2:x=(ow-iw)/2:y=(oh-ih)/2:color=black",
+    "hint": "半尺寸后用 pad 加黑边，效果更明显；Vulkan 缩放后回落到软件 pad"
+  },
+  {
+    "group": "Vulkan",
+    "name": "Vulkan 水平翻转（hflip_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "drawbox=x=0:y=0:w=iw/10:h=ih:color=red@0.9:t=fill,hwupload,hflip_vulkan,hwdownload,format=yuv420p",
+    "hint": "左侧红色竖条；水平翻转后应出现在右侧（hflip_vulkan）"
+  },
+  {
+    "group": "Vulkan",
+    "name": "Vulkan 垂直翻转（vflip_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "drawbox=x=0:y=0:w=iw:h=ih/10:color=red@0.9:t=fill,hwupload,vflip_vulkan,hwdownload,format=yuv420p",
+    "hint": "顶部红色横条；垂直翻转后应出现在底部（vflip_vulkan）"
+  },
+  {
+    "group": "Vulkan",
+    "name": "Vulkan 旋转90°（transpose_vulkan=clock）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,transpose_vulkan=dir=clock,hwdownload,format=yuv420p",
+    "hint": "验证 Vulkan 旋转（transpose_vulkan）"
+  },
+  {
+    "group": "Vulkan",
+    "name": "Vulkan 高斯模糊（gblur_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,gblur_vulkan=sigma=8:size=31,hwdownload,format=yuv420p",
+    "hint": "提高 sigma/size 让模糊更明显（gblur_vulkan）"
+  },
+  {
+    "group": "Vulkan",
+    "name": "Vulkan 均值模糊（avgblur_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,avgblur_vulkan=sizeX=16:sizeY=16,hwdownload,format=yuv420p",
+    "hint": "增大模糊半径让效果更明显（avgblur_vulkan）"
+  },
+  {
+    "group": "Vulkan",
+    "name": "Vulkan 色差（chromaber_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,chromaber_vulkan=dist_x=10:dist_y=6,hwdownload,format=yuv420p",
+    "hint": "增大 dist 让色差更明显（chromaber_vulkan）"
   }
 ]

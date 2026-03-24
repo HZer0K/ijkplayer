@@ -13,6 +13,7 @@ import tv.danmaku.ijk.media.player.AndroidMediaPlayer;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 import tv.danmaku.ijk.media.player.TextureMediaPlayer;
+import tv.danmaku.ijk.media.example.util.DebugEventLog;
 
 public final class PlayerFactory {
     private final Context mAppContext;
@@ -39,6 +40,7 @@ public final class PlayerFactory {
         }
 
         IjkMediaPlayer ijk = (IjkMediaPlayer) mediaPlayer;
+        DebugEventLog.add("PlayerFactory.configure: enableVulkan=" + enableVulkan + ", deviceVulkan=" + deviceSupportsVulkan + ", sdk=" + Build.VERSION.SDK_INT + ", vf0Override=" + (!TextUtils.isEmpty(vf0Override)));
 
         if (!TextUtils.isEmpty(manifestString)) {
             ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "iformat", "ijklas");
@@ -46,6 +48,11 @@ public final class PlayerFactory {
             ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "manifest_string", manifestString);
         }
 
+        boolean hasVf0Override = !TextUtils.isEmpty(vf0Override);
+        if (hasVf0Override && settings.getUsingMediaCodec()) {
+            ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 0);
+            DebugEventLog.add("PlayerFactory.configure: disable mediacodec due to vf0Override");
+        } else
         if (settings.getUsingMediaCodec()) {
             ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 1);
             ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-auto-rotate", settings.getUsingMediaCodecAutoRotate() ? 1 : 0);
@@ -68,9 +75,29 @@ public final class PlayerFactory {
         ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "http-detect-range-support", 0);
         ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_CODEC, "skip_loop_filter", 48);
 
-        if (enableVulkan && deviceSupportsVulkan && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            String vf0 = !TextUtils.isEmpty(vf0Override) ? vf0Override : "scale_vulkan=iw:ih";
-            ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "vf0", vf0);
+        String vf0ToApply = null;
+        if (hasVf0Override) {
+            vf0ToApply = vf0Override;
+            if (vf0ToApply.contains("vulkan")) {
+                if (!deviceSupportsVulkan || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+                    vf0ToApply = mapVulkanVf0ToSoftware(vf0ToApply);
+                    DebugEventLog.add("PlayerFactory.configure: vulkan not available -> fallback vf0=" + vf0ToApply);
+                } else {
+                    if (!vf0ToApply.contains("hwupload")) {
+                        vf0ToApply = "hwupload," + vf0ToApply;
+                    }
+                    if (!vf0ToApply.contains("hwdownload")) {
+                        vf0ToApply = vf0ToApply + ",hwdownload,format=yuv420p";
+                    }
+                }
+            }
+        } else if (enableVulkan && deviceSupportsVulkan && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            vf0ToApply = "hwupload,scale_vulkan=w=iw:h=ih,hwdownload,format=yuv420p";
+        }
+
+        if (!TextUtils.isEmpty(vf0ToApply)) {
+            DebugEventLog.add("PlayerFactory.configure: apply vf0=" + vf0ToApply);
+            ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "vf0", vf0ToApply);
         }
 
         if (uri != null) {
@@ -84,6 +111,22 @@ public final class PlayerFactory {
         }
 
         return ijk;
+    }
+
+    private String mapVulkanVf0ToSoftware(String vf0) {
+        String out = vf0;
+        out = out.replace("scale_vulkan", "scale");
+        out = out.replace("hflip_vulkan", "hflip");
+        out = out.replace("vflip_vulkan", "vflip");
+        out = out.replace("transpose_vulkan", "transpose");
+        out = out.replace("gblur_vulkan", "gblur");
+        out = out.replace("avgblur_vulkan", "avgblur");
+        out = out.replace("chromaber_vulkan", "chromaber");
+        out = out.replace("hwupload,", "");
+        out = out.replace(",hwdownload,format=yuv420p", "");
+        out = out.replace(",hwdownload", "");
+        out = out.replace("hwdownload,", "");
+        return out;
     }
 
     public IMediaPlayer wrapIfNeeded(IMediaPlayer mediaPlayer, Settings settings) {

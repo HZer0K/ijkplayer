@@ -46,6 +46,7 @@
 #include "libavformat/http.h"
 #include "libavformat/httpauth.h"
 #include "libavutil/dict.h"
+#include "libavutil/hwcontext.h"
 #if CONFIG_ZLIB
 #include <zlib.h>
 #endif
@@ -1876,6 +1877,17 @@ static int configure_video_filters(FFPlayer *ffp, AVFilterGraph *graph, VideoSta
         sws_flags_str[strlen(sws_flags_str)-1] = '\0';
 
     graph->scale_sws_opts = av_strdup(sws_flags_str);
+
+    if (vfilters && strstr(vfilters, "vulkan")) {
+        if (!graph->hw_device_ctx) {
+            AVBufferRef *hw_device_ctx = NULL;
+            ret = av_hwdevice_ctx_create(&hw_device_ctx, AV_HWDEVICE_TYPE_VULKAN, NULL, NULL, 0);
+            if (ret < 0) {
+                return ret;
+            }
+            graph->hw_device_ctx = hw_device_ctx;
+        }
+    }
 
     snprintf(buffersrc_args, sizeof(buffersrc_args),
              "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",

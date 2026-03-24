@@ -1,5 +1,7 @@
 package tv.danmaku.ijk.media.example.util;
 
+import android.util.Log;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -8,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 
 public final class DebugEventLog {
+    private static final String TAG = "DebugEventLog";
     private static final int MAX_LINES = 200;
     private static final Object LOCK = new Object();
     private static final ArrayDeque<String> LINES = new ArrayDeque<>();
@@ -20,6 +23,7 @@ public final class DebugEventLog {
         if (message == null)
             return;
         String line = TIME.format(new Date()) + " " + message;
+        Log.d(TAG, line);
         synchronized (LOCK) {
             LINES.addLast(line);
             while (LINES.size() > MAX_LINES) {
@@ -44,4 +48,3 @@ public final class DebugEventLog {
         return out;
     }
 }
-
