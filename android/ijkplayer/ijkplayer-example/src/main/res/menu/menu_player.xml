@@ -86,8 +86,8 @@
                 android:title="@string/tracks"
                 app:showAsAction="never" />
             <item
-                android:id="@+id/action_show_debug_log"
-                android:title="@string/debug_log"
+                android:id="@+id/action_show_diagnostics"
+                android:title="@string/diagnostics"
                 app:showAsAction="never" />
         </menu>
     </item>

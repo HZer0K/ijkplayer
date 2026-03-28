@@ -30,6 +30,8 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import android.text.TextUtils;
@@ -39,6 +41,7 @@ import android.security.NetworkSecurityPolicy;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.PixelCopy;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.MediaController;
@@ -123,6 +126,9 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     private IMediaPlayer.OnPreparedListener mOnPreparedListener;
     private int mCurrentBufferPercentage;
     private int mCurrentRetryCount = 0;
+    private int mLastErrorFramework = 0;
+    private int mLastErrorImpl = 0;
+    private long mLastErrorTimeMs = 0L;
     private IMediaPlayer.OnErrorListener mOnErrorListener;
     private IMediaPlayer.OnInfoListener mOnInfoListener;
     private int mSeekWhenPrepared;  // recording the seek position while preparing
@@ -645,6 +651,9 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                 public boolean onError(IMediaPlayer mp, int framework_err, int impl_err) {
                     Log.d(TAG, "Error: " + framework_err + "," + impl_err);
                     DebugEventLog.add("onError: fw=" + framework_err + ", impl=" + impl_err + ", player=" + (mp != null ? mp.getClass().getSimpleName() : "null"));
+                    mLastErrorFramework = framework_err;
+                    mLastErrorImpl = impl_err;
+                    mLastErrorTimeMs = System.currentTimeMillis();
                     mCurrentState = STATE_ERROR;
                     mTargetState = STATE_ERROR;
                     if (mMediaController != null) {
@@ -1197,6 +1206,10 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         }
     }
 
+    public int getCurrentAspectRatio() {
+        return mCurrentAspectRatio;
+    }
+
     private static final float[] s_allSpeed = new float[]{0.5f, 1.0f, 1.5f, 2.0f};
     private int mCurrentSpeedIndex = 1;
     public float toggleSpeed() {
@@ -1404,6 +1417,26 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         return deviceSupportsVulkan();
     }
 
+    public String getVideoFilterVf0() {
+        return mVf0Override;
+    }
+
+    public String getDataSource() {
+        return mUri != null ? mUri.toString() : null;
+    }
+
+    public int getLastErrorFramework() {
+        return mLastErrorFramework;
+    }
+
+    public int getLastErrorImpl() {
+        return mLastErrorImpl;
+    }
+
+    public long getLastErrorTimeMs() {
+        return mLastErrorTimeMs;
+    }
+
     public Bitmap captureFrameBitmap() {
         if (mCurrentRender != RENDER_TEXTURE_VIEW) {
             return null;
@@ -1412,7 +1445,70 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         if (!(view instanceof TextureRenderView)) {
             return null;
         }
-        return ((TextureRenderView) view).getBitmap();
+        try {
+            return ((TextureRenderView) view).getBitmap();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    public interface OnBitmapCapturedListener {
+        void onCaptured(Bitmap bitmap);
+    }
+
+    public void captureFrameBitmapAsync(OnBitmapCapturedListener listener) {
+        if (listener == null) {
+            return;
+        }
+
+        View view = mRenderView != null ? mRenderView.getView() : null;
+        if (view == null) {
+            listener.onCaptured(null);
+            return;
+        }
+
+        if (view instanceof TextureRenderView) {
+            Bitmap bitmap = null;
+            try {
+                bitmap = ((TextureRenderView) view).getBitmap();
+            } catch (Throwable ignored) {
+            }
+            listener.onCaptured(bitmap);
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && view instanceof SurfaceRenderView) {
+            int w = view.getWidth();
+            int h = view.getHeight();
+            if (w <= 0 || h <= 0) {
+                listener.onCaptured(null);
+                return;
+            }
+
+            Bitmap bitmap;
+            try {
+                bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            } catch (Throwable t) {
+                listener.onCaptured(null);
+                return;
+            }
+
+            Handler handler = new Handler(Looper.getMainLooper());
+            PixelCopy.request((SurfaceRenderView) view, bitmap, result -> {
+                if (result == PixelCopy.SUCCESS) {
+                    listener.onCaptured(bitmap);
+                } else {
+                    try {
+                        bitmap.recycle();
+                    } catch (Throwable ignored) {
+                    }
+                    listener.onCaptured(null);
+                }
+            }, handler);
+            return;
+        }
+
+        listener.onCaptured(null);
     }
 
     public String captureFrame(Context context) {

@@ -34,8 +34,6 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.Handler;
-import android.os.Looper;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.appcompat.app.ActionBar;
@@ -66,6 +64,7 @@ import tv.danmaku.ijk.media.player.misc.ITrackInfo;
 import tv.danmaku.ijk.media.example.R;
 import tv.danmaku.ijk.media.example.application.Settings;
 import tv.danmaku.ijk.media.example.content.RecentMediaStorage;
+import tv.danmaku.ijk.media.example.fragments.DiagnosticsBottomSheetDialogFragment;
 import tv.danmaku.ijk.media.example.fragments.TracksFragment;
 import tv.danmaku.ijk.media.example.player.MediaSourceUtil;
 import tv.danmaku.ijk.media.example.player.PlayerToggle;
@@ -612,8 +611,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 tv.danmaku.ijk.media.example.fragments.TracksBottomSheetDialogFragment.newInstance()
                         .show(getSupportFragmentManager(), tag);
             }
-        } else if (id == R.id.action_show_debug_log) {
-            showDebugLogDialog();
+        } else if (id == R.id.action_show_diagnostics) {
+            showDiagnosticsSheet();
             return true;
         } else if (id == R.id.action_toggle_speed) {
             float speed = mVideoView.toggleSpeed();
@@ -650,27 +649,71 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         return super.onPrepareOptionsMenu(menu);
     }
 
-    private void showDebugLogDialog() {
+    private void showDiagnosticsSheet() {
+        String summary = buildDiagnosticsSummary();
+        String logs = buildDiagnosticsLogs();
+        DiagnosticsBottomSheetDialogFragment.newInstance(summary, logs)
+                .show(getSupportFragmentManager(), "diagnostics_sheet");
+    }
+
+    private String buildDiagnosticsSummary() {
+        StringBuilder sb = new StringBuilder();
+        String source = mVideoView != null ? mVideoView.getDataSource() : null;
+        if (TextUtils.isEmpty(source)) {
+            source = mVideoPath != null ? mVideoPath : (mVideoUri != null ? String.valueOf(mVideoUri) : "");
+        }
+
+        sb.append(getString(R.string.diagnostics_title)).append('\n');
+        sb.append("source=").append(source).append('\n');
+        sb.append("pref.player=").append(mSettings != null ? mSettings.getPlayer() : -1).append('\n');
+        sb.append("orientation=").append(getOrientationText(mSettings != null ? mSettings.getPlayerOrientation() : Settings.ORIENTATION__Auto)).append('\n');
+        sb.append("render=").append(mVideoView != null ? IjkVideoView.getRenderText(this, mVideoView.getRender()) : "").append('\n');
+        sb.append("ratio=").append(MeasureHelper.getAspectRatioText(this, mVideoView != null ? mVideoView.getCurrentAspectRatio() : IRenderView.AR_ASPECT_FIT_PARENT)).append('\n');
+        sb.append("mirror=").append(mSettings != null && mSettings.getVideoMirrorHorizontal()).append('\n');
+        sb.append("deviceVulkan=").append(mVideoView != null && mVideoView.isDeviceSupportsVulkan()).append('\n');
+
+        String vf0 = mVideoView != null ? mVideoView.getVideoFilterVf0() : null;
+        sb.append("vf0=").append(TextUtils.isEmpty(vf0) ? "null" : ("len=" + vf0.length())).append('\n');
+
+        if (mVideoView != null) {
+            int fw = mVideoView.getLastErrorFramework();
+            int impl = mVideoView.getLastErrorImpl();
+            if (fw != 0 || impl != 0) {
+                sb.append("lastError=").append(fw).append(',').append(impl).append(" timeMs=").append(mVideoView.getLastErrorTimeMs()).append('\n');
+            }
+        }
+
+        String lastCreate = findLastLogLineContains("createPlayer:");
+        if (!TextUtils.isEmpty(lastCreate)) {
+            sb.append(lastCreate).append('\n');
+        }
+        String lastApplyVf0 = findLastLogLineContains("PlayerFactory.configure: apply vf0=");
+        if (!TextUtils.isEmpty(lastApplyVf0)) {
+            sb.append(lastApplyVf0).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private String buildDiagnosticsLogs() {
         StringBuilder sb = new StringBuilder();
         for (String line : DebugEventLog.tail(200)) {
             sb.append(line).append('\n');
         }
-        String text = sb.toString();
-        new AlertDialog.Builder(this)
-                .setTitle(getString(R.string.debug_log))
-                .setMessage(text)
-                .setPositiveButton("关闭", null)
-                .setNeutralButton("复制", (dialog, which) -> {
-                    try {
-                        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                        if (cm != null) {
-                            cm.setPrimaryClip(ClipData.newPlainText("debug_log", text));
-                        }
-                    } catch (Throwable ignored) {
-                    }
-                })
-                .setCancelable(true)
-                .show();
+        return sb.toString();
+    }
+
+    private String findLastLogLineContains(String keyword) {
+        if (TextUtils.isEmpty(keyword)) {
+            return null;
+        }
+        java.util.List<String> lines = DebugEventLog.tail(200);
+        for (int i = lines.size() - 1; i >= 0; i--) {
+            String line = lines.get(i);
+            if (line != null && line.contains(keyword)) {
+                return line;
+            }
+        }
+        return null;
     }
 
     private int nextOrientation(int current) {
@@ -710,25 +753,18 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mToastTextView.setText(getString(R.string.snapshot_saving));
         mMediaController.showOnce(mToastTextView);
 
-        int beforeRender = mVideoView.getRender();
-        if (beforeRender != IjkVideoView.RENDER_TEXTURE_VIEW) {
-            mVideoView.setRender(IjkVideoView.RENDER_TEXTURE_VIEW);
-        }
-
-        int restoreRender = (beforeRender != IjkVideoView.RENDER_TEXTURE_VIEW && !mSettings.getVideoMirrorHorizontal()) ? beforeRender : -1;
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            Bitmap bitmap = mVideoView.captureFrameBitmap();
+        mVideoView.captureFrameBitmapAsync(bitmap -> {
             if (bitmap == null) {
                 mToastTextView.setText(getString(R.string.snapshot_failed));
                 mMediaController.showOnce(mToastTextView);
-                if (restoreRender != -1) {
-                    mVideoView.setRender(restoreRender);
-                }
                 return;
             }
 
             String location = saveBitmapToGallery(bitmap);
-            bitmap.recycle();
+            try {
+                bitmap.recycle();
+            } catch (Throwable ignored) {
+            }
 
             if (!TextUtils.isEmpty(location)) {
                 mToastTextView.setText(getString(R.string.snapshot_saved));
@@ -736,11 +772,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 mToastTextView.setText(getString(R.string.snapshot_failed));
             }
             mMediaController.showOnce(mToastTextView);
-
-            if (restoreRender != -1) {
-                mVideoView.setRender(restoreRender);
-            }
-        }, 250);
+        });
     }
 
     private String saveBitmapToGallery(Bitmap bitmap) {
