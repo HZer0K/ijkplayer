@@ -1,18 +1,20 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:orientation="vertical"
-    android:paddingBottom="0dp"
-    android:paddingLeft="@dimen/ijk_horizontal_margin"
-    android:paddingRight="@dimen/ijk_horizontal_margin"
-    android:paddingTop="0dp">
+    android:paddingHorizontal="0dp"
+    android:paddingVertical="0dp">
 
     <ListView
         android:id="@+id/file_list_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:choiceMode="singleChoice"
+        android:clipToPadding="false"
+        android:divider="@null"
+        android:paddingVertical="8dp"
+        android:scrollbarStyle="outsideOverlay"
         tools:context=".file_list_view" />
 
 </LinearLayout>

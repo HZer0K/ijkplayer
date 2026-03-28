@@ -139,6 +139,7 @@ public class FileListFragment extends Fragment implements LoaderManager.LoaderCa
         final class ViewHolder {
             public ImageView iconImageView;
             public TextView nameTextView;
+            public TextView subtitleTextView;
         }
 
         public VideoAdapter(Context context) {
@@ -160,6 +161,8 @@ public class FileListFragment extends Fragment implements LoaderManager.LoaderCa
                 viewHolder = new ViewHolder();
                 viewHolder.iconImageView = (ImageView) view.findViewById(R.id.icon);
                 viewHolder.nameTextView = (TextView) view.findViewById(R.id.name);
+                viewHolder.subtitleTextView = (TextView) view.findViewById(R.id.subtitle);
+                view.setTag(viewHolder);
             }
 
             if (isDirectory(position)) {
@@ -170,6 +173,9 @@ public class FileListFragment extends Fragment implements LoaderManager.LoaderCa
                 viewHolder.iconImageView.setImageResource(R.drawable.ic_theme_description);
             }
             viewHolder.nameTextView.setText(getFileName(position));
+            if (viewHolder.subtitleTextView != null) {
+                viewHolder.subtitleTextView.setText(getFilePath(position));
+            }
 
             return view;
         }

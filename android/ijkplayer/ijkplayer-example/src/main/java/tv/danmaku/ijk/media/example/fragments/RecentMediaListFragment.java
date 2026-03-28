@@ -95,7 +95,7 @@ public class RecentMediaListFragment extends Fragment implements LoaderManager.L
         private int mIndex_name = -1;
 
         public RecentMediaAdapter(Context context) {
-            super(context, android.R.layout.simple_list_item_2, null,
+            super(context, R.layout.list_item_two_line, null,
                     new String[]{RecentMediaStorage.Entry.COLUMN_NAME_NAME, RecentMediaStorage.Entry.COLUMN_NAME_URL},
                     new int[]{android.R.id.text1, android.R.id.text2}, 0);
         }

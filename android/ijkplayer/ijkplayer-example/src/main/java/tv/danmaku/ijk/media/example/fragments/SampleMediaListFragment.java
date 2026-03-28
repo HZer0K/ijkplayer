@@ -270,7 +270,7 @@ public class SampleMediaListFragment extends Fragment {
                 View view = convertView;
                 if (view == null) {
                     LayoutInflater inflater = LayoutInflater.from(parent.getContext());
-                    view = inflater.inflate(android.R.layout.simple_list_item_1, parent, false);
+                    view = inflater.inflate(R.layout.list_item_header, parent, false);
                 }
                 TextView textView = (TextView) view.findViewById(android.R.id.text1);
                 textView.setText(item.mName);
@@ -280,7 +280,7 @@ public class SampleMediaListFragment extends Fragment {
             View view = convertView;
             if (view == null) {
                 LayoutInflater inflater = LayoutInflater.from(parent.getContext());
-                view = inflater.inflate(android.R.layout.simple_list_item_2, parent, false);
+                view = inflater.inflate(R.layout.list_item_two_line, parent, false);
             }
 
             ViewHolder viewHolder = (ViewHolder) view.getTag();

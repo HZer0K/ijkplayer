@@ -182,7 +182,7 @@ public class TestHubFragment extends Fragment {
                 View view = convertView;
                 if (view == null) {
                     LayoutInflater inflater = LayoutInflater.from(parent.getContext());
-                    view = inflater.inflate(android.R.layout.simple_list_item_1, parent, false);
+                    view = inflater.inflate(R.layout.list_item_header, parent, false);
                 }
                 TextView textView = view.findViewById(android.R.id.text1);
                 textView.setText(item.title);
@@ -192,7 +192,7 @@ public class TestHubFragment extends Fragment {
             View view = convertView;
             if (view == null) {
                 LayoutInflater inflater = LayoutInflater.from(parent.getContext());
-                view = inflater.inflate(android.R.layout.simple_list_item_2, parent, false);
+                view = inflater.inflate(R.layout.list_item_two_line, parent, false);
             }
 
             TextView title = view.findViewById(android.R.id.text1);
