@@ -77,10 +77,6 @@ public class FileExplorerActivity extends AppActivity {
         if (recent != null)
             recent.setVisible(false);
 
-        MenuItem sample = menu.findItem(R.id.action_sample);
-        if (sample != null)
-            sample.setVisible(false);
-
         return true;
     }
 

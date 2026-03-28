@@ -9,6 +9,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -18,6 +19,10 @@ import androidx.fragment.app.Fragment;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import android.text.Editable;
+import android.text.TextUtils;
+import android.text.TextWatcher;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -36,6 +41,8 @@ public class TestCaseListFragment extends Fragment {
 
     private ListView mListView;
     private CaseAdapter mAdapter;
+    private EditText mSearchInput;
+    private final List<CaseItem> mAllCases = new ArrayList<>();
 
     public static TestCaseListFragment newInstance(int rawResId) {
         TestCaseListFragment f = new TestCaseListFragment();
@@ -67,12 +74,20 @@ public class TestCaseListFragment extends Fragment {
             rawResId = args.getInt(ARG_RAW_RES_ID, 0);
         }
 
+        View header = LayoutInflater.from(activity).inflate(R.layout.header_case_search, mListView, false);
+        mSearchInput = header.findViewById(R.id.input_search);
+        mListView.addHeaderView(header, null, false);
+
         mAdapter = new CaseAdapter(activity);
         mListView.setAdapter(mAdapter);
         mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                CaseItem item = mAdapter.getItem(position);
+                int adapterPosition = position - mListView.getHeaderViewsCount();
+                if (adapterPosition < 0) {
+                    return;
+                }
+                CaseItem item = mAdapter.getItem(adapterPosition);
                 if (item == null || item.isHeader)
                     return;
                 if (item.vf0 != null && !item.vf0.isEmpty()) {
@@ -84,6 +99,7 @@ public class TestCaseListFragment extends Fragment {
         });
 
         loadCasesFromJson(activity, rawResId);
+        bindSearch();
     }
 
     private void loadCasesFromJson(Context context, int rawResId) {
@@ -95,39 +111,100 @@ public class TestCaseListFragment extends Fragment {
             return;
 
         try {
-            LinkedHashMap<String, List<CaseItem>> grouped = new LinkedHashMap<>();
             JSONArray array = new JSONArray(json);
             for (int i = 0; i < array.length(); i++) {
                 JSONObject obj = array.optJSONObject(i);
                 if (obj == null)
                     continue;
 
+                String category = obj.optString("category", "");
                 String group = obj.optString("group", "");
                 String name = obj.optString("name", "");
                 String url = obj.optString("url", "");
                 String hint = obj.optString("hint", "");
                 String vf0 = obj.optString("vf0", "");
-                if (group == null || group.trim().isEmpty())
-                    group = "Other";
-                if (!grouped.containsKey(group))
-                    grouped.put(group, new ArrayList<>());
-                if (url != null && !url.isEmpty()) {
-                    grouped.get(group).add(CaseItem.caseItem(name, url, hint, vf0));
-                }
-            }
+                String expected = obj.optString("expected", "");
+                JSONArray logKeywordsArray = obj.optJSONArray("logKeywords");
+                List<String> logKeywords = toStringList(logKeywordsArray);
+                JSONArray tagsArray = obj.optJSONArray("tags");
+                List<String> tags = toStringList(tagsArray);
 
-            for (Map.Entry<String, List<CaseItem>> entry : grouped.entrySet()) {
-                String group = entry.getKey();
-                List<CaseItem> items = entry.getValue();
-                if (items == null || items.isEmpty())
-                    continue;
-                mAdapter.add(CaseItem.header(group));
-                for (CaseItem item : items) {
-                    mAdapter.add(item);
+                String groupKey = !TextUtils.isEmpty(category) ? category : group;
+                if (TextUtils.isEmpty(groupKey)) {
+                    groupKey = "Other";
+                }
+
+                if (!TextUtils.isEmpty(url)) {
+                    mAllCases.add(CaseItem.caseItem(groupKey, name, url, hint, vf0, expected, logKeywords, tags));
                 }
             }
+            rebuildAdapter(null);
         } catch (JSONException e) {
         }
+    }
+
+    private void bindSearch() {
+        if (mSearchInput == null) {
+            return;
+        }
+        mSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                rebuildAdapter(s != null ? s.toString() : null);
+            }
+        });
+    }
+
+    private void rebuildAdapter(String query) {
+        String q = query != null ? query.trim() : "";
+        LinkedHashMap<String, List<CaseItem>> grouped = new LinkedHashMap<>();
+        for (CaseItem c : mAllCases) {
+            if (c == null || c.isHeader) {
+                continue;
+            }
+            if (!TextUtils.isEmpty(q) && !c.matches(q)) {
+                continue;
+            }
+            if (!grouped.containsKey(c.group)) {
+                grouped.put(c.group, new ArrayList<>());
+            }
+            grouped.get(c.group).add(c);
+        }
+
+        mAdapter.clear();
+        for (Map.Entry<String, List<CaseItem>> entry : grouped.entrySet()) {
+            List<CaseItem> items = entry.getValue();
+            if (items == null || items.isEmpty()) {
+                continue;
+            }
+            mAdapter.add(CaseItem.header(entry.getKey()));
+            for (CaseItem item : items) {
+                mAdapter.add(item);
+            }
+        }
+        mAdapter.notifyDataSetChanged();
+    }
+
+    private List<String> toStringList(JSONArray arr) {
+        List<String> out = new ArrayList<>();
+        if (arr == null) {
+            return out;
+        }
+        for (int i = 0; i < arr.length(); i++) {
+            String s = arr.optString(i, null);
+            if (!TextUtils.isEmpty(s)) {
+                out.add(s);
+            }
+        }
+        return out;
     }
 
     private String readRawText(Context context, int resId) {
@@ -155,25 +232,89 @@ public class TestCaseListFragment extends Fragment {
 
     static final class CaseItem {
         final boolean isHeader;
+        final String group;
         final String name;
         final String url;
         final String hint;
         final String vf0;
+        final String subtitle;
+        final List<String> tags;
 
-        private CaseItem(boolean isHeader, String name, String url, String hint, String vf0) {
+        private CaseItem(boolean isHeader, String group, String name, String url, String hint, String vf0, String subtitle, List<String> tags) {
             this.isHeader = isHeader;
+            this.group = group;
             this.name = name;
             this.url = url;
             this.hint = hint;
             this.vf0 = vf0;
+            this.subtitle = subtitle;
+            this.tags = tags != null ? tags : new ArrayList<>();
         }
 
         static CaseItem header(String title) {
-            return new CaseItem(true, title, "", "", "");
+            return new CaseItem(true, title, title, "", "", "", "", new ArrayList<>());
         }
 
-        static CaseItem caseItem(String name, String url, String hint, String vf0) {
-            return new CaseItem(false, name, url, hint, vf0);
+        static CaseItem caseItem(String group, String name, String url, String hint, String vf0, String expected, List<String> logKeywords, List<String> tags) {
+            String primary;
+            if (!TextUtils.isEmpty(expected)) {
+                primary = "预期: " + expected;
+            } else if (!TextUtils.isEmpty(hint)) {
+                primary = hint;
+            } else {
+                primary = url;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(primary);
+            if (logKeywords != null && !logKeywords.isEmpty()) {
+                sb.append('\n').append("关键日志: ").append(join(logKeywords, ", "));
+            }
+            if (tags != null && !tags.isEmpty()) {
+                sb.append('\n').append("#").append(join(tags, " #"));
+            }
+            return new CaseItem(false, group, name, url, hint, vf0, sb.toString(), tags);
+        }
+
+        boolean matches(String q) {
+            String query = q != null ? q.toLowerCase() : "";
+            if (TextUtils.isEmpty(query)) {
+                return true;
+            }
+            if (!TextUtils.isEmpty(name) && name.toLowerCase().contains(query)) {
+                return true;
+            }
+            if (!TextUtils.isEmpty(group) && group.toLowerCase().contains(query)) {
+                return true;
+            }
+            if (!TextUtils.isEmpty(hint) && hint.toLowerCase().contains(query)) {
+                return true;
+            }
+            if (!TextUtils.isEmpty(subtitle) && subtitle.toLowerCase().contains(query)) {
+                return true;
+            }
+            if (tags != null) {
+                for (String t : tags) {
+                    if (!TextUtils.isEmpty(t) && t.toLowerCase().contains(query)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static String join(List<String> list, String sep) {
+            if (list == null || list.isEmpty()) {
+                return "";
+            }
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < list.size(); i++) {
+                if (i > 0) {
+                    sb.append(sep);
+                }
+                sb.append(list.get(i));
+            }
+            return sb.toString();
         }
     }
 
@@ -216,7 +357,7 @@ public class TestCaseListFragment extends Fragment {
             TextView title = view.findViewById(android.R.id.text1);
             TextView subtitle = view.findViewById(android.R.id.text2);
             title.setText(item != null ? item.name : "");
-            subtitle.setText(item != null ? item.url : "");
+            subtitle.setText(item != null ? item.subtitle : "");
             return view;
         }
     }

@@ -1,89 +1,128 @@
 [
   {
-    "group": "播放器内核",
+    "category": "内核/策略",
+    "tags": ["player", "fallback"],
     "name": "内核切换（Ijk/Exo）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "expected": "播放正常；可从菜单切换 Ijk/Exo；诊断面板里 createPlayer reason 变化",
+    "logKeywords": ["createPlayer:", "reason="],
     "hint": "播放后从右上角菜单切换内核（Ijk/Exo）"
   },
   {
-    "group": "渲染/Surface",
+    "category": "渲染/显示",
+    "tags": ["render", "surface", "texture"],
     "name": "渲染切换（Surface/Texture）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "expected": "播放正常；切换渲染方式后画面持续显示；截图在两种渲染都可用",
+    "logKeywords": ["setRender:", "snapshot"],
     "hint": "播放后从右上角菜单切换渲染方式（Surface/Texture）"
   },
   {
-    "group": "解码/选项",
+    "category": "解码/选项",
+    "tags": ["mediacodec", "decode"],
     "name": "MediaCodec 开关（软硬解对比）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "expected": "切换硬解后仍可播放；诊断面板里播放器/渲染保持一致；错误码可定位",
+    "logKeywords": ["mediacodec", "onError:"],
     "hint": "播放后从右上角菜单切换硬解（MediaCodec）并观察日志与稳定性"
   },
   {
-    "group": "画面/调试",
+    "category": "调试/工具",
+    "tags": ["snapshot", "info", "diagnostics"],
     "name": "截图与统计信息",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "expected": "截图可保存；诊断面板可复制日志；信息面板可查看播放器统计",
+    "logKeywords": ["snapshot", "diagnostics"],
     "hint": "播放后从右上角菜单进行截图、查看统计信息与错误弹窗"
   },
   {
-    "group": "滤镜/自检",
+    "category": "滤镜/软件",
+    "tags": ["filter", "vf0", "selfcheck"],
     "name": "滤镜链路自检（hflip 软件）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "hflip",
+    "expected": "画面左右翻转（用于确认 vf0 过滤链路生效）",
+    "logKeywords": ["apply vf0="],
     "hint": "用于确认 vf0 过滤链路是否生效；应看到画面左右翻转"
   },
   {
-    "group": "Vulkan",
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "filter", "vf0"],
     "name": "Vulkan 缩放（scale_vulkan 原尺寸）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "hwupload,scale_vulkan=w=iw:h=ih,hwdownload,format=yuv420p",
+    "expected": "设备支持 Vulkan 时生效；诊断面板显示 deviceVulkan=true；vf0 走 Ijk",
+    "logKeywords": ["enableVulkan=true", "apply vf0="],
     "hint": "仅 Ijk 内核生效；需要设备支持 Vulkan；通过 vf0 走 Vulkan filtergraph"
   },
   {
-    "group": "Vulkan",
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "scale", "pad"],
     "name": "Vulkan 缩放（scale_vulkan 半尺寸）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "hwupload,scale_vulkan=w=iw/2:h=ih/2,hwdownload,format=yuv420p,pad=w=iw*2:h=ih*2:x=(ow-iw)/2:y=(oh-ih)/2:color=black",
+    "expected": "画面缩小居中并出现黑边；pad 可能回落软件；用于观察回退链路",
+    "logKeywords": ["apply vf0="],
     "hint": "半尺寸后用 pad 加黑边，效果更明显；Vulkan 缩放后回落到软件 pad"
   },
   {
-    "group": "Vulkan",
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "flip"],
     "name": "Vulkan 水平翻转（hflip_vulkan）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "drawbox=x=0:y=0:w=iw/10:h=ih:color=red@0.9:t=fill,hwupload,hflip_vulkan,hwdownload,format=yuv420p",
+    "expected": "左侧红色竖条翻到右侧（hflip_vulkan）",
+    "logKeywords": ["apply vf0="],
     "hint": "左侧红色竖条；水平翻转后应出现在右侧（hflip_vulkan）"
   },
   {
-    "group": "Vulkan",
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "flip"],
     "name": "Vulkan 垂直翻转（vflip_vulkan）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "drawbox=x=0:y=0:w=iw:h=ih/10:color=red@0.9:t=fill,hwupload,vflip_vulkan,hwdownload,format=yuv420p",
+    "expected": "顶部红色横条翻到下方（vflip_vulkan）",
+    "logKeywords": ["apply vf0="],
     "hint": "顶部红色横条；垂直翻转后应出现在底部（vflip_vulkan）"
   },
   {
-    "group": "Vulkan",
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "rotate"],
     "name": "Vulkan 旋转90°（transpose_vulkan=clock）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "hwupload,transpose_vulkan=dir=clock,hwdownload,format=yuv420p",
+    "expected": "画面顺时针旋转 90°（transpose_vulkan）",
+    "logKeywords": ["apply vf0="],
     "hint": "验证 Vulkan 旋转（transpose_vulkan）"
   },
   {
-    "group": "Vulkan",
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "blur"],
     "name": "Vulkan 高斯模糊（gblur_vulkan）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "hwupload,gblur_vulkan=sigma=8:size=31,hwdownload,format=yuv420p",
+    "expected": "画面明显变模糊（gblur_vulkan）",
+    "logKeywords": ["apply vf0="],
     "hint": "提高 sigma/size 让模糊更明显（gblur_vulkan）"
   },
   {
-    "group": "Vulkan",
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "blur"],
     "name": "Vulkan 均值模糊（avgblur_vulkan）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "hwupload,avgblur_vulkan=sizeX=16:sizeY=16,hwdownload,format=yuv420p",
+    "expected": "画面明显变模糊（avgblur_vulkan）",
+    "logKeywords": ["apply vf0="],
     "hint": "增大模糊半径让效果更明显（avgblur_vulkan）"
   },
   {
-    "group": "Vulkan",
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "chromatic"],
     "name": "Vulkan 色差（chromaber_vulkan）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "hwupload,chromaber_vulkan=dist_x=10:dist_y=6,hwdownload,format=yuv420p",
+    "expected": "边缘出现明显 RGB 分离（chromaber_vulkan）",
+    "logKeywords": ["apply vf0="],
     "hint": "增大 dist 让色差更明显（chromaber_vulkan）"
   }
 ]

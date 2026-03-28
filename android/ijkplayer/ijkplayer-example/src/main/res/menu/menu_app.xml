@@ -4,19 +4,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context=".menu_app">
     <item
-        android:id="@+id/action_sample"
-        android:title="@string/sample"
-        app:showAsAction="ifRoom" />
-    <item
         android:id="@+id/action_recent"
         android:title="@string/recent"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_settings"
+        android:icon="@drawable/ic_action_dark_settings"
         android:title="@string/settings"
-        app:showAsAction="ifRoom" />
-    <item
-        android:id="@+id/action_open_url"
-        android:title="@string/open_url"
-        app:showAsAction="ifRoom" />
+        app:iconTint="?attr/colorOnSurface"
+        app:showAsAction="always" />
 </menu>

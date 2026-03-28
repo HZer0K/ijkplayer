@@ -28,12 +28,17 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import android.text.Editable;
+import android.text.TextUtils;
+import android.text.TextWatcher;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -51,6 +56,9 @@ public class SampleMediaListFragment extends Fragment {
     private static final String ARG_GROUP_BY = "group_by";
     private ListView mFileListView;
     private SampleMediaAdapter mAdapter;
+    private EditText mSearchInput;
+    private String mGroupBy = "category";
+    private final List<SampleEntry> mAllEntries = new ArrayList<>();
 
     public static SampleMediaListFragment newInstance(String groupBy) {
         SampleMediaListFragment f = new SampleMediaListFragment();
@@ -75,12 +83,20 @@ public class SampleMediaListFragment extends Fragment {
 
         final Activity activity = getActivity();
 
+        View header = LayoutInflater.from(activity).inflate(R.layout.header_case_search, mFileListView, false);
+        mSearchInput = header.findViewById(R.id.input_search);
+        mFileListView.addHeaderView(header, null, false);
+
         mAdapter = new SampleMediaAdapter(activity);
         mFileListView.setAdapter(mAdapter);
         mFileListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, final int position, final long id) {
-                SampleMediaItem item = mAdapter.getItem(position);
+                int adapterPosition = position - mFileListView.getHeaderViewsCount();
+                if (adapterPosition < 0) {
+                    return;
+                }
+                SampleMediaItem item = mAdapter.getItem(adapterPosition);
                 if (item == null || item.mIsHeader)
                     return;
                 String name = item.mName;
@@ -89,6 +105,7 @@ public class SampleMediaListFragment extends Fragment {
             }
         });
         loadSamplesFromJson(activity);
+        bindSearch();
     }
 
     private void loadSamplesFromJson(Context context) {
@@ -104,8 +121,9 @@ public class SampleMediaListFragment extends Fragment {
                 if (value != null && !value.trim().isEmpty())
                     groupBy = value;
             }
+            mGroupBy = groupBy;
 
-            LinkedHashMap<String, List<SampleMediaItem>> grouped = new LinkedHashMap<>();
+            mAllEntries.clear();
             JSONArray array = new JSONArray(json);
             for (int i = 0; i < array.length(); i++) {
                 JSONObject obj = array.optJSONObject(i);
@@ -127,38 +145,76 @@ public class SampleMediaListFragment extends Fragment {
                 if (groupKey == null || groupKey.trim().isEmpty())
                     groupKey = "Other";
 
-                if (!grouped.containsKey(groupKey))
-                    grouped.put(groupKey, new ArrayList<>());
-
                 if ("ijklas_manifest".equals(type) && manifestRes != null && !manifestRes.isEmpty()) {
                     int resId = context.getResources().getIdentifier(manifestRes, "raw", context.getPackageName());
                     String manifestString = resId != 0 ? readRawText(context, resId) : null;
                     if (manifestString != null) {
-                        grouped.get(groupKey).add(SampleMediaItem.createSample(manifestString, "ijklas:(manifest_string)", formatName(name, recommendedPlayer, requiresExo)));
+                        String displayName = formatName(name, recommendedPlayer, requiresExo);
+                        mAllEntries.add(new SampleEntry(groupKey, displayName, manifestString, "ijklas:(manifest_string)", type, category));
                     }
                     continue;
                 }
 
                 if (url != null && !url.isEmpty()) {
                     String displayUrl = obj.optString("displayUrl", url);
-                    grouped.get(groupKey).add(SampleMediaItem.createSample(url, displayUrl, formatName(name, recommendedPlayer, requiresExo)));
+                    String displayName = formatName(name, recommendedPlayer, requiresExo);
+                    mAllEntries.add(new SampleEntry(groupKey, displayName, url, displayUrl, type, category));
                 }
             }
-
-            for (Map.Entry<String, List<SampleMediaItem>> entry : grouped.entrySet()) {
-                String category = entry.getKey();
-                List<SampleMediaItem> items = entry.getValue();
-                if (items == null || items.isEmpty())
-                    continue;
-
-                mAdapter.add(SampleMediaItem.createHeader(category));
-                for (SampleMediaItem item : items) {
-                    mAdapter.add(item);
-                }
-            }
+            rebuildAdapter(null);
         } catch (JSONException e) {
             // ignore
         }
+    }
+
+    private void bindSearch() {
+        if (mSearchInput == null) {
+            return;
+        }
+        mSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                rebuildAdapter(s != null ? s.toString() : null);
+            }
+        });
+    }
+
+    private void rebuildAdapter(String query) {
+        String q = query != null ? query.trim() : "";
+        LinkedHashMap<String, List<SampleMediaItem>> grouped = new LinkedHashMap<>();
+        for (SampleEntry e : mAllEntries) {
+            if (e == null) {
+                continue;
+            }
+            if (!TextUtils.isEmpty(q) && !e.matches(q)) {
+                continue;
+            }
+            if (!grouped.containsKey(e.groupKey)) {
+                grouped.put(e.groupKey, new ArrayList<>());
+            }
+            grouped.get(e.groupKey).add(SampleMediaItem.createSample(e.playUrl, e.displayUrl, e.name));
+        }
+
+        mAdapter.clear();
+        for (Map.Entry<String, List<SampleMediaItem>> entry : grouped.entrySet()) {
+            List<SampleMediaItem> items = entry.getValue();
+            if (items == null || items.isEmpty()) {
+                continue;
+            }
+            mAdapter.add(SampleMediaItem.createHeader(entry.getKey()));
+            for (SampleMediaItem item : items) {
+                mAdapter.add(item);
+            }
+        }
+        mAdapter.notifyDataSetChanged();
     }
 
     private String formatTypeGroup(String type) {
@@ -299,6 +355,47 @@ public class SampleMediaListFragment extends Fragment {
         final class ViewHolder {
             public TextView mNameTextView;
             public TextView mUrlTextView;
+        }
+    }
+
+    static final class SampleEntry {
+        final String groupKey;
+        final String name;
+        final String playUrl;
+        final String displayUrl;
+        final String type;
+        final String category;
+
+        SampleEntry(String groupKey, String name, String playUrl, String displayUrl, String type, String category) {
+            this.groupKey = groupKey;
+            this.name = name;
+            this.playUrl = playUrl;
+            this.displayUrl = displayUrl;
+            this.type = type;
+            this.category = category;
+        }
+
+        boolean matches(String q) {
+            String query = q != null ? q.toLowerCase() : "";
+            if (TextUtils.isEmpty(query)) {
+                return true;
+            }
+            if (!TextUtils.isEmpty(name) && name.toLowerCase().contains(query)) {
+                return true;
+            }
+            if (!TextUtils.isEmpty(displayUrl) && displayUrl.toLowerCase().contains(query)) {
+                return true;
+            }
+            if (!TextUtils.isEmpty(type) && type.toLowerCase().contains(query)) {
+                return true;
+            }
+            if (!TextUtils.isEmpty(category) && category.toLowerCase().contains(query)) {
+                return true;
+            }
+            if (!TextUtils.isEmpty(groupKey) && groupKey.toLowerCase().contains(query)) {
+                return true;
+            }
+            return false;
         }
     }
 }
