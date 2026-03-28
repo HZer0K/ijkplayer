@@ -73,6 +73,18 @@ android {
     }
 }
 
+def ffmpegSoSrc = file("${rootProject.projectDir}/../contrib/build/ffmpeg-arm64/output/libijkffmpeg.so")
+def ffmpegSoDstDir = file("${project.projectDir}/src/main/libs/arm64-v8a")
+
+tasks.register("syncContribFfmpegSo", Copy) {
+    onlyIf { ffmpegSoSrc.exists() }
+    from(ffmpegSoSrc)
+    into(ffmpegSoDstDir)
+    rename { "libijkffmpeg.so" }
+}
+
+preBuild.dependsOn(tasks.named("syncContribFfmpegSo"))
+
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 }

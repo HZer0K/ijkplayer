@@ -10,7 +10,7 @@
             android:title="@string/pref_title_enable_background_play" />
         <tv.danmaku.ijk.media.example.widget.preference.IjkListPreference
             android:defaultValue="0"
-            android:entries="@@array/pref_entries_player"
+            android:entries="@array/pref_entries_player"
             android:entryValues="@array/pref_entry_values_player"
             android:key="@string/pref_key_player"
             android:persistent="true"
@@ -28,6 +28,54 @@
             android:persistent="true"
             android:summary="@string/pref_summary_enable_vulkan_filter"
             android:title="@string/pref_title_enable_vulkan_filter" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_title_asr">
+        <tv.danmaku.ijk.media.example.widget.preference.IjkListPreference
+            android:defaultValue="system"
+            android:entries="@array/pref_entries_asr_mode"
+            android:entryValues="@array/pref_entry_values_asr_mode"
+            android:key="@string/pref_key_asr_mode"
+            android:persistent="true"
+            android:title="@string/pref_title_asr_mode"
+            app:entrySummaries="@array/pref_entry_summaries_asr_mode" />
+
+        <EditTextPreference
+            android:defaultValue=""
+            android:key="@string/pref_key_asr_remote_endpoint"
+            android:persistent="true"
+            android:summary="@string/pref_summary_asr_remote_endpoint"
+            android:title="@string/pref_title_asr_remote_endpoint" />
+
+        <EditTextPreference
+            android:defaultValue=""
+            android:key="@string/pref_key_asr_language"
+            android:persistent="true"
+            android:summary="@string/pref_summary_asr_language"
+            android:title="@string/pref_title_asr_language" />
+
+        <EditTextPreference
+            android:defaultValue=""
+            android:key="@string/pref_key_asr_whisper_model_path"
+            android:persistent="true"
+            android:summary="@string/pref_summary_asr_whisper_model_path"
+            android:title="@string/pref_title_asr_whisper_model_path" />
+
+        <tv.danmaku.ijk.media.example.widget.preference.IjkListPreference
+            android:defaultValue=""
+            android:entries="@array/pref_entries_asr_whisper_model_preset"
+            android:entryValues="@array/pref_entry_values_asr_whisper_model_preset"
+            android:key="@string/pref_key_asr_whisper_model_preset"
+            android:persistent="true"
+            android:title="@string/pref_title_asr_whisper_model_preset"
+            app:entrySummaries="@array/pref_entry_summaries_asr_whisper_model_preset" />
+
+        <EditTextPreference
+            android:defaultValue=""
+            android:key="@string/pref_key_asr_whisper_model_url"
+            android:persistent="true"
+            android:summary="@string/pref_summary_asr_whisper_model_url"
+            android:title="@string/pref_title_asr_whisper_model_url" />
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/pref_title_ijkplayer_video">
         <SwitchPreferenceCompat

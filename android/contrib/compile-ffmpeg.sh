@@ -42,6 +42,22 @@ FF_ACT_ARCHS_32=""
 FF_ACT_ARCHS_64="arm64"
 FF_ACT_ARCHS_ALL=$FF_ACT_ARCHS_64
 
+maybe_build_glslang() {
+    local ARCH="$1"
+    if [ "${IJK_ENABLE_VULKAN_FILTERS:-1}" != "1" ]; then
+        return 0
+    fi
+    local GLSLANG_LIB="./build/glslang-${ARCH}/output/lib/libglslang.a"
+    if [ -f "$GLSLANG_LIB" ]; then
+        return 0
+    fi
+    echo ""
+    echo "--------------------"
+    echo "[*] build glslang for $ARCH (Vulkan filter SPIR-V compiler)"
+    echo "--------------------"
+    bash ./compile-glslang.sh "$ARCH"
+}
+
 maybe_build_openssl() {
     local ARCH="$1"
     if [ "${IJK_ENABLE_OPENSSL:-1}" != "1" ]; then
@@ -89,11 +105,13 @@ echo_nextstep_help() {
 case "$FF_TARGET" in
     "")
         echo_archs arm64
+        maybe_build_glslang arm64
         maybe_build_openssl arm64
         bash tools/do-compile-ffmpeg.sh arm64
     ;;
     arm64)
         echo_archs $FF_TARGET $FF_TARGET_EXTRA
+        maybe_build_glslang $FF_TARGET
         maybe_build_openssl $FF_TARGET
         bash tools/do-compile-ffmpeg.sh $FF_TARGET $FF_TARGET_EXTRA
         echo_nextstep_help
@@ -102,6 +120,7 @@ case "$FF_TARGET" in
         echo_archs $FF_ACT_ARCHS_64
         for ARCH in $FF_ACT_ARCHS_64
         do
+            maybe_build_glslang $ARCH
             maybe_build_openssl $ARCH
             bash tools/do-compile-ffmpeg.sh $ARCH $FF_TARGET_EXTRA
         done

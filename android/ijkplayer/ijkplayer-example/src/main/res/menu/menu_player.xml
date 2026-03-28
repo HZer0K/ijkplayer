@@ -78,6 +78,23 @@
                 android:title="@string/snapshot"
                 app:showAsAction="never" />
             <item
+                android:id="@+id/action_subtitle_add"
+                android:title="@string/subtitle_add"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_subtitle_asr_toggle"
+                android:checkable="true"
+                android:title="@string/subtitle_asr_toggle"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_subtitle_clear"
+                android:title="@string/subtitle_clear"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_subtitle_export"
+                android:title="@string/subtitle_export_srt"
+                app:showAsAction="never" />
+            <item
                 android:id="@+id/action_show_info"
                 android:title="@string/show_info"
                 app:showAsAction="never" />

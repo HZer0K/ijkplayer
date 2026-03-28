@@ -113,6 +113,42 @@
     <string name="copied">已复制</string>
     <string name="pref_key_native_diagnostics_enabled">pref_key_native_diagnostics_enabled</string>
     <string name="case_search_hint">搜索用例（名称/预期/标签）</string>
+    <string name="subtitle_add">添加字幕行</string>
+    <string name="subtitle_clear">清空字幕</string>
+    <string name="subtitle_export_srt">导出字幕（SRT）</string>
+    <string name="subtitle_input_title">字幕内容</string>
+    <string name="subtitle_saved">字幕已导出</string>
+    <string name="subtitle_failed">字幕导出失败</string>
+    <string name="subtitle_asr_toggle">语音识别字幕</string>
+    <string name="subtitle_asr_unavailable">当前设备不支持语音识别</string>
+    <string name="subtitle_asr_permission_denied">未授予录音权限</string>
+    <string name="subtitle_asr_start_failed">语音识别启动失败</string>
+    <string name="subtitle_asr_remote_missing_endpoint">请先在设置里填写 Remote ASR Endpoint</string>
+    <string name="subtitle_asr_remote_start">远程语音识别：开始录音</string>
+    <string name="subtitle_asr_remote_stop">远程语音识别：停止录音</string>
+    <string name="subtitle_asr_remote_uploading">远程语音识别：上传识别中…</string>
+    <string name="subtitle_asr_remote_failed">远程语音识别失败</string>
+    <string name="subtitle_asr_track_unsupported">当前系统版本不支持音轨解码（需要 API 16+）</string>
+    <string name="subtitle_asr_track_start">远程语音识别：开始从音轨提取</string>
+    <string name="subtitle_asr_track_stop">远程语音识别：停止音轨提取</string>
+    <string name="subtitle_asr_track_need_download">音轨提取需要先下载源文件</string>
+    <string name="subtitle_asr_track_downloading">音轨提取：正在下载…</string>
+    <string name="subtitle_asr_track_downloaded">音轨提取：下载完成，开始提取</string>
+    <string name="subtitle_asr_track_download_failed">音轨提取：下载失败</string>
+    <string name="subtitle_asr_track_hls_unsupported">音轨提取暂不支持 HLS（m3u8），请改用 Remote (Mic)</string>
+    <string name="subtitle_asr_whisper_missing_native">Whisper 离线引擎未打包进 APK</string>
+    <string name="subtitle_asr_whisper_missing_native_detail">Whisper 离线引擎未打包进 APK（WHISPER_ENABLED=%1$s）。请安装 NDK/CMake 并重新构建（Build Variant 选 whisper64Debug 或 enableWhisper=true）</string>
+    <string name="subtitle_asr_whisper_disabled_detail">Whisper native 已打包但未启用（WHISPER_ENABLED=%1$s）。请开启 enableWhisper=true 后 Rebuild</string>
+    <string name="subtitle_asr_whisper_missing_model">请在设置里填写 Whisper Model Path 或 Model URL</string>
+    <string name="subtitle_asr_whisper_downloading">Whisper 模型下载中…</string>
+    <string name="subtitle_asr_whisper_download_failed">Whisper 模型下载失败</string>
+    <string name="subtitle_asr_whisper_ready">Whisper：开始离线识别</string>
+    <string name="subtitle_asr_whisper_downloading_progress">Whisper 模型下载中…%1$d%% (%2$s/%3$s)</string>
+    <string name="subtitle_asr_whisper_downloaded_ready">Whisper 模型已下载，可以开始使用</string>
+    <string name="subtitle_asr_whisper_download_prompt_title">下载 Whisper 模型</string>
+    <string name="subtitle_asr_whisper_download_prompt_message">需要下载 Whisper 模型文件到本地后才能离线识别。是否开始下载？</string>
+    <string name="subtitle_asr_whisper_download_start">开始下载</string>
+    <string name="subtitle_asr_whisper_download_cancel">取消</string>
 
     <string name="test_hub_title">测试用例</string>
     <string name="test_hub_content">内容类型</string>

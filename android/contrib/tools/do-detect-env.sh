@@ -42,6 +42,12 @@ fi
 
 export ANDROID_NDK_ROOT="$ANDROID_NDK"
 
+if [ -z "$ANDROID_SDK" ]; then
+    ANDROID_SDK="${ANDROID_HOME:-}"
+    export ANDROID_SDK
+fi
+echo "ANDROID_SDK=$ANDROID_SDK"
+
 case "$UNAME_S" in
     CYGWIN_NT-*|MINGW64_NT*|MINGW32_NT*)
         if command -v cygpath >/dev/null 2>&1; then
@@ -49,12 +55,22 @@ case "$UNAME_S" in
             export ANDROID_NDK
             export ANDROID_NDK_ROOT="$ANDROID_NDK"
             echo "ANDROID_NDK(normalized)=$ANDROID_NDK"
+            if [ -n "$ANDROID_SDK" ]; then
+                ANDROID_SDK="$(cygpath -u "$ANDROID_SDK")"
+                export ANDROID_SDK
+                echo "ANDROID_SDK(normalized)=$ANDROID_SDK"
+            fi
         else
             if cd "$ANDROID_NDK" >/dev/null 2>&1; then
                 ANDROID_NDK="$(pwd -P)"
                 export ANDROID_NDK
                 export ANDROID_NDK_ROOT="$ANDROID_NDK"
                 echo "ANDROID_NDK(normalized)=$ANDROID_NDK"
+            fi
+            if [ -n "$ANDROID_SDK" ] && cd "$ANDROID_SDK" >/dev/null 2>&1; then
+                ANDROID_SDK="$(pwd -P)"
+                export ANDROID_SDK
+                echo "ANDROID_SDK(normalized)=$ANDROID_SDK"
             fi
         fi
     ;;

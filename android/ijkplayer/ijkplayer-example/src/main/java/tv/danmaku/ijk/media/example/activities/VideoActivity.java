@@ -29,11 +29,16 @@ import android.content.pm.ActivityInfo;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.app.DownloadManager;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
 import android.media.MediaScannerConnection;
+import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.appcompat.app.ActionBar;
@@ -41,26 +46,40 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import android.provider.MediaStore;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.TableLayout;
 import android.widget.TextView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import android.widget.Toast;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 import tv.danmaku.ijk.media.player.misc.ITrackInfo;
+import tv.danmaku.ijk.media.example.BuildConfig;
 import tv.danmaku.ijk.media.example.R;
 import tv.danmaku.ijk.media.example.application.Settings;
 import tv.danmaku.ijk.media.example.content.RecentMediaStorage;
@@ -69,7 +88,10 @@ import tv.danmaku.ijk.media.example.fragments.TracksFragment;
 import tv.danmaku.ijk.media.example.player.MediaSourceUtil;
 import tv.danmaku.ijk.media.example.player.PlayerToggle;
 import tv.danmaku.ijk.media.example.util.DebugEventLog;
+import tv.danmaku.ijk.media.example.util.AsrAudioTrackDecoder;
 import tv.danmaku.ijk.media.example.util.NativeFFmpegDiagnostics;
+import tv.danmaku.ijk.media.example.util.RemoteAsrClient;
+import tv.danmaku.ijk.media.example.util.WhisperAsrEngine;
 import tv.danmaku.ijk.media.example.widget.media.AndroidMediaController;
 import tv.danmaku.ijk.media.example.widget.media.IjkVideoView;
 import tv.danmaku.ijk.media.example.widget.media.IRenderView;
@@ -101,6 +123,63 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     private long mVulkanDownloadId = -1L;
     private File mVulkanDownloadedFile;
     private BroadcastReceiver mVulkanDownloadReceiver;
+
+    private long mAsrTrackDownloadId = -1L;
+    private File mAsrTrackDownloadedFile;
+    private BroadcastReceiver mAsrTrackDownloadReceiver;
+    private String mAsrTrackDownloadUrl;
+
+    private File mWhisperModelDownloadedFile;
+    private String mWhisperModelDownloadUrl;
+    private tv.danmaku.ijk.media.example.util.HttpFileDownloader mWhisperModelDownloader;
+    private Thread mWhisperModelDownloadThread;
+
+    private TextView mSubtitleOverlay;
+    private final java.util.ArrayList<SubtitleCue> mSubtitleCues = new java.util.ArrayList<>();
+    private final Handler mSubtitleHandler = new Handler(Looper.getMainLooper());
+    private final Runnable mSubtitleTick = new Runnable() {
+        @Override
+        public void run() {
+            updateSubtitleOverlay();
+            mSubtitleHandler.postDelayed(this, 250);
+        }
+    };
+
+    private static final int REQ_RECORD_AUDIO = 2201;
+    private SpeechRecognizer mSpeechRecognizer;
+    private Intent mSpeechIntent;
+    private boolean mAsrEnabled;
+    private boolean mAsrPendingStart;
+    private String mAsrPartialText;
+    private String mAsrLastFinalText;
+    private long mAsrLastFinalAtMs;
+    private int mAsrServiceCount;
+    private AudioRecord mAsrAudioRecord;
+    private Thread mAsrRemoteThread;
+    private boolean mAsrRemoteRunning;
+    private long mAsrRemoteChunkStartPlayerMs = -1;
+    private int mAsrRemoteChunkBytes = 0;
+    private final java.io.ByteArrayOutputStream mAsrRemoteChunkBuffer = new java.io.ByteArrayOutputStream();
+    private final RemoteAsrClient mRemoteAsrClient = new RemoteAsrClient();
+    private ExecutorService mAsrRemoteExecutor;
+    private boolean mAsrRemoteChunkHasVoice;
+    private long mAsrRemoteLastVoiceAtMs = -1;
+    private String mAsrRemoteCommittedTail = "";
+
+    private AsrAudioTrackDecoder mAsrTrackDecoder;
+    private int mAsrTrackChunkStartMs = -1;
+    private int mAsrTrackChunkBytes = 0;
+    private boolean mAsrTrackChunkHasVoice;
+    private int mAsrTrackLastVoiceMs = -1;
+    private int mAsrTrackLastEndMs = -1;
+    private int mAsrTrackSampleRate = 16000;
+    private int mAsrTrackChannelCount = 1;
+    private String mAsrTrackAudioFormat = "pcm_s16le";
+    private final java.io.ByteArrayOutputStream mAsrTrackChunkBuffer = new java.io.ByteArrayOutputStream();
+    private boolean mAsrTrackUseWhisper;
+    private String mAsrWhisperModelPath;
+    private long mAsrTrackLastVoiceDebugAtMs;
+    private long mAsrTrackLastResultDebugAtMs;
 
     public static Intent newIntent(Context context, String videoPath, String videoTitle) {
         Intent intent = new Intent(context, VideoActivity.class);
@@ -189,6 +268,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
         mToastTextView = (TextView) findViewById(R.id.toast_text_view);
         mHudView = (TableLayout) findViewById(R.id.hud_view);
+        mSubtitleOverlay = (TextView) findViewById(R.id.subtitle_overlay);
         String testHint = getIntent() != null ? getIntent().getStringExtra(EXTRA_TEST_HINT) : null;
         if (!TextUtils.isEmpty(testHint)) {
             mToastTextView.setText(testHint);
@@ -266,6 +346,29 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             } catch (Throwable ignored) {
             }
             mVulkanDownloadReceiver = null;
+        }
+        if (mAsrTrackDownloadReceiver != null) {
+            try {
+                unregisterReceiver(mAsrTrackDownloadReceiver);
+            } catch (Throwable ignored) {
+            }
+            mAsrTrackDownloadReceiver = null;
+        }
+        tv.danmaku.ijk.media.example.util.HttpFileDownloader d = mWhisperModelDownloader;
+        mWhisperModelDownloader = null;
+        if (d != null) {
+            try {
+                d.cancel();
+            } catch (Throwable ignored) {
+            }
+        }
+        Thread t = mWhisperModelDownloadThread;
+        mWhisperModelDownloadThread = null;
+        if (t != null) {
+            try {
+                t.interrupt();
+            } catch (Throwable ignored) {
+            }
         }
     }
 
@@ -425,6 +528,217 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         }
     }
 
+    private boolean prepareAsrTrackSource(String url) {
+        try {
+            url = normalizeUrl(url);
+            if (TextUtils.isEmpty(url) || !isNetworkUrl(url)) {
+                return false;
+            }
+            if (url.contains(".m3u8")) {
+                return false;
+            }
+            File dir = getExternalFilesDir(Environment.DIRECTORY_MOVIES);
+            if (dir == null) {
+                return false;
+            }
+            File asrDir = new File(dir, "asr");
+            if (!asrDir.exists() && !asrDir.mkdirs()) {
+                return false;
+            }
+            String ext = ".mp4";
+            try {
+                String path = Uri.parse(url).getPath();
+                if (!TextUtils.isEmpty(path)) {
+                    int dot = path.lastIndexOf('.');
+                    if (dot > 0 && dot < path.length() - 1) {
+                        String e = path.substring(dot);
+                        if (e.length() <= 6) {
+                            ext = e;
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            String name = "asr_" + sha1(url) + ext;
+            mAsrTrackDownloadedFile = new File(asrDir, name);
+            mAsrTrackDownloadUrl = url;
+            if (mAsrTrackDownloadedFile.exists() && mAsrTrackDownloadedFile.length() > 0) {
+                return false;
+            }
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            if (dm == null) {
+                return false;
+            }
+            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION);
+            req.setAllowedOverMetered(true);
+            req.setAllowedOverRoaming(true);
+            req.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_MOVIES, "asr/" + name);
+            mAsrTrackDownloadId = dm.enqueue(req);
+            if (mAsrTrackDownloadReceiver == null) {
+                mAsrTrackDownloadReceiver = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        if (!DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) {
+                            return;
+                        }
+                        long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
+                        if (id != mAsrTrackDownloadId) {
+                            return;
+                        }
+                        handleAsrTrackDownloadComplete();
+                    }
+                };
+                registerReceiver(mAsrTrackDownloadReceiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+            }
+            return true;
+        } catch (Throwable t) {
+            DebugEventLog.add("VideoActivity: asrTrack download exception=" + t.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    private void handleAsrTrackDownloadComplete() {
+        try {
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            if (dm == null) {
+                return;
+            }
+            DownloadManager.Query q = new DownloadManager.Query().setFilterById(mAsrTrackDownloadId);
+            Cursor c = dm.query(q);
+            if (c == null) {
+                return;
+            }
+            boolean ok = false;
+            try {
+                if (c.moveToFirst()) {
+                    int status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                    ok = status == DownloadManager.STATUS_SUCCESSFUL;
+                }
+            } finally {
+                c.close();
+            }
+            if (ok && mAsrTrackDownloadedFile != null && mAsrTrackDownloadedFile.exists() && mAsrTrackDownloadedFile.length() > 0) {
+                mToastTextView.setText(getString(R.string.subtitle_asr_track_downloaded));
+                mMediaController.showOnce(mToastTextView);
+                startTrackAsrIfPossible();
+            } else {
+                mToastTextView.setText(getString(R.string.subtitle_asr_track_download_failed));
+                mMediaController.showOnce(mToastTextView);
+            }
+        } catch (Throwable t) {
+            try {
+                mToastTextView.setText(getString(R.string.subtitle_asr_track_download_failed));
+                mMediaController.showOnce(mToastTextView);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private boolean prepareWhisperModelDownload(String url) {
+        try {
+            url = normalizeUrl(url);
+            if (TextUtils.isEmpty(url) || !isNetworkUrl(url)) {
+                return false;
+            }
+            File modelDir = new File(getFilesDir(), "asr/models");
+            if (!modelDir.exists() && !modelDir.mkdirs()) {
+                return false;
+            }
+            String ext = ".bin";
+            try {
+                String path = Uri.parse(url).getPath();
+                if (!TextUtils.isEmpty(path)) {
+                    int dot = path.lastIndexOf('.');
+                    if (dot > 0 && dot < path.length() - 1) {
+                        String e = path.substring(dot);
+                        if (e.length() <= 8) {
+                            ext = e;
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            String name = "whisper_" + sha1(url) + ext;
+            mWhisperModelDownloadedFile = new File(modelDir, name);
+            mWhisperModelDownloadUrl = url;
+            if (mWhisperModelDownloadedFile.exists() && mWhisperModelDownloadedFile.length() > 0) {
+                if (mSettings != null) {
+                    mSettings.setAsrWhisperModelPath(mWhisperModelDownloadedFile.getAbsolutePath());
+                }
+                return false;
+            }
+            if (mWhisperModelDownloader != null) {
+                try {
+                    mWhisperModelDownloader.cancel();
+                } catch (Throwable ignored) {
+                }
+            }
+            tv.danmaku.ijk.media.example.util.HttpFileDownloader downloader = new tv.danmaku.ijk.media.example.util.HttpFileDownloader();
+            mWhisperModelDownloader = downloader;
+            String finalUrl = url;
+            Thread t = new Thread(() -> downloader.download(finalUrl, mWhisperModelDownloadedFile, new tv.danmaku.ijk.media.example.util.HttpFileDownloader.Listener() {
+                @Override
+                public void onProgress(long downloadedBytes, long totalBytes) {
+                    mSubtitleHandler.post(() -> {
+                        int percent = totalBytes > 0 ? (int) (downloadedBytes * 100 / totalBytes) : 0;
+                        String sofarText = formatBytes(downloadedBytes);
+                        String totalText = totalBytes > 0 ? formatBytes(totalBytes) : "?";
+                        mToastTextView.setText(getString(R.string.subtitle_asr_whisper_downloading_progress, percent, sofarText, totalText));
+                        mMediaController.showOnce(mToastTextView);
+                    });
+                }
+
+                @Override
+                public void onSuccess(File file) {
+                    mSubtitleHandler.post(() -> {
+                        if (mSettings != null) {
+                            mSettings.setAsrWhisperModelPath(file.getAbsolutePath());
+                        }
+                        mToastTextView.setText(getString(R.string.subtitle_asr_whisper_downloaded_ready));
+                        mMediaController.showOnce(mToastTextView);
+                        if (mAsrEnabled) {
+                            startWhisperTrackAsrIfPossible();
+                        }
+                    });
+                }
+
+                @Override
+                public void onError(Throwable t) {
+                    mSubtitleHandler.post(() -> {
+                        mToastTextView.setText(getString(R.string.subtitle_asr_whisper_download_failed));
+                        mMediaController.showOnce(mToastTextView);
+                    });
+                }
+            }), "whisper-model-download");
+            mWhisperModelDownloadThread = t;
+            t.start();
+            return true;
+        } catch (Throwable t) {
+            DebugEventLog.add("VideoActivity: whisperModel download exception=" + t.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 0) {
+            return "0B";
+        }
+        if (bytes < 1024) {
+            return bytes + "B";
+        }
+        double kb = bytes / 1024.0;
+        if (kb < 1024) {
+            return String.format(Locale.US, "%.1fKB", kb);
+        }
+        double mb = kb / 1024.0;
+        if (mb < 1024) {
+            return String.format(Locale.US, "%.1fMB", mb);
+        }
+        double gb = mb / 1024.0;
+        return String.format(Locale.US, "%.2fGB", gb);
+    }
+
     private String sha1(String text) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-1");
@@ -556,6 +870,25 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        mSubtitleHandler.removeCallbacks(mSubtitleTick);
+        mSubtitleHandler.post(mSubtitleTick);
+        if (mAsrEnabled) {
+            startAsrByMode();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mSubtitleHandler.removeCallbacks(mSubtitleTick);
+        stopAsrListening();
+        stopTrackAsr();
+        stopRemoteAsr();
+    }
+
+    @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.menu_player, menu);
         return true;
@@ -632,9 +965,1432 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         } else if (id == R.id.action_snapshot) {
             takeSnapshot();
             return true;
+        } else if (id == R.id.action_subtitle_add) {
+            showSubtitleAddDialog();
+            return true;
+        } else if (id == R.id.action_subtitle_asr_toggle) {
+            boolean next = !mAsrEnabled;
+            if (next) {
+                mAsrEnabled = true;
+                startAsrByMode();
+            } else {
+                mAsrEnabled = false;
+                stopAsrListening();
+                stopTrackAsr();
+                stopRemoteAsr();
+                mAsrPartialText = null;
+                updateSubtitleOverlay();
+            }
+            item.setChecked(mAsrEnabled);
+            return true;
+        } else if (id == R.id.action_subtitle_clear) {
+            mSubtitleCues.clear();
+            updateSubtitleOverlay();
+            mToastTextView.setText(getString(R.string.subtitle_clear));
+            mMediaController.showOnce(mToastTextView);
+            return true;
+        } else if (id == R.id.action_subtitle_export) {
+            exportSubtitlesSrt();
+            return true;
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    private void showSubtitleAddDialog() {
+        final EditText input = new EditText(this);
+        input.setSingleLine(false);
+        input.setMinLines(2);
+
+        int pos = mVideoView != null ? mVideoView.getCurrentPosition() : 0;
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.subtitle_input_title) + " (" + formatSrtTime(pos) + ")")
+                .setView(input)
+                .setPositiveButton(android.R.string.ok, (d, which) -> {
+                    String text = input.getText() != null ? input.getText().toString().trim() : "";
+                    if (TextUtils.isEmpty(text)) {
+                        return;
+                    }
+                    int startMs = mVideoView != null ? mVideoView.getCurrentPosition() : 0;
+                    addSubtitleCue(startMs, text);
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void addSubtitleCue(int startMs, String text) {
+        SubtitleCue cue = new SubtitleCue(startMs, -1, text);
+        int insertAt = mSubtitleCues.size();
+        for (int i = 0; i < mSubtitleCues.size(); i++) {
+            if (startMs < mSubtitleCues.get(i).startMs) {
+                insertAt = i;
+                break;
+            }
+        }
+        mSubtitleCues.add(insertAt, cue);
+        normalizeSubtitleEnds();
+        updateSubtitleOverlay();
+    }
+
+    private void normalizeSubtitleEnds() {
+        int duration = mVideoView != null ? mVideoView.getDuration() : -1;
+        for (int i = 0; i < mSubtitleCues.size(); i++) {
+            SubtitleCue c = mSubtitleCues.get(i);
+            int nextStart = (i + 1 < mSubtitleCues.size()) ? mSubtitleCues.get(i + 1).startMs : -1;
+            int end;
+            if (nextStart > 0) {
+                end = Math.max(c.startMs + 300, nextStart - 1);
+            } else if (duration > 0) {
+                end = Math.min(duration, c.startMs + 2000);
+            } else {
+                end = c.startMs + 2000;
+            }
+            c.endMs = end;
+        }
+    }
+
+    private void updateSubtitleOverlay() {
+        if (mSubtitleOverlay == null || mVideoView == null) {
+            return;
+        }
+        if (mAsrEnabled && !TextUtils.isEmpty(mAsrPartialText)) {
+            mSubtitleOverlay.setText(mAsrPartialText);
+            mSubtitleOverlay.setVisibility(View.VISIBLE);
+            return;
+        }
+        int pos = mVideoView.getCurrentPosition();
+        String text = null;
+        for (int i = 0; i < mSubtitleCues.size(); i++) {
+            SubtitleCue c = mSubtitleCues.get(i);
+            if (pos >= c.startMs && pos <= c.endMs) {
+                text = c.text;
+                break;
+            }
+        }
+        if (TextUtils.isEmpty(text)) {
+            mSubtitleOverlay.setVisibility(View.GONE);
+        } else {
+            mSubtitleOverlay.setText(text);
+            mSubtitleOverlay.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void exportSubtitlesSrt() {
+        if (mSubtitleCues.isEmpty()) {
+            mToastTextView.setText(getString(R.string.subtitle_failed));
+            mMediaController.showOnce(mToastTextView);
+            return;
+        }
+        normalizeSubtitleEnds();
+        String srt = buildSrtText();
+        boolean ok = writeSrtToDownloads(srt);
+        mToastTextView.setText(getString(ok ? R.string.subtitle_saved : R.string.subtitle_failed));
+        mMediaController.showOnce(mToastTextView);
+    }
+
+    private String buildSrtText() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < mSubtitleCues.size(); i++) {
+            SubtitleCue c = mSubtitleCues.get(i);
+            sb.append(i + 1).append('\n');
+            sb.append(formatSrtTime(c.startMs)).append(" --> ").append(formatSrtTime(c.endMs)).append('\n');
+            sb.append(c.text != null ? c.text : "").append("\n\n");
+        }
+        return sb.toString();
+    }
+
+    private boolean writeSrtToDownloads(String content) {
+        String time = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+        String fileName = "subtitle_" + time + ".srt";
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+                values.put(MediaStore.Downloads.MIME_TYPE, "application/x-subrip");
+                values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/IJKPlayer");
+                Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (uri == null) {
+                    return false;
+                }
+                try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                    if (os == null) {
+                        return false;
+                    }
+                    os.write(content.getBytes("UTF-8"));
+                    os.flush();
+                }
+                return true;
+            }
+            File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            if (dir == null) {
+                return false;
+            }
+            File out = new File(dir, fileName);
+            try (FileOutputStream fos = new FileOutputStream(out)) {
+                fos.write(content.getBytes("UTF-8"));
+                fos.flush();
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private String formatSrtTime(int ms) {
+        int total = Math.max(0, ms);
+        int hours = total / 3600000;
+        int minutes = (total % 3600000) / 60000;
+        int seconds = (total % 60000) / 1000;
+        int millis = total % 1000;
+        return String.format(Locale.US, "%02d:%02d:%02d,%03d", hours, minutes, seconds, millis);
+    }
+
+    static final class SubtitleCue {
+        final int startMs;
+        int endMs;
+        final String text;
+
+        SubtitleCue(int startMs, int endMs, String text) {
+            this.startMs = startMs;
+            this.endMs = endMs;
+            this.text = text;
+        }
+    }
+
+    private void startAsrIfPossible() {
+        if (!mAsrEnabled) {
+            return;
+        }
+        boolean availableFlag = false;
+        try {
+            availableFlag = SpeechRecognizer.isRecognitionAvailable(this);
+        } catch (Throwable ignored) {
+        }
+        int services = queryAsrServiceCount();
+        if (!availableFlag && services <= 0) {
+            String endpoint = mSettings != null ? mSettings.getAsrRemoteEndpoint() : "";
+            if (!TextUtils.isEmpty(endpoint)) {
+                startRemoteAsrIfPossible();
+                return;
+            }
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_unavailable));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            mAsrPendingStart = true;
+            ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.RECORD_AUDIO}, REQ_RECORD_AUDIO);
+            return;
+        }
+        startAsrListening();
+    }
+
+    private void startAsrListening() {
+        if (!mAsrEnabled) {
+            return;
+        }
+        try {
+            if (mSpeechRecognizer == null) {
+                mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+                mSpeechRecognizer.setRecognitionListener(new RecognitionListener() {
+                    @Override
+                    public void onReadyForSpeech(Bundle params) {
+                    }
+
+                    @Override
+                    public void onBeginningOfSpeech() {
+                    }
+
+                    @Override
+                    public void onRmsChanged(float rmsdB) {
+                    }
+
+                    @Override
+                    public void onBufferReceived(byte[] buffer) {
+                    }
+
+                    @Override
+                    public void onEndOfSpeech() {
+                    }
+
+                    @Override
+                    public void onError(int error) {
+                        if (!mAsrEnabled) {
+                            return;
+                        }
+                        DebugEventLog.add("ASR.onError=" + errorToText(error));
+                        mSubtitleHandler.postDelayed(() -> {
+                            if (mAsrEnabled) {
+                                restartAsr();
+                            }
+                        }, 600);
+                    }
+
+                    @Override
+                    public void onResults(Bundle results) {
+                        handleAsrResults(results, false);
+                        if (mAsrEnabled) {
+                            mSubtitleHandler.postDelayed(() -> {
+                                if (mAsrEnabled) {
+                                    restartAsr();
+                                }
+                            }, 200);
+                        }
+                    }
+
+                    @Override
+                    public void onPartialResults(Bundle partialResults) {
+                        handleAsrResults(partialResults, true);
+                    }
+
+                    @Override
+                    public void onEvent(int eventType, Bundle params) {
+                    }
+                });
+            }
+            if (mSpeechIntent == null) {
+                mSpeechIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                mSpeechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                mSpeechIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+                mSpeechIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+                mSpeechIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            }
+            mSpeechRecognizer.startListening(mSpeechIntent);
+        } catch (Throwable t) {
+            mAsrEnabled = false;
+            mAsrPartialText = null;
+            updateSubtitleOverlay();
+            mToastTextView.setText(getString(R.string.subtitle_asr_start_failed));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+        }
+    }
+
+    private void restartAsr() {
+        try {
+            if (mSpeechRecognizer != null) {
+                mSpeechRecognizer.cancel();
+            }
+        } catch (Throwable ignored) {
+        }
+        startAsrListening();
+    }
+
+    private void stopAsrListening() {
+        try {
+            if (mSpeechRecognizer != null) {
+                mSpeechRecognizer.cancel();
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void startAsrByMode() {
+        if (!mAsrEnabled) {
+            return;
+        }
+        String mode = mSettings != null ? mSettings.getAsrMode() : "system";
+        if ("whisper_track".equalsIgnoreCase(mode)) {
+            startWhisperTrackAsrIfPossible();
+        } else if ("remote_track".equalsIgnoreCase(mode)) {
+            startTrackAsrIfPossible();
+        } else if ("remote".equalsIgnoreCase(mode)) {
+            startRemoteAsrIfPossible();
+        } else {
+            startAsrIfPossible();
+        }
+    }
+
+    private void startRemoteAsrIfPossible() {
+        if (!mAsrEnabled) {
+            return;
+        }
+        String endpoint = mSettings != null ? mSettings.getAsrRemoteEndpoint() : "";
+        if (TextUtils.isEmpty(endpoint)) {
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_remote_missing_endpoint));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            mAsrPendingStart = true;
+            ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.RECORD_AUDIO}, REQ_RECORD_AUDIO);
+            return;
+        }
+        startRemoteAsr();
+    }
+
+    private void startRemoteAsr() {
+        stopRemoteAsr();
+        stopTrackAsr();
+        stopAsrListening();
+
+        int sampleRate = 16000;
+        int channelConfig = AudioFormat.CHANNEL_IN_MONO;
+        int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
+        int minBuffer = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat);
+        int bufferSize = Math.max(minBuffer, sampleRate * 2);
+        AudioRecord record = new AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, bufferSize);
+        try {
+            record.startRecording();
+        } catch (Throwable t) {
+            try {
+                record.release();
+            } catch (Throwable ignored) {
+            }
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_remote_failed));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+        mAsrAudioRecord = record;
+        mAsrRemoteRunning = true;
+        mAsrRemoteChunkStartPlayerMs = -1;
+        mAsrRemoteChunkBytes = 0;
+        mAsrRemoteChunkHasVoice = false;
+        mAsrRemoteLastVoiceAtMs = -1;
+        mAsrRemoteChunkBuffer.reset();
+        mAsrRemoteCommittedTail = "";
+        if (mAsrRemoteExecutor != null) {
+            try {
+                mAsrRemoteExecutor.shutdownNow();
+            } catch (Throwable ignored) {
+            }
+        }
+        mAsrRemoteExecutor = Executors.newSingleThreadExecutor();
+
+        mToastTextView.setText(getString(R.string.subtitle_asr_remote_start));
+        mMediaController.showOnce(mToastTextView);
+
+        mAsrRemoteThread = new Thread(() -> remoteAsrLoop(sampleRate), "asr-remote");
+        mAsrRemoteThread.start();
+    }
+
+    private void stopRemoteAsr() {
+        mAsrRemoteRunning = false;
+        AudioRecord r = mAsrAudioRecord;
+        mAsrAudioRecord = null;
+        if (r != null) {
+            try {
+                r.stop();
+            } catch (Throwable ignored) {
+            }
+            try {
+                r.release();
+            } catch (Throwable ignored) {
+            }
+        }
+        Thread t = mAsrRemoteThread;
+        mAsrRemoteThread = null;
+        if (t != null) {
+            try {
+                t.interrupt();
+            } catch (Throwable ignored) {
+            }
+        }
+        ExecutorService ex = mAsrRemoteExecutor;
+        mAsrRemoteExecutor = null;
+        if (ex != null) {
+            try {
+                ex.shutdownNow();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private void startTrackAsrIfPossible() {
+        if (!mAsrEnabled) {
+            return;
+        }
+        mAsrTrackUseWhisper = false;
+        mAsrWhisperModelPath = null;
+        String endpoint = mSettings != null ? mSettings.getAsrRemoteEndpoint() : "";
+        if (TextUtils.isEmpty(endpoint)) {
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_remote_missing_endpoint));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN) {
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_track_unsupported));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+
+        stopAsrListening();
+        stopRemoteAsr();
+        stopTrackAsr();
+
+        if (mAsrRemoteExecutor != null) {
+            try {
+                mAsrRemoteExecutor.shutdownNow();
+            } catch (Throwable ignored) {
+            }
+        }
+        mAsrRemoteExecutor = Executors.newSingleThreadExecutor();
+        mAsrRemoteCommittedTail = "";
+        mAsrPartialText = null;
+        updateSubtitleOverlay();
+
+        mAsrTrackChunkBuffer.reset();
+        mAsrTrackChunkBytes = 0;
+        mAsrTrackChunkStartMs = -1;
+        mAsrTrackChunkHasVoice = false;
+        mAsrTrackLastVoiceMs = -1;
+        mAsrTrackLastEndMs = -1;
+
+        String source = mVideoView != null ? mVideoView.getDataSource() : null;
+        if (TextUtils.isEmpty(source)) {
+            source = mVideoPath != null ? mVideoPath : (mVideoUri != null ? String.valueOf(mVideoUri) : "");
+        }
+        String finalSource = source;
+        if (TextUtils.isEmpty(finalSource)) {
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_remote_failed));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+        finalSource = normalizeUrl(finalSource);
+        if (isNetworkUrl(finalSource)) {
+            if (finalSource.contains(".m3u8")) {
+                mAsrEnabled = false;
+                mToastTextView.setText(getString(R.string.subtitle_asr_track_hls_unsupported));
+                mMediaController.showOnce(mToastTextView);
+                invalidateOptionsMenu();
+                return;
+            }
+            if (mAsrTrackDownloadedFile != null && mAsrTrackDownloadedFile.exists() && mAsrTrackDownloadedFile.length() > 0) {
+                finalSource = mAsrTrackDownloadedFile.getAbsolutePath();
+            } else if (mAsrTrackDownloadUrl != null && mAsrTrackDownloadUrl.equals(finalSource) && mAsrTrackDownloadId > 0) {
+                mToastTextView.setText(getString(R.string.subtitle_asr_track_downloading));
+                mMediaController.showOnce(mToastTextView);
+                return;
+            } else {
+                boolean started = prepareAsrTrackSource(finalSource);
+                if (started) {
+                    mToastTextView.setText(getString(R.string.subtitle_asr_track_need_download));
+                    mMediaController.showOnce(mToastTextView);
+                    mToastTextView.setText(getString(R.string.subtitle_asr_track_downloading));
+                    mMediaController.showOnce(mToastTextView);
+                    return;
+                }
+                if (mAsrTrackDownloadedFile != null && mAsrTrackDownloadedFile.exists() && mAsrTrackDownloadedFile.length() > 0) {
+                    finalSource = mAsrTrackDownloadedFile.getAbsolutePath();
+                } else {
+                    mAsrEnabled = false;
+                    mToastTextView.setText(getString(R.string.subtitle_asr_track_download_failed));
+                    mMediaController.showOnce(mToastTextView);
+                    invalidateOptionsMenu();
+                    return;
+                }
+            }
+        }
+
+        int startPlayerMs = mVideoView != null ? mVideoView.getCurrentPosition() : 0;
+        if (mAsrTrackDecoder == null) {
+            mAsrTrackDecoder = new AsrAudioTrackDecoder();
+        }
+
+        mToastTextView.setText(getString(R.string.subtitle_asr_track_start));
+        mMediaController.showOnce(mToastTextView);
+
+        mAsrTrackDecoder.start(this, finalSource, startPlayerMs, new AsrAudioTrackDecoder.Listener() {
+            @Override
+            public void onPcmChunk(byte[] pcmData, int startMs, int endMs, int sampleRate, int channelCount, String audioFormat) {
+                handleTrackPcmChunk(pcmData, startMs, endMs, sampleRate, channelCount, audioFormat);
+            }
+
+            @Override
+            public void onStopped() {
+                mSubtitleHandler.post(() -> {
+                    flushPendingTrackChunkFromDecoderStop();
+                    if (mAsrEnabled) {
+                        mToastTextView.setText(getString(R.string.subtitle_asr_track_stop));
+                        mMediaController.showOnce(mToastTextView);
+                    }
+                });
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                mSubtitleHandler.post(() -> {
+                    if (mAsrEnabled) {
+                        mToastTextView.setText(getString(R.string.subtitle_asr_remote_failed));
+                        mMediaController.showOnce(mToastTextView);
+                    }
+                });
+            }
+        });
+    }
+
+    private void startWhisperTrackAsrIfPossible() {
+        if (!mAsrEnabled) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN) {
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_track_unsupported));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+        if (!WhisperAsrEngine.isLoaded()) {
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_whisper_missing_native_detail, String.valueOf(BuildConfig.WHISPER_ENABLED)));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+        if (!WhisperAsrEngine.isAvailable()) {
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_whisper_disabled_detail, String.valueOf(BuildConfig.WHISPER_ENABLED)));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+        String modelPath = mSettings != null ? mSettings.getAsrWhisperModelPath() : "";
+        java.io.File f = !TextUtils.isEmpty(modelPath) ? new java.io.File(modelPath) : null;
+        if (TextUtils.isEmpty(modelPath) || f == null || !f.exists() || f.length() <= 0) {
+            String modelUrl = mSettings != null ? mSettings.getAsrWhisperModelUrl() : "";
+            if (TextUtils.isEmpty(modelUrl)) {
+                mAsrEnabled = false;
+                mToastTextView.setText(getString(R.string.subtitle_asr_whisper_missing_model));
+                mMediaController.showOnce(mToastTextView);
+                invalidateOptionsMenu();
+                return;
+            }
+
+            modelUrl = normalizeUrl(modelUrl);
+            final String finalModelUrl = modelUrl;
+            if (mWhisperModelDownloadedFile != null && mWhisperModelDownloadedFile.exists() && mWhisperModelDownloadedFile.length() > 0 && modelUrl.equals(mWhisperModelDownloadUrl)) {
+                if (mSettings != null) {
+                    mSettings.setAsrWhisperModelPath(mWhisperModelDownloadedFile.getAbsolutePath());
+                }
+                startWhisperTrackAsrIfPossible();
+                return;
+            }
+            if (modelUrl.equals(mWhisperModelDownloadUrl) && mWhisperModelDownloadThread != null && mWhisperModelDownloadThread.isAlive()) {
+                mToastTextView.setText(getString(R.string.subtitle_asr_whisper_downloading));
+                mMediaController.showOnce(mToastTextView);
+                return;
+            }
+
+            new AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.subtitle_asr_whisper_download_prompt_title))
+                    .setMessage(getString(R.string.subtitle_asr_whisper_download_prompt_message))
+                    .setPositiveButton(getString(R.string.subtitle_asr_whisper_download_start), (d, which) -> {
+                        boolean started = prepareWhisperModelDownload(finalModelUrl);
+                        if (started) {
+                            mToastTextView.setText(getString(R.string.subtitle_asr_whisper_downloading));
+                            mMediaController.showOnce(mToastTextView);
+                        } else if (mWhisperModelDownloadedFile != null && mWhisperModelDownloadedFile.exists() && mWhisperModelDownloadedFile.length() > 0) {
+                            if (mSettings != null) {
+                                mSettings.setAsrWhisperModelPath(mWhisperModelDownloadedFile.getAbsolutePath());
+                            }
+                            startWhisperTrackAsrIfPossible();
+                        } else {
+                            mToastTextView.setText(getString(R.string.subtitle_asr_whisper_download_failed));
+                            mMediaController.showOnce(mToastTextView);
+                        }
+                    })
+                    .setNegativeButton(getString(R.string.subtitle_asr_whisper_download_cancel), (d, which) -> {
+                        mAsrEnabled = false;
+                        invalidateOptionsMenu();
+                    })
+                    .show();
+            return;
+        }
+        if (!WhisperAsrEngine.loadModel(modelPath)) {
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_whisper_missing_model));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+
+        mAsrTrackUseWhisper = true;
+        mAsrWhisperModelPath = modelPath;
+
+        stopAsrListening();
+        stopRemoteAsr();
+        stopTrackAsr();
+
+        if (mAsrRemoteExecutor != null) {
+            try {
+                mAsrRemoteExecutor.shutdownNow();
+            } catch (Throwable ignored) {
+            }
+        }
+        mAsrRemoteExecutor = Executors.newSingleThreadExecutor();
+        mAsrRemoteCommittedTail = "";
+        mAsrPartialText = null;
+        updateSubtitleOverlay();
+
+        mAsrTrackChunkBuffer.reset();
+        mAsrTrackChunkBytes = 0;
+        mAsrTrackChunkStartMs = -1;
+        mAsrTrackChunkHasVoice = false;
+        mAsrTrackLastVoiceMs = -1;
+        mAsrTrackLastEndMs = -1;
+
+        String source = mVideoView != null ? mVideoView.getDataSource() : null;
+        if (TextUtils.isEmpty(source)) {
+            source = mVideoPath != null ? mVideoPath : (mVideoUri != null ? String.valueOf(mVideoUri) : "");
+        }
+        String finalSource = source;
+        if (TextUtils.isEmpty(finalSource)) {
+            mAsrEnabled = false;
+            mToastTextView.setText(getString(R.string.subtitle_asr_remote_failed));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+        finalSource = normalizeUrl(finalSource);
+        if (isNetworkUrl(finalSource)) {
+            if (finalSource.contains(".m3u8")) {
+                mAsrEnabled = false;
+                mToastTextView.setText(getString(R.string.subtitle_asr_track_hls_unsupported));
+                mMediaController.showOnce(mToastTextView);
+                invalidateOptionsMenu();
+                return;
+            }
+            if (mAsrTrackDownloadedFile != null && mAsrTrackDownloadedFile.exists() && mAsrTrackDownloadedFile.length() > 0) {
+                finalSource = mAsrTrackDownloadedFile.getAbsolutePath();
+            } else if (mAsrTrackDownloadUrl != null && mAsrTrackDownloadUrl.equals(finalSource) && mAsrTrackDownloadId > 0) {
+                mToastTextView.setText(getString(R.string.subtitle_asr_track_downloading));
+                mMediaController.showOnce(mToastTextView);
+                return;
+            } else {
+                boolean started = prepareAsrTrackSource(finalSource);
+                if (started) {
+                    mToastTextView.setText(getString(R.string.subtitle_asr_track_need_download));
+                    mMediaController.showOnce(mToastTextView);
+                    mToastTextView.setText(getString(R.string.subtitle_asr_track_downloading));
+                    mMediaController.showOnce(mToastTextView);
+                    return;
+                }
+                if (mAsrTrackDownloadedFile != null && mAsrTrackDownloadedFile.exists() && mAsrTrackDownloadedFile.length() > 0) {
+                    finalSource = mAsrTrackDownloadedFile.getAbsolutePath();
+                } else {
+                    mAsrEnabled = false;
+                    mToastTextView.setText(getString(R.string.subtitle_asr_track_download_failed));
+                    mMediaController.showOnce(mToastTextView);
+                    invalidateOptionsMenu();
+                    return;
+                }
+            }
+        }
+
+        int startPlayerMs = mVideoView != null ? mVideoView.getCurrentPosition() : 0;
+        if (mAsrTrackDecoder == null) {
+            mAsrTrackDecoder = new AsrAudioTrackDecoder();
+        }
+
+        mToastTextView.setText(getString(R.string.subtitle_asr_whisper_ready));
+        mMediaController.showOnce(mToastTextView);
+
+        mAsrTrackDecoder.start(this, finalSource, startPlayerMs, new AsrAudioTrackDecoder.Listener() {
+            @Override
+            public void onPcmChunk(byte[] pcmData, int startMs, int endMs, int sampleRate, int channelCount, String audioFormat) {
+                handleTrackPcmChunk(pcmData, startMs, endMs, sampleRate, channelCount, audioFormat);
+            }
+
+            @Override
+            public void onStopped() {
+                mSubtitleHandler.post(() -> {
+                    flushPendingTrackChunkFromDecoderStop();
+                    if (mAsrEnabled) {
+                        mToastTextView.setText(getString(R.string.subtitle_asr_track_stop));
+                        mMediaController.showOnce(mToastTextView);
+                    }
+                });
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                mSubtitleHandler.post(() -> {
+                    if (mAsrEnabled) {
+                        mToastTextView.setText(getString(R.string.subtitle_asr_remote_failed));
+                        mMediaController.showOnce(mToastTextView);
+                    }
+                });
+            }
+        });
+    }
+
+    private void stopTrackAsr() {
+        AsrAudioTrackDecoder d = mAsrTrackDecoder;
+        if (d != null) {
+            try {
+                d.stop();
+            } catch (Throwable ignored) {
+            }
+        }
+        mAsrTrackUseWhisper = false;
+        mAsrWhisperModelPath = null;
+        synchronized (mAsrTrackChunkBuffer) {
+            if (mAsrTrackChunkBytes > 0 && mAsrTrackChunkStartMs >= 0) {
+                flushTrackChunkLocked(mAsrTrackChunkStartMs + 1500, 0, 0);
+            } else {
+                mAsrTrackChunkBuffer.reset();
+                mAsrTrackChunkBytes = 0;
+                mAsrTrackChunkStartMs = -1;
+                mAsrTrackChunkHasVoice = false;
+                mAsrTrackLastVoiceMs = -1;
+                mAsrTrackLastEndMs = -1;
+            }
+        }
+    }
+
+    private void handleTrackPcmChunk(byte[] pcmData, int startMs, int endMs, int sampleRate, int channelCount, String audioFormat) {
+        if (!mAsrEnabled || pcmData == null || pcmData.length <= 0) {
+            return;
+        }
+        int sr = Math.max(1, sampleRate);
+        int ch = Math.max(1, channelCount);
+        int bytesPerSecond = sr * 2 * ch;
+        int minChunkMs = 900;
+        int maxChunkMs = 1800;
+        int overlapMs = 450;
+        int minChunkBytes = bytesPerSecond * minChunkMs / 1000;
+        int maxChunkBytes = bytesPerSecond * maxChunkMs / 1000;
+        int overlapBytes = bytesPerSecond * overlapMs / 1000;
+        int silenceFlushMs = 650;
+
+        long avgAbs = avgAbsPcm16le(pcmData, pcmData.length, ch);
+        boolean voice = avgAbs >= 200;
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (now - mAsrTrackLastVoiceDebugAtMs >= 1000) {
+            mAsrTrackLastVoiceDebugAtMs = now;
+            Log.d(TAG, "ASR(track) pcm voice=" + voice + " avg=" + avgAbs + " sr=" + sr + " ch=" + ch + " startMs=" + startMs + " endMs=" + endMs + " bytes=" + pcmData.length);
+        }
+        synchronized (mAsrTrackChunkBuffer) {
+            mAsrTrackSampleRate = sr;
+            mAsrTrackChannelCount = ch;
+            mAsrTrackAudioFormat = TextUtils.isEmpty(audioFormat) ? "pcm_s16le" : audioFormat;
+            mAsrTrackLastEndMs = Math.max(mAsrTrackLastEndMs, endMs);
+
+            if (mAsrTrackChunkStartMs < 0) {
+                mAsrTrackChunkStartMs = Math.max(0, startMs);
+            }
+            try {
+                mAsrTrackChunkBuffer.write(pcmData, 0, pcmData.length);
+                mAsrTrackChunkBytes += pcmData.length;
+            } catch (Throwable ignored) {
+            }
+            if (voice) {
+                mAsrTrackChunkHasVoice = true;
+                mAsrTrackLastVoiceMs = endMs;
+            }
+
+            int durationMs = Math.max(0, endMs - mAsrTrackChunkStartMs);
+            if (mAsrTrackChunkBytes >= maxChunkBytes || durationMs >= maxChunkMs) {
+                flushTrackChunkLocked(endMs, overlapMs, overlapBytes);
+            } else if (mAsrTrackChunkHasVoice && mAsrTrackChunkBytes >= minChunkBytes && mAsrTrackLastVoiceMs > 0 && (endMs - mAsrTrackLastVoiceMs) >= silenceFlushMs) {
+                flushTrackChunkLocked(endMs, overlapMs, overlapBytes);
+            }
+        }
+    }
+
+    private void flushPendingTrackChunkFromDecoderStop() {
+        synchronized (mAsrTrackChunkBuffer) {
+            if (mAsrTrackChunkBytes > 0 && mAsrTrackChunkStartMs >= 0) {
+                int endMs = mAsrTrackLastEndMs > 0 ? mAsrTrackLastEndMs : (mAsrTrackChunkStartMs + 1500);
+                flushTrackChunkLocked(endMs, 0, 0);
+            }
+        }
+    }
+
+    private void flushTrackChunkLocked(int endMs, int overlapMs, int overlapBytes) {
+        if (mAsrTrackChunkBytes <= 0 || mAsrTrackChunkStartMs < 0) {
+            return;
+        }
+        if (!mAsrTrackChunkHasVoice) {
+            mAsrTrackChunkBuffer.reset();
+            mAsrTrackChunkBytes = 0;
+            mAsrTrackChunkStartMs = -1;
+            mAsrTrackLastVoiceMs = -1;
+            return;
+        }
+
+        final byte[] pcm = mAsrTrackChunkBuffer.toByteArray();
+        final int startMs = mAsrTrackChunkStartMs;
+        final int safeEndMs = Math.max(startMs + 200, endMs);
+        final String endpoint = mSettings != null ? mSettings.getAsrRemoteEndpoint() : "";
+        final String lang = mSettings != null ? mSettings.getAsrLanguage() : "";
+        final int sr = mAsrTrackSampleRate;
+        final int ch = mAsrTrackChannelCount;
+        final String fmt = mAsrTrackAudioFormat;
+
+        Log.i(TAG, "ASR(track) flush startMs=" + startMs + " endMs=" + safeEndMs + " bytes=" + pcm.length + " sr=" + sr + " ch=" + ch + " whisper=" + mAsrTrackUseWhisper);
+
+        if (overlapBytes > 0 && pcm.length > overlapBytes) {
+            byte[] tail = Arrays.copyOfRange(pcm, pcm.length - overlapBytes, pcm.length);
+            mAsrTrackChunkBuffer.reset();
+            try {
+                mAsrTrackChunkBuffer.write(tail, 0, tail.length);
+                mAsrTrackChunkBytes = tail.length;
+                mAsrTrackChunkStartMs = Math.max(0, safeEndMs - overlapMs);
+            } catch (Throwable ignored) {
+                mAsrTrackChunkBytes = 0;
+                mAsrTrackChunkStartMs = -1;
+            }
+            mAsrTrackChunkHasVoice = false;
+            mAsrTrackLastVoiceMs = -1;
+        } else {
+            mAsrTrackChunkBuffer.reset();
+            mAsrTrackChunkBytes = 0;
+            mAsrTrackChunkStartMs = -1;
+            mAsrTrackChunkHasVoice = false;
+            mAsrTrackLastVoiceMs = -1;
+        }
+
+        mSubtitleHandler.post(() -> {
+            if (mAsrEnabled) {
+                mToastTextView.setText(getString(R.string.subtitle_asr_remote_uploading));
+                mMediaController.showOnce(mToastTextView);
+            }
+        });
+
+        ExecutorService ex = mAsrRemoteExecutor;
+        if (ex == null) {
+            ex = Executors.newSingleThreadExecutor();
+            mAsrRemoteExecutor = ex;
+        }
+        ex.execute(() -> {
+            try {
+                RemoteAsrClient.Result res;
+                if (mAsrTrackUseWhisper) {
+                    String json = WhisperAsrEngine.transcribePcm16Json(pcm, sr, ch, startMs, safeEndMs, lang);
+                    res = parseRemoteAsrResultJson(json, startMs, safeEndMs);
+                } else {
+                    res = mRemoteAsrClient.transcribePcm(endpoint, pcm, startMs, safeEndMs, sr, ch, fmt, lang);
+                }
+                List<RemoteAsrClient.Segment> segs = res != null ? res.segments : null;
+                boolean partial = res != null && res.partial;
+
+                long now = android.os.SystemClock.elapsedRealtime();
+                if (now - mAsrTrackLastResultDebugAtMs >= 1000) {
+                    mAsrTrackLastResultDebugAtMs = now;
+                    int n = segs != null ? segs.size() : 0;
+                    String t = n > 0 ? joinSegmentsText(segs) : "";
+                    if (t != null && t.length() > 240) {
+                        t = t.substring(0, 240);
+                    }
+                    Log.i(TAG, "ASR(track) result partial=" + partial + " segs=" + n + " text=" + t);
+                }
+
+                if (segs == null || segs.isEmpty()) {
+                    if (!partial) {
+                        mSubtitleHandler.post(() -> {
+                            mAsrPartialText = null;
+                            updateSubtitleOverlay();
+                        });
+                    }
+                    return;
+                }
+                mSubtitleHandler.post(() -> {
+                    if (!mAsrEnabled) {
+                        return;
+                    }
+                    if (partial) {
+                        String t = joinSegmentsText(segs);
+                        mAsrPartialText = TextUtils.isEmpty(t) ? null : t;
+                        updateSubtitleOverlay();
+                        return;
+                    }
+                    mAsrPartialText = null;
+                    for (RemoteAsrClient.Segment s : segs) {
+                        if (s == null || TextUtils.isEmpty(s.text)) {
+                            continue;
+                        }
+                        Log.d(TAG, "ASR(track) commit " + s.startMs + "-" + s.endMs + " " + s.text);
+                        commitRemoteFinalText(s.startMs, s.endMs, s.text);
+                    }
+                    updateSubtitleOverlay();
+                });
+            } catch (Throwable t) {
+                mSubtitleHandler.post(() -> {
+                    if (mAsrEnabled) {
+                        mToastTextView.setText(getString(R.string.subtitle_asr_remote_failed));
+                        mMediaController.showOnce(mToastTextView);
+                    }
+                });
+            }
+        });
+    }
+
+    private long avgAbsPcm16le(byte[] pcm, int length, int channelCount) {
+        if (pcm == null || length <= 2) {
+            return 0;
+        }
+        int ch = Math.max(1, channelCount);
+        int sampleCount = length / 2;
+        int frameCount = sampleCount / ch;
+        if (frameCount <= 0) {
+            return 0;
+        }
+        long sum = 0;
+        int step = Math.max(1, frameCount / 160);
+        int picked = 0;
+        for (int f = 0; f < frameCount; f += step) {
+            long frameAbs = 0;
+            int base = f * ch * 2;
+            for (int c = 0; c < ch; c++) {
+                int i = base + c * 2;
+                if (i + 1 >= length) {
+                    break;
+                }
+                int lo = pcm[i] & 0xff;
+                int hi = pcm[i + 1];
+                short v = (short) ((hi << 8) | lo);
+                frameAbs += Math.abs((int) v);
+            }
+            sum += (frameAbs / ch);
+            picked++;
+        }
+        return picked > 0 ? (sum / picked) : 0;
+    }
+
+    private RemoteAsrClient.Result parseRemoteAsrResultJson(String json, int startMs, int endMs) {
+        try {
+            if (TextUtils.isEmpty(json)) {
+                return new RemoteAsrClient.Result(false, new ArrayList<>());
+            }
+            org.json.JSONObject obj = new org.json.JSONObject(json);
+            boolean partial = obj.optBoolean("partial", false);
+            org.json.JSONArray segArr = obj.optJSONArray("segments");
+            ArrayList<RemoteAsrClient.Segment> segs = new ArrayList<>();
+            if (segArr != null) {
+                for (int i = 0; i < segArr.length(); i++) {
+                    org.json.JSONObject s = segArr.optJSONObject(i);
+                    if (s == null) {
+                        continue;
+                    }
+                    int s0 = s.optInt("startMs", startMs);
+                    int s1 = s.optInt("endMs", endMs);
+                    String t = s.optString("text", "");
+                    if (!TextUtils.isEmpty(t)) {
+                        segs.add(new RemoteAsrClient.Segment(s0, s1, t));
+                    }
+                }
+                return new RemoteAsrClient.Result(partial, segs);
+            }
+            String text = obj.optString("text", "");
+            if (!TextUtils.isEmpty(text)) {
+                segs.add(new RemoteAsrClient.Segment(startMs, endMs, text));
+            }
+            return new RemoteAsrClient.Result(partial, segs);
+        } catch (Throwable ignored) {
+            return new RemoteAsrClient.Result(false, new ArrayList<>());
+        }
+    }
+
+    private void remoteAsrLoop(int sampleRate) {
+        int bytesPerSecond = sampleRate * 2;
+        int minChunkMs = 900;
+        int maxChunkMs = 1800;
+        int overlapMs = 450;
+        int minChunkBytes = bytesPerSecond * minChunkMs / 1000;
+        int maxChunkBytes = bytesPerSecond * maxChunkMs / 1000;
+        int overlapBytes = bytesPerSecond * overlapMs / 1000;
+        int silenceFlushMs = 650;
+        byte[] buf = new byte[8 * 1024];
+        while (mAsrRemoteRunning) {
+            AudioRecord r = mAsrAudioRecord;
+            if (r == null) {
+                break;
+            }
+            int n;
+            try {
+                n = r.read(buf, 0, buf.length);
+            } catch (Throwable t) {
+                break;
+            }
+            if (n <= 0) {
+                continue;
+            }
+            boolean voice = isVoicePcm16leMono(buf, n);
+            long now = System.currentTimeMillis();
+            if (voice) {
+                mAsrRemoteLastVoiceAtMs = now;
+            }
+            if (mAsrRemoteChunkStartPlayerMs < 0) {
+                mAsrRemoteChunkStartPlayerMs = mVideoView != null ? mVideoView.getCurrentPosition() : 0;
+            }
+            synchronized (mAsrRemoteChunkBuffer) {
+                mAsrRemoteChunkBuffer.write(buf, 0, n);
+                mAsrRemoteChunkBytes += n;
+                if (voice) {
+                    mAsrRemoteChunkHasVoice = true;
+                }
+                int currentPlayerMs = mVideoView != null ? mVideoView.getCurrentPosition() : ((int) mAsrRemoteChunkStartPlayerMs + maxChunkMs);
+                if (mAsrRemoteChunkBytes >= maxChunkBytes) {
+                    flushRemoteAsrChunkLocked(currentPlayerMs, overlapMs, overlapBytes);
+                } else if (mAsrRemoteChunkHasVoice && mAsrRemoteChunkBytes >= minChunkBytes && mAsrRemoteLastVoiceAtMs > 0 && (now - mAsrRemoteLastVoiceAtMs) >= silenceFlushMs) {
+                    flushRemoteAsrChunkLocked(currentPlayerMs, overlapMs, overlapBytes);
+                }
+            }
+        }
+        synchronized (mAsrRemoteChunkBuffer) {
+            if (mAsrRemoteChunkBytes > 0) {
+                int currentPlayerMs = mVideoView != null ? mVideoView.getCurrentPosition() : ((int) mAsrRemoteChunkStartPlayerMs + 1500);
+                flushRemoteAsrChunkLocked(currentPlayerMs, 0, 0);
+            }
+        }
+        mSubtitleHandler.post(() -> {
+            if (!mAsrEnabled) {
+                return;
+            }
+            mToastTextView.setText(getString(R.string.subtitle_asr_remote_stop));
+            mMediaController.showOnce(mToastTextView);
+        });
+    }
+
+    private void flushRemoteAsrChunkLocked(int endPlayerMs, int overlapMs, int overlapBytes) {
+        if (mAsrRemoteChunkBytes <= 0) {
+            return;
+        }
+        if (!mAsrRemoteChunkHasVoice) {
+            mAsrRemoteChunkBuffer.reset();
+            mAsrRemoteChunkBytes = 0;
+            mAsrRemoteChunkStartPlayerMs = -1;
+            return;
+        }
+        final byte[] pcm = mAsrRemoteChunkBuffer.toByteArray();
+        final int startMs = (int) Math.max(0, mAsrRemoteChunkStartPlayerMs);
+        final int endMs = Math.max(startMs + 200, endPlayerMs);
+        final String endpoint = mSettings != null ? mSettings.getAsrRemoteEndpoint() : "";
+        final String lang = mSettings != null ? mSettings.getAsrLanguage() : "";
+
+        if (overlapBytes > 0 && pcm.length > overlapBytes) {
+            byte[] tail = Arrays.copyOfRange(pcm, pcm.length - overlapBytes, pcm.length);
+            mAsrRemoteChunkBuffer.reset();
+            mAsrRemoteChunkBuffer.write(tail, 0, tail.length);
+            mAsrRemoteChunkBytes = tail.length;
+            mAsrRemoteChunkStartPlayerMs = Math.max(0, endMs - overlapMs);
+            mAsrRemoteChunkHasVoice = false;
+            mAsrRemoteLastVoiceAtMs = -1;
+        } else {
+            mAsrRemoteChunkBuffer.reset();
+            mAsrRemoteChunkBytes = 0;
+            mAsrRemoteChunkStartPlayerMs = -1;
+            mAsrRemoteChunkHasVoice = false;
+            mAsrRemoteLastVoiceAtMs = -1;
+        }
+
+        mSubtitleHandler.post(() -> {
+            if (mAsrEnabled) {
+                mToastTextView.setText(getString(R.string.subtitle_asr_remote_uploading));
+                mMediaController.showOnce(mToastTextView);
+            }
+        });
+
+        ExecutorService ex = mAsrRemoteExecutor;
+        if (ex == null) {
+            ex = Executors.newSingleThreadExecutor();
+            mAsrRemoteExecutor = ex;
+        }
+        ex.execute(() -> {
+            try {
+                RemoteAsrClient.Result res = mRemoteAsrClient.transcribePcm16Mono16k(endpoint, pcm, startMs, endMs, lang);
+                List<RemoteAsrClient.Segment> segs = res != null ? res.segments : null;
+                boolean partial = res != null && res.partial;
+
+                if (segs == null || segs.isEmpty()) {
+                    if (!partial) {
+                        mSubtitleHandler.post(() -> {
+                            mAsrPartialText = null;
+                            updateSubtitleOverlay();
+                        });
+                    }
+                    return;
+                }
+
+                mSubtitleHandler.post(() -> {
+                    if (!mAsrEnabled) {
+                        return;
+                    }
+                    if (partial) {
+                        String t = joinSegmentsText(segs);
+                        mAsrPartialText = TextUtils.isEmpty(t) ? null : t;
+                        updateSubtitleOverlay();
+                        return;
+                    }
+                    mAsrPartialText = null;
+                    for (RemoteAsrClient.Segment s : segs) {
+                        if (s == null || TextUtils.isEmpty(s.text)) {
+                            continue;
+                        }
+                        commitRemoteFinalText(s.startMs, s.endMs, s.text);
+                    }
+                    updateSubtitleOverlay();
+                });
+            } catch (Throwable t) {
+                mSubtitleHandler.post(() -> {
+                    if (mAsrEnabled) {
+                        mToastTextView.setText(getString(R.string.subtitle_asr_remote_failed));
+                        mMediaController.showOnce(mToastTextView);
+                    }
+                });
+            }
+        });
+    }
+
+    private String joinSegmentsText(List<RemoteAsrClient.Segment> segs) {
+        if (segs == null || segs.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (RemoteAsrClient.Segment s : segs) {
+            if (s == null || TextUtils.isEmpty(s.text)) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(s.text.trim());
+        }
+        return sb.toString().trim();
+    }
+
+    private void commitRemoteFinalText(int startMs, int endMs, String rawText) {
+        String text = rawText != null ? rawText.trim() : "";
+        if (TextUtils.isEmpty(text)) {
+            return;
+        }
+        String delta = removeTextOverlap(mAsrRemoteCommittedTail, text);
+        if (TextUtils.isEmpty(delta)) {
+            return;
+        }
+        List<String> parts = splitToSentences(delta);
+        if (parts.isEmpty()) {
+            return;
+        }
+        int duration = Math.max(200, endMs - startMs);
+        int total = 0;
+        for (String p : parts) {
+            if (p != null) {
+                total += p.length();
+            }
+        }
+        if (total <= 0) {
+            addSubtitleCueExplicit(startMs, endMs, delta);
+            rememberRemoteTail(text);
+            return;
+        }
+        int used = 0;
+        int segStart = startMs;
+        for (int i = 0; i < parts.size(); i++) {
+            String p = parts.get(i);
+            if (TextUtils.isEmpty(p)) {
+                continue;
+            }
+            used += p.length();
+            int segEnd = startMs + (int) ((long) duration * used / total);
+            segEnd = Math.max(segStart + 200, segEnd);
+            if (i == parts.size() - 1) {
+                segEnd = endMs;
+            } else {
+                segEnd = Math.min(endMs, segEnd);
+            }
+            addSubtitleCueExplicit(segStart, segEnd, p);
+            segStart = segEnd;
+        }
+        rememberRemoteTail(text);
+    }
+
+    private void rememberRemoteTail(String fullText) {
+        if (TextUtils.isEmpty(fullText)) {
+            return;
+        }
+        String t = fullText.trim();
+        int max = 80;
+        if (t.length() > max) {
+            t = t.substring(t.length() - max);
+        }
+        mAsrRemoteCommittedTail = t;
+    }
+
+    private String removeTextOverlap(String prevTail, String current) {
+        if (TextUtils.isEmpty(current)) {
+            return "";
+        }
+        if (TextUtils.isEmpty(prevTail)) {
+            return current;
+        }
+        String a = prevTail;
+        String b = current;
+        int max = Math.min(60, Math.min(a.length(), b.length()));
+        int best = 0;
+        for (int len = 1; len <= max; len++) {
+            String suf = a.substring(a.length() - len);
+            String pre = b.substring(0, len);
+            if (suf.equalsIgnoreCase(pre)) {
+                best = len;
+            }
+        }
+        if (best >= 3 && best < b.length()) {
+            return b.substring(best).trim();
+        }
+        return b;
+    }
+
+    private List<String> splitToSentences(String text) {
+        ArrayList<String> out = new ArrayList<>();
+        if (TextUtils.isEmpty(text)) {
+            return out;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            sb.append(c);
+            boolean hard = c == '。' || c == '！' || c == '？' || c == '.' || c == '!' || c == '?';
+            boolean soft = (c == '，' || c == ',' || c == ';' || c == '；') && sb.length() >= 18;
+            if (hard || soft) {
+                String s = sb.toString().trim();
+                if (!TextUtils.isEmpty(s)) {
+                    out.add(s);
+                }
+                sb.setLength(0);
+            }
+        }
+        String rest = sb.toString().trim();
+        if (!TextUtils.isEmpty(rest)) {
+            out.add(rest);
+        }
+        return out;
+    }
+
+    private boolean isVoicePcm16le(byte[] pcm, int length, int channelCount, int threshold) {
+        if (pcm == null || length <= 2) {
+            return false;
+        }
+        int ch = Math.max(1, channelCount);
+        int sampleCount = length / 2;
+        int frameCount = sampleCount / ch;
+        if (frameCount <= 0) {
+            return false;
+        }
+        long sum = 0;
+        int step = Math.max(1, frameCount / 160);
+        int picked = 0;
+        for (int f = 0; f < frameCount; f += step) {
+            long frameAbs = 0;
+            int base = f * ch * 2;
+            for (int c = 0; c < ch; c++) {
+                int i = base + c * 2;
+                if (i + 1 >= length) {
+                    break;
+                }
+                int lo = pcm[i] & 0xff;
+                int hi = pcm[i + 1];
+                short v = (short) ((hi << 8) | lo);
+                frameAbs += Math.abs((int) v);
+            }
+            sum += (frameAbs / ch);
+            picked++;
+        }
+        if (picked <= 0) {
+            return false;
+        }
+        long avg = sum / picked;
+        return avg >= threshold;
+    }
+
+    private boolean isVoicePcm16leMono(byte[] pcm, int length) {
+        return isVoicePcm16le(pcm, length, 1, 700);
+    }
+
+    private void addSubtitleCueExplicit(int startMs, int endMs, String text) {
+        SubtitleCue cue = new SubtitleCue(startMs, endMs, text);
+        int insertAt = mSubtitleCues.size();
+        for (int i = 0; i < mSubtitleCues.size(); i++) {
+            if (startMs < mSubtitleCues.get(i).startMs) {
+                insertAt = i;
+                break;
+            }
+        }
+        mSubtitleCues.add(insertAt, cue);
+        normalizeSubtitleEnds();
+    }
+
+    private int queryAsrServiceCount() {
+        try {
+            android.content.pm.PackageManager pm = getPackageManager();
+            if (pm == null) {
+                return 0;
+            }
+            java.util.List<android.content.pm.ResolveInfo> infos = pm.queryIntentServices(new Intent("android.speech.RecognitionService"), 0);
+            int count = infos != null ? infos.size() : 0;
+            mAsrServiceCount = count;
+            return count;
+        } catch (Throwable ignored) {
+            mAsrServiceCount = 0;
+            return 0;
+        }
+    }
+
+    private String errorToText(int error) {
+        if (error == SpeechRecognizer.ERROR_AUDIO) return "ERROR_AUDIO";
+        if (error == SpeechRecognizer.ERROR_CLIENT) return "ERROR_CLIENT";
+        if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) return "ERROR_INSUFFICIENT_PERMISSIONS";
+        if (error == SpeechRecognizer.ERROR_NETWORK) return "ERROR_NETWORK";
+        if (error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) return "ERROR_NETWORK_TIMEOUT";
+        if (error == SpeechRecognizer.ERROR_NO_MATCH) return "ERROR_NO_MATCH";
+        if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) return "ERROR_RECOGNIZER_BUSY";
+        if (error == SpeechRecognizer.ERROR_SERVER) return "ERROR_SERVER";
+        if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) return "ERROR_SPEECH_TIMEOUT";
+        return "ERROR_" + error;
+    }
+
+    private void handleAsrResults(Bundle bundle, boolean partial) {
+        if (!mAsrEnabled) {
+            return;
+        }
+        try {
+            java.util.ArrayList<String> list = bundle != null ? bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) : null;
+            String text = (list != null && !list.isEmpty()) ? list.get(0) : null;
+            if (TextUtils.isEmpty(text)) {
+                if (partial) {
+                    mAsrPartialText = null;
+                    updateSubtitleOverlay();
+                }
+                return;
+            }
+            text = text.trim();
+            if (TextUtils.isEmpty(text)) {
+                return;
+            }
+
+            if (partial) {
+                mAsrPartialText = text;
+                updateSubtitleOverlay();
+                return;
+            }
+
+            long now = System.currentTimeMillis();
+            if (text.equals(mAsrLastFinalText) && (now - mAsrLastFinalAtMs) < 800) {
+                mAsrPartialText = null;
+                updateSubtitleOverlay();
+                return;
+            }
+            mAsrLastFinalText = text;
+            mAsrLastFinalAtMs = now;
+            mAsrPartialText = null;
+
+            int startMs = mVideoView != null ? mVideoView.getCurrentPosition() : 0;
+            addSubtitleCue(startMs, text);
+        } catch (Throwable ignored) {
+        }
     }
 
     @Override
@@ -648,7 +2404,31 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         if (mirror != null) {
             mirror.setChecked(mSettings.getVideoMirrorHorizontal());
         }
+        MenuItem asr = menu != null ? menu.findItem(R.id.action_subtitle_asr_toggle) : null;
+        if (asr != null) {
+            asr.setChecked(mAsrEnabled);
+        }
         return super.onPrepareOptionsMenu(menu);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_RECORD_AUDIO) {
+            boolean granted = grantResults != null && grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            if (granted && mAsrPendingStart) {
+                mAsrPendingStart = false;
+                startAsrByMode();
+            } else if (!granted) {
+                mAsrPendingStart = false;
+                mAsrEnabled = false;
+                mAsrPartialText = null;
+                updateSubtitleOverlay();
+                mToastTextView.setText(getString(R.string.subtitle_asr_permission_denied));
+                mMediaController.showOnce(mToastTextView);
+                invalidateOptionsMenu();
+            }
+        }
     }
 
     private void showDiagnosticsSheet() {
@@ -693,8 +2473,78 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         if (!TextUtils.isEmpty(lastApplyVf0)) {
             sb.append(lastApplyVf0).append('\n');
         }
+        appendApkNativeLibInfo(sb);
         appendNativeCapabilities(sb);
+        appendAsrCapabilities(sb);
         return sb.toString();
+    }
+
+    private void appendApkNativeLibInfo(StringBuilder sb) {
+        try {
+            String dir = getApplicationInfo() != null ? getApplicationInfo().nativeLibraryDir : null;
+            sb.append("apk.nativeLibDir=").append(TextUtils.isEmpty(dir) ? "null" : dir).append('\n');
+
+            File nativeDir = !TextUtils.isEmpty(dir) ? new File(dir) : null;
+            appendNativeLibFileInfo(sb, nativeDir, "libijkffmpeg.so");
+            appendNativeLibFileInfo(sb, nativeDir, "libijkplayer.so");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void appendNativeLibFileInfo(StringBuilder sb, File nativeDir, String name) {
+        try {
+            if (nativeDir == null || TextUtils.isEmpty(name)) {
+                return;
+            }
+            File f = new File(nativeDir, name);
+            if (!f.exists()) {
+                sb.append("apk.").append(name).append("=missing").append('\n');
+                return;
+            }
+            sb.append("apk.").append(name).append(".size=").append(f.length()).append('\n');
+            String sha1 = sha1Hex(f);
+            if (!TextUtils.isEmpty(sha1)) {
+                sb.append("apk.").append(name).append(".sha1=").append(sha1).append('\n');
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private String sha1Hex(File f) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            try (FileInputStream fis = new FileInputStream(f)) {
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = fis.read(buf)) > 0) {
+                    md.update(buf, 0, n);
+                }
+            }
+            byte[] b = md.digest();
+            StringBuilder sb = new StringBuilder();
+            for (byte v : b) {
+                sb.append(String.format(Locale.US, "%02x", v));
+            }
+            return sb.toString();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private void appendAsrCapabilities(StringBuilder sb) {
+        try {
+            boolean availableFlag = SpeechRecognizer.isRecognitionAvailable(this);
+            int services = queryAsrServiceCount();
+            String service = android.provider.Settings.Secure.getString(getContentResolver(), "voice_recognition_service");
+            sb.append("asr.availableFlag=").append(availableFlag).append(" services=").append(services).append('\n');
+            sb.append("asr.voiceService=").append(TextUtils.isEmpty(service) ? "null" : service).append('\n');
+            sb.append("asr.enabled=").append(mAsrEnabled).append('\n');
+            String mode = mSettings != null ? mSettings.getAsrMode() : "system";
+            String endpoint = mSettings != null ? mSettings.getAsrRemoteEndpoint() : "";
+            sb.append("asr.mode=").append(TextUtils.isEmpty(mode) ? "system" : mode).append('\n');
+            sb.append("asr.remote.endpointConfigured=").append(!TextUtils.isEmpty(endpoint)).append('\n');
+        } catch (Throwable ignored) {
+        }
     }
 
     private void appendNativeCapabilities(StringBuilder sb) {
@@ -725,6 +2575,9 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             sb.append("ffmpeg.protocols.http=").append(http).append(" https=").append(https).append(" tls=").append(tls).append('\n');
             sb.append("ffmpeg.filters.drawbox=").append(drawbox).append('\n');
             sb.append("ffmpeg.filters.vulkan=").append(scaleVulkan || hflipVulkan || vflipVulkan || transposeVulkan).append('\n');
+            if (!TextUtils.isEmpty(cfg)) {
+                sb.append("ffmpeg.avformat_configuration=").append(cfg).append('\n');
+            }
             sb.append("ffmpeg.nativeDiag=").append(NativeFFmpegDiagnostics.isDiagnosticsEnabledSafe()).append('\n');
         } catch (Throwable ignored) {
         }

@@ -42,6 +42,66 @@
     <string name="pref_title_enable_vulkan_filter">Enable Vulkan scale filter</string>
     <string name="pref_summary_enable_vulkan_filter">Try scale_vulkan; fallback automatically if unsupported</string>
 
+    <string name="pref_title_asr">ASR Subtitles</string>
+    <string name="pref_key_asr_mode">pref.asr.mode</string>
+    <string name="pref_title_asr_mode">ASR Mode</string>
+    <string-array name="pref_entries_asr_mode">
+        <item>System</item>
+        <item>Remote (Mic)</item>
+        <item>Remote (Track)</item>
+        <item>Offline (Whisper Track)</item>
+    </string-array>
+    <string-array name="pref_entry_values_asr_mode">
+        <item>system</item>
+        <item>remote</item>
+        <item>remote_track</item>
+        <item>whisper_track</item>
+    </string-array>
+    <string-array name="pref_entry_summaries_asr_mode">
+        <item>Use Android SpeechRecognizer</item>
+        <item>Send mic PCM to remote endpoint</item>
+        <item>Decode video audio track and send to remote endpoint</item>
+        <item>Decode audio track and run whisper.cpp locally</item>
+    </string-array>
+
+    <string name="pref_key_asr_remote_endpoint">pref.asr.remote.endpoint</string>
+    <string name="pref_title_asr_remote_endpoint">Remote ASR Endpoint</string>
+    <string name="pref_summary_asr_remote_endpoint">HTTP(S) URL, accepts PCM16 mono 16k; returns text/JSON</string>
+
+    <string name="pref_key_asr_language">pref.asr.language</string>
+    <string name="pref_title_asr_language">ASR Language</string>
+    <string name="pref_summary_asr_language">e.g. zh-CN, en-US (empty = auto)</string>
+
+    <string name="pref_key_asr_whisper_model_path">pref.asr.whisper.model_path</string>
+    <string name="pref_title_asr_whisper_model_path">Whisper Model Path</string>
+    <string name="pref_summary_asr_whisper_model_path">Absolute path to ggml/gguf model file</string>
+
+    <string name="pref_key_asr_whisper_model_url">pref.asr.whisper.model_url</string>
+    <string name="pref_title_asr_whisper_model_url">Whisper Model URL</string>
+    <string name="pref_summary_asr_whisper_model_url">Optional: download URL for model file</string>
+
+    <string name="pref_key_asr_whisper_model_preset">pref.asr.whisper.model_preset</string>
+    <string name="pref_title_asr_whisper_model_preset">Whisper Model Preset</string>
+    <string name="pref_summary_asr_whisper_model_preset">One-tap official model URL</string>
+    <string-array name="pref_entries_asr_whisper_model_preset">
+        <item>Custom</item>
+        <item>tiny (ggml-tiny.bin)</item>
+        <item>base (ggml-base.bin)</item>
+        <item>small (ggml-small.bin)</item>
+    </string-array>
+    <string-array name="pref_entry_values_asr_whisper_model_preset">
+        <item></item>
+        <item>https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin</item>
+        <item>https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin</item>
+        <item>https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin</item>
+    </string-array>
+    <string-array name="pref_entry_summaries_asr_whisper_model_preset">
+        <item>Use the URL field below</item>
+        <item>Official; about 75MB</item>
+        <item>Official; about 142MB</item>
+        <item>Official; about 466MB</item>
+    </string-array>
+
     <string name="pref_key_video_mirror_horizontal">pref.video_mirror_horizontal</string>
 
     <!-- -->

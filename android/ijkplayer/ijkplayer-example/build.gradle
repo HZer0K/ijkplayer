@@ -1,5 +1,13 @@
 apply plugin: 'com.android.application'
 
+def enableWhisperPropRaw =
+        (rootProject.findProperty("enableWhisper") != null ? rootProject.findProperty("enableWhisper") : project.findProperty("enableWhisper"))
+def enableWhisperEnvRaw =
+        (System.getenv("IJK_ENABLE_WHISPER") != null ? System.getenv("IJK_ENABLE_WHISPER") : System.getenv("ENABLE_WHISPER"))
+def enableWhisperSysRaw = System.getProperty("enableWhisper")
+def enableWhisperProp = String.valueOf(enableWhisperPropRaw != null ? enableWhisperPropRaw : (enableWhisperEnvRaw != null ? enableWhisperEnvRaw : (enableWhisperSysRaw != null ? enableWhisperSysRaw : "false"))).toBoolean()
+def enableWhisperNative = enableWhisperProp || gradle.startParameter.taskNames.any { it.toLowerCase().contains("whisper64") }
+
 android {
     // http://tools.android.com/tech-docs/new-build-system/tips
     //noinspection GroovyAssignabilityCheck
@@ -10,6 +18,9 @@ android {
 
     lintOptions {
         abortOnError false
+    }
+    buildFeatures {
+        buildConfig true
     }
     flavorDimensions "abi"
     compileOptions {
@@ -22,6 +33,17 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode rootProject.ext.versionCode
         versionName rootProject.ext.versionName
+
+        buildConfigField "boolean", "WHISPER_ENABLED", String.valueOf(enableWhisperNative)
+
+        if (enableWhisperNative) {
+            ndk { abiFilters "arm64-v8a" }
+            externalNativeBuild {
+                cmake {
+                    arguments "-DENABLE_WHISPER=ON"
+                }
+            }
+        }
     }
     buildTypes {
         release {
@@ -31,6 +53,24 @@ android {
     }
     productFlavors {
         all64 { minSdkVersion 21; dimension "abi" }
+        whisper64 {
+            minSdkVersion 21
+            dimension "abi"
+            ndk { abiFilters "arm64-v8a" }
+            externalNativeBuild {
+                cmake {
+                    arguments "-DENABLE_WHISPER=ON"
+                }
+            }
+        }
+    }
+
+    if (enableWhisperNative) {
+        externalNativeBuild {
+            cmake {
+                path file("src/main/cpp/CMakeLists.txt")
+            }
+        }
     }
 }
 
@@ -47,6 +87,7 @@ dependencies {
     implementation project(':ijkplayer-exo')
 
     all64Implementation project(':ijkplayer-arm64')
+    whisper64Implementation project(':ijkplayer-arm64')
 
     // compile 'tv.danmaku.ijk.media:ijkplayer-java:0.8.8'
     // compile 'tv.danmaku.ijk.media:ijkplayer-exo:0.8.8'

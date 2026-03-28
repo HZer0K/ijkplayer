@@ -156,6 +156,9 @@ export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --disable-protocol=unix"
 #
 export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --disable-devices"
 export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --disable-filters"
+if [ "${IJK_ENABLE_VULKAN_FILTERS:-0}" = "1" ] || [ "${IJK_ENABLE_FILTERS:-0}" = "1" ]; then
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=buffer --enable-filter=buffersink --enable-filter=format --enable-filter=pad --enable-filter=scale --enable-filter=drawbox --enable-filter=hflip --enable-filter=vflip --enable-filter=transpose --enable-filter=hwupload --enable-filter=hwdownload --enable-filter=scale_vulkan --enable-filter=hflip_vulkan --enable-filter=vflip_vulkan --enable-filter=transpose_vulkan --enable-filter=gblur_vulkan --enable-filter=avgblur_vulkan --enable-filter=chromaber_vulkan --enable-filter=blend_vulkan --enable-filter=overlay_vulkan"
+fi
 
 # External library support:
 export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --disable-iconv"

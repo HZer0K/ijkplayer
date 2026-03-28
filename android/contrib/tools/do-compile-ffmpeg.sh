@@ -249,6 +249,15 @@ FF_EXTRA_LDFLAGS="$FF_EXTRA_LDFLAGS -B$FF_API_LIB_DIR"
 #FF_CFLAGS="$FF_CFLAGS -finline-limit=300"
 
 export COMMON_FF_CFG_FLAGS=
+
+FF_ENABLE_VULKAN="${IJK_ENABLE_VULKAN:-1}"
+FF_ENABLE_VULKAN_FILTERS="${IJK_ENABLE_VULKAN_FILTERS:-}"
+
+FF_DEP_GLSLANG_INC="$FF_BUILD_ROOT/build/glslang-arm64/output/include"
+FF_DEP_GLSLANG_LIB="$FF_BUILD_ROOT/build/glslang-arm64/output/lib"
+if [ "$FF_ENABLE_VULKAN" = "1" ] && [ -z "$FF_ENABLE_VULKAN_FILTERS" ] && [ -f "${FF_DEP_GLSLANG_LIB}/libglslang.a" ]; then
+    export IJK_ENABLE_VULKAN_FILTERS=1
+fi
 . $FF_BUILD_ROOT/../../config/module.sh
 
 
@@ -273,44 +282,59 @@ fi
 
 FF_CFG_FLAGS="$FF_CFG_FLAGS $COMMON_FF_CFG_FLAGS"
 
-# Vulkan support (conditionally enable based on NDK headers)
-FF_ENABLE_VULKAN=1
-# Require vk_video AV1 headers and newer core extension macros
-if [ ! -f "$FF_SYSROOT/usr/include/vk_video/vulkan_video_codec_av1std.h" ]; then
-    FF_ENABLE_VULKAN=0
-elif ! grep -q "VK_KHR_SHADER_SUBGROUP_ROTATE_EXTENSION_NAME" "$FF_SYSROOT/usr/include/vulkan/vulkan_core.h" 2>/dev/null; then
-    FF_ENABLE_VULKAN=0
-fi
+# Vulkan support (enable Vulkan filters; depends on spirv_compiler + Vulkan-Headers)
+FF_ENABLE_VULKAN="${IJK_ENABLE_VULKAN:-1}"
 if [ "$FF_ENABLE_VULKAN" = "1" ]; then
+    # Ensure Vulkan-Headers are available even if NDK headers are missing vk_video/*
+    VULKAN_HEADERS_VER=1.3.280
+    VULKAN_HEADERS_ROOT="$FF_BUILD_ROOT/build/vulkan-headers"
+    VULKAN_HEADERS_DIR="$VULKAN_HEADERS_ROOT/Vulkan-Headers-$VULKAN_HEADERS_VER"
+    VH_TAR="$VULKAN_HEADERS_ROOT/Vulkan-Headers-$VULKAN_HEADERS_VER.tar.gz"
+    VH_URL="https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v$VULKAN_HEADERS_VER.tar.gz"
+
+    NEED_VH=0
+    if [ ! -f "$FF_SYSROOT/usr/include/vk_video/vulkan_video_codec_av1std.h" ]; then
+        NEED_VH=1
+    elif ! grep -q "VK_KHR_SHADER_SUBGROUP_ROTATE_EXTENSION_NAME" "$FF_SYSROOT/usr/include/vulkan/vulkan_core.h" 2>/dev/null; then
+        NEED_VH=1
+    fi
+
+    if [ "$NEED_VH" = "1" ]; then
+        echo "NDK Vulkan headers not sufficient; using vendored Vulkan-Headers v$VULKAN_HEADERS_VER"
+        mkdir -p "$VULKAN_HEADERS_ROOT"
+        if [ ! -d "$VULKAN_HEADERS_DIR/include" ]; then
+            if [ ! -f "$VH_TAR" ]; then
+                if command -v curl >/dev/null 2>&1; then
+                    curl -L "$VH_URL" -o "$VH_TAR"
+                elif command -v wget >/dev/null 2>&1; then
+                    wget -O "$VH_TAR" "$VH_URL"
+                else
+                    echo "No curl/wget to download Vulkan-Headers"; exit 1
+                fi
+            fi
+            tar -xzf "$VH_TAR" -C "$VULKAN_HEADERS_ROOT"
+        fi
+        if [ -d "$VULKAN_HEADERS_DIR/include" ]; then
+            FF_CFLAGS="-I$VULKAN_HEADERS_DIR/include $FF_CFLAGS"
+        fi
+    fi
+
     FF_CFG_FLAGS="$FF_CFG_FLAGS --enable-vulkan"
     FF_DEP_LIBS="$FF_DEP_LIBS -lvulkan"
-    # Prefer vendored Vulkan-Headers if NDK headers are old
-    VULKAN_HEADERS_VER=1.3.280
-    VULKAN_HEADERS_DIR="$FF_BUILD_ROOT/build/vulkan-headers/vulkan-headers-$VULKAN_HEADERS_VER"
-    if [ ! -f "$FF_SYSROOT/usr/include/vk_video/vulkan_video_codec_av1std.h" ] || \
-       ! grep -q "VK_KHR_SHADER_SUBGROUP_ROTATE_EXTENSION_NAME" "$FF_SYSROOT/usr/include/vulkan/vulkan_core.h" 2>/dev/null ; then
-        echo "Fetching Vulkan-Headers v$VULKAN_HEADERS_VER"
-        mkdir -p "$FF_BUILD_ROOT/build/vulkan-headers"
-        VH_TAR="$FF_BUILD_ROOT/build/vulkan-headers/vulkan-headers-$VULKAN_HEADERS_VER.tar.gz"
-        VH_URL="https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v$VULKAN_HEADERS_VER.tar.gz"
-        if command -v curl >/dev/null 2>&1; then
-            curl -L "$VH_URL" -o "$VH_TAR"
-        elif command -v wget >/dev/null 2>&1; then
-            wget -O "$VH_TAR" "$VH_URL"
-        else
-            echo "No curl/wget to download Vulkan-Headers"; exit 1
-        fi
-        tar -xzf "$VH_TAR" -C "$FF_BUILD_ROOT/build/vulkan-headers"
-    fi
-    if [ -d "$VULKAN_HEADERS_DIR/include" ]; then
-        FF_CFLAGS="-I$VULKAN_HEADERS_DIR/include $FF_CFLAGS"
-        echo "Using vendored Vulkan-Headers includes: $VULKAN_HEADERS_DIR/include"
-    fi
-    # Enable beta extensions for video decode headers (AV1, etc.)
     FF_CFLAGS="$FF_CFLAGS -DVK_ENABLE_BETA_EXTENSIONS=1"
 else
-    echo "Vulkan headers not sufficient in NDK; disabling Vulkan in FFmpeg build"
     FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-vulkan"
+fi
+
+# Enable Vulkan GLSL->SPIR-V compiler (required by *_vulkan filters)
+FF_ENABLE_VULKAN_FILTERS="${IJK_ENABLE_VULKAN_FILTERS:-1}"
+FF_DEP_GLSLANG_INC="$FF_BUILD_ROOT/build/glslang-arm64/output/include"
+FF_DEP_GLSLANG_LIB="$FF_BUILD_ROOT/build/glslang-arm64/output/lib"
+if [ "$FF_ENABLE_VULKAN" = "1" ] && [ "$FF_ENABLE_VULKAN_FILTERS" = "1" ] && [ -f "${FF_DEP_GLSLANG_LIB}/libglslang.a" ]; then
+    echo "glslang detected (spirv_compiler)"
+    FF_CFG_FLAGS="$FF_CFG_FLAGS --enable-libglslang"
+    FF_CFLAGS="$FF_CFLAGS -I${FF_DEP_GLSLANG_INC}"
+    FF_DEP_LIBS="$FF_DEP_LIBS -L${FF_DEP_GLSLANG_LIB} -lglslang -lMachineIndependent -lOSDependent -lGenericCodeGen -lSPIRV -lSPVRemapper -lglslang-default-resource-limits -lc++_static -lc++abi -latomic"
 fi
 
 # Android 不使用桌面/Windows 硬件解码加速，避免未定义宏导致编译失败（不影响 Vulkan 滤镜）

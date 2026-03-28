@@ -25,6 +25,9 @@ gen/
 libs/
 obj/
 ijkmedia/ijkplayer/ijkversion.h
+.cxx/
+**/.cxx/
+android/ijkplayer/ijkplayer-example/.cxx/
 
 # Local configuration file (sdk path, etc)
 local.properties

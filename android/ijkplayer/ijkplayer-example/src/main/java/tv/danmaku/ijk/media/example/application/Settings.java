@@ -184,4 +184,49 @@ public class Settings {
         String key = mAppContext.getString(R.string.pref_key_last_directory);
         mSharedPreferences.edit().putString(key, path).apply();
     }
+
+    public String getAsrMode() {
+        String key = mAppContext.getString(R.string.pref_key_asr_mode);
+        String v = mSharedPreferences.getString(key, "system");
+        return v != null ? v : "system";
+    }
+
+    public String getAsrRemoteEndpoint() {
+        String key = mAppContext.getString(R.string.pref_key_asr_remote_endpoint);
+        String v = mSharedPreferences.getString(key, "");
+        return v != null ? v : "";
+    }
+
+    public String getAsrLanguage() {
+        String key = mAppContext.getString(R.string.pref_key_asr_language);
+        String v = mSharedPreferences.getString(key, "");
+        return v != null ? v : "";
+    }
+
+    public String getAsrWhisperModelPath() {
+        String key = mAppContext.getString(R.string.pref_key_asr_whisper_model_path);
+        String v = mSharedPreferences.getString(key, "");
+        return v != null ? v : "";
+    }
+
+    public void setAsrWhisperModelPath(String path) {
+        String key = mAppContext.getString(R.string.pref_key_asr_whisper_model_path);
+        mSharedPreferences.edit().putString(key, path != null ? path : "").apply();
+    }
+
+    public String getAsrWhisperModelPresetUrl() {
+        String key = mAppContext.getString(R.string.pref_key_asr_whisper_model_preset);
+        String v = mSharedPreferences.getString(key, "");
+        return v != null ? v : "";
+    }
+
+    public String getAsrWhisperModelUrl() {
+        String preset = getAsrWhisperModelPresetUrl();
+        if (preset != null && !preset.isEmpty()) {
+            return preset;
+        }
+        String key = mAppContext.getString(R.string.pref_key_asr_whisper_model_url);
+        String v = mSharedPreferences.getString(key, "");
+        return v != null ? v : "";
+    }
 }
