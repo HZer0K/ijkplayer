@@ -51,6 +51,8 @@
 #include <zlib.h>
 #endif
 
+extern int g_ijkplayer_diag_enabled;
+
 typedef enum {
     LOWER_PROTO,
     READ_HEADERS,
@@ -1850,6 +1852,14 @@ static int configure_filtergraph(AVFilterGraph *graph, const char *filtergraph,
         FFSWAP(AVFilterContext*, graph->filters[i], graph->filters[i + nb_filters]);
 
     ret = avfilter_graph_config(graph, NULL);
+    if (g_ijkplayer_diag_enabled && ret >= 0) {
+        ALOGI("diag: filtergraph=%s nb_filters=%d", filtergraph ? filtergraph : "null", graph->nb_filters);
+        for (i = 0; i < graph->nb_filters; i++) {
+            AVFilterContext *ctx = graph->filters[i];
+            const char *n = (ctx && ctx->filter && ctx->filter->name) ? ctx->filter->name : "null";
+            ALOGI("diag: filter[%d]=%s", i, n);
+        }
+    }
 fail:
     avfilter_inout_free(&outputs);
     avfilter_inout_free(&inputs);

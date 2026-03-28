@@ -16,6 +16,21 @@
 # limitations under the License.
 #
 
+REQUEST_TARGET=$1
+REQUEST_SUB_CMD=$2
+ACT_ABI_64="arm64"
+ACT_ABI_ALL=$ACT_ABI_64
+
+ANDROID_ROOT="$(cd "$(dirname "$0")" && pwd)"
+LOG_DIR="${IJK_LOG_DIR:-$ANDROID_ROOT/build/logs}"
+mkdir -p "$LOG_DIR"
+LOG_TS="$(date +%Y%m%d_%H%M%S)"
+LOG_FILE="${IJK_LOG_FILE:-$LOG_DIR/compile-ijk_${REQUEST_TARGET:-default}_${LOG_TS}.log}"
+echo "" > "$LOG_FILE"
+echo "[*] log: $LOG_FILE" | tee -a "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "[*] bash: ${BASH_VERSION:-unknown}"
+
 if [ -z "$ANDROID_NDK" ]; then
     ANDROID_NDK="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-}}"
     export ANDROID_NDK
@@ -31,19 +46,6 @@ if [ -z "$ANDROID_NDK" -o -z "$ANDROID_SDK" ]; then
     echo "They must point to your NDK and SDK directories.\n"
     exit 1
 fi
-
-REQUEST_TARGET=$1
-REQUEST_SUB_CMD=$2
-ACT_ABI_64="arm64"
-ACT_ABI_ALL=$ACT_ABI_64
-
-ANDROID_ROOT="$(cd "$(dirname "$0")" && pwd)"
-LOG_DIR="${IJK_LOG_DIR:-$ANDROID_ROOT/build/logs}"
-mkdir -p "$LOG_DIR"
-LOG_TS="$(date +%Y%m%d_%H%M%S)"
-LOG_FILE="${IJK_LOG_FILE:-$LOG_DIR/compile-ijk_${REQUEST_TARGET:-default}_${LOG_TS}.log}"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "[*] log: $LOG_FILE"
 
 find_cmake_bin () {
     if [ -n "$ANDROID_SDK" ] && [ -d "$ANDROID_SDK/cmake" ]; then
@@ -149,6 +151,14 @@ do_cmake_build () {
 
     mkdir -p "$BUILD_DIR"
     mkdir -p "$OUT_LIB_DIR"
+
+    if [ -f "$BUILD_DIR/CMakeCache.txt" ]; then
+        if ! grep -q "^CMAKE_HOME_DIRECTORY:INTERNAL=$CMAKE_DIR$" "$BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
+            echo "[*] CMake cache path mismatch, cleaning: $BUILD_DIR"
+            rm -rf "$BUILD_DIR"
+            mkdir -p "$BUILD_DIR"
+        fi
+    fi
 
     "$CMAKE_BIN" -S "$CMAKE_DIR" -B "$BUILD_DIR" -G "$GENERATOR" \
         "${MAKE_PROGRAM_ARGS[@]}" \

@@ -27,6 +27,9 @@
 #include <string.h>
 #include <jni.h>
 #include "../ff_ffinc.h"
+#include "libavformat/avio.h"
+#include "libavfilter/avfilter.h"
+#include "../ijkavformat/cJSON.h"
 #include "ijksdl/ijksdl_log.h"
 #include "ijksdl/android/ijksdl_android_jni.h"
 
@@ -36,6 +39,8 @@ typedef struct ffmpeg_api_fields_t {
     jclass clazz;
 } ffmpeg_api_fields_t;
 static ffmpeg_api_fields_t g_clazz;
+
+int g_ijkplayer_diag_enabled = 0;
 
 static jstring
 FFmpegApi_av_base64_encode(JNIEnv *env, jclass clazz, jbyteArray in)
@@ -74,8 +79,122 @@ fail:
     return ret_string;
 }
 
+static jstring
+FFmpegApi_getCapabilitiesJson(JNIEnv *env, jclass clazz)
+{
+    (void)clazz;
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        return NULL;
+    }
+
+    cJSON_AddNumberToObject(root, "avformat_version", (double)avformat_version());
+    cJSON_AddStringToObject(root, "avformat_configuration", avformat_configuration());
+    cJSON_AddNumberToObject(root, "avcodec_version", (double)avcodec_version());
+    cJSON_AddStringToObject(root, "avcodec_configuration", avcodec_configuration());
+    cJSON_AddNumberToObject(root, "avutil_version", (double)avutil_version());
+    cJSON_AddStringToObject(root, "avutil_configuration", avutil_configuration());
+    cJSON_AddNumberToObject(root, "avfilter_version", (double)avfilter_version());
+    cJSON_AddStringToObject(root, "avfilter_configuration", avfilter_configuration());
+
+    cJSON *protocols_in = cJSON_CreateArray();
+    cJSON *protocols_out = cJSON_CreateArray();
+    if (protocols_in) {
+        cJSON_AddItemToObject(root, "protocols_in", protocols_in);
+    }
+    if (protocols_out) {
+        cJSON_AddItemToObject(root, "protocols_out", protocols_out);
+    }
+    if (protocols_in && protocols_out) {
+        void *opaque_in = NULL;
+        const char *name_in = NULL;
+        while ((name_in = avio_enum_protocols(&opaque_in, 0)) != NULL) {
+            cJSON_AddItemToArray(protocols_in, cJSON_CreateString(name_in));
+        }
+
+        void *opaque_out = NULL;
+        const char *name_out = NULL;
+        while ((name_out = avio_enum_protocols(&opaque_out, 1)) != NULL) {
+            cJSON_AddItemToArray(protocols_out, cJSON_CreateString(name_out));
+        }
+    }
+
+    const char *filters_to_check[] = {
+            "drawbox",
+            "hflip",
+            "vflip",
+            "transpose",
+            "scale",
+            "format",
+            "hwupload",
+            "hwdownload",
+            "scale_vulkan",
+            "hflip_vulkan",
+            "vflip_vulkan",
+            "transpose_vulkan",
+            "gblur_vulkan",
+            "avgblur_vulkan",
+            "chromaber_vulkan",
+            NULL
+    };
+
+    cJSON *filter_presence = cJSON_CreateObject();
+    if (filter_presence) {
+        cJSON_AddItemToObject(root, "filter_presence", filter_presence);
+    }
+    int filter_count = 0;
+    void *it = NULL;
+    while (av_filter_iterate(&it) != NULL) {
+        filter_count++;
+    }
+    cJSON_AddNumberToObject(root, "filters_count", filter_count);
+
+    if (filter_presence) {
+        for (int i = 0; filters_to_check[i] != NULL; i++) {
+            const char *fname = filters_to_check[i];
+            const AVFilter *f = avfilter_get_by_name(fname);
+            cJSON_AddBoolToObject(filter_presence, fname, f != NULL);
+        }
+    }
+
+    cJSON_AddBoolToObject(root, "diagnostics_enabled", g_ijkplayer_diag_enabled ? 1 : 0);
+
+    char *out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!out) {
+        return NULL;
+    }
+    jstring ret = (*env)->NewStringUTF(env, out);
+    cJSON_free(out);
+    return ret;
+}
+
+static void
+FFmpegApi_setDiagnosticsEnabled(JNIEnv *env, jclass clazz, jboolean enabled)
+{
+    (void)env;
+    (void)clazz;
+    g_ijkplayer_diag_enabled = enabled ? 1 : 0;
+    if (g_ijkplayer_diag_enabled) {
+        ALOGI("diagnostics_enabled=1");
+    } else {
+        ALOGI("diagnostics_enabled=0");
+    }
+}
+
+static jboolean
+FFmpegApi_isDiagnosticsEnabled(JNIEnv *env, jclass clazz)
+{
+    (void)env;
+    (void)clazz;
+    return g_ijkplayer_diag_enabled ? JNI_TRUE : JNI_FALSE;
+}
+
 static JNINativeMethod g_methods[] = {
     {"av_base64_encode", "([B)Ljava/lang/String;", (void *) FFmpegApi_av_base64_encode},
+    {"getCapabilitiesJson", "()Ljava/lang/String;", (void *) FFmpegApi_getCapabilitiesJson},
+    {"setDiagnosticsEnabled", "(Z)V", (void *) FFmpegApi_setDiagnosticsEnabled},
+    {"isDiagnosticsEnabled", "()Z", (void *) FFmpegApi_isDiagnosticsEnabled},
 };
 
 int FFmpegApi_global_init(JNIEnv *env)

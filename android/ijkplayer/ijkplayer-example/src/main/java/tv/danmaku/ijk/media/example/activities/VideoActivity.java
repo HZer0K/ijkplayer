@@ -69,6 +69,7 @@ import tv.danmaku.ijk.media.example.fragments.TracksFragment;
 import tv.danmaku.ijk.media.example.player.MediaSourceUtil;
 import tv.danmaku.ijk.media.example.player.PlayerToggle;
 import tv.danmaku.ijk.media.example.util.DebugEventLog;
+import tv.danmaku.ijk.media.example.util.NativeFFmpegDiagnostics;
 import tv.danmaku.ijk.media.example.widget.media.AndroidMediaController;
 import tv.danmaku.ijk.media.example.widget.media.IjkVideoView;
 import tv.danmaku.ijk.media.example.widget.media.IRenderView;
@@ -196,6 +197,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
         // init player
         IjkMediaPlayer.loadLibrariesOnce(null);
+        NativeFFmpegDiagnostics.setDiagnosticsEnabledSafe(mSettings.getNativeDiagnosticsEnabled());
         IjkMediaPlayer.native_profileBegin("libijkplayer.so");
 
         mVideoView = (IjkVideoView) findViewById(R.id.video_view);
@@ -691,7 +693,53 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         if (!TextUtils.isEmpty(lastApplyVf0)) {
             sb.append(lastApplyVf0).append('\n');
         }
+        appendNativeCapabilities(sb);
         return sb.toString();
+    }
+
+    private void appendNativeCapabilities(StringBuilder sb) {
+        try {
+            String json = NativeFFmpegDiagnostics.getCapabilitiesJsonOrNull();
+            if (TextUtils.isEmpty(json)) {
+                return;
+            }
+            org.json.JSONObject obj = new org.json.JSONObject(json);
+
+            String cfg = obj.optString("avformat_configuration", "");
+            boolean openssl = cfg.contains("enable-openssl");
+            boolean gnutls = cfg.contains("enable-gnutls");
+
+            org.json.JSONArray in = obj.optJSONArray("protocols_in");
+            boolean http = containsString(in, "http");
+            boolean https = containsString(in, "https");
+            boolean tls = containsString(in, "tls");
+
+            org.json.JSONObject filters = obj.optJSONObject("filter_presence");
+            boolean drawbox = filters != null && filters.optBoolean("drawbox", false);
+            boolean scaleVulkan = filters != null && filters.optBoolean("scale_vulkan", false);
+            boolean hflipVulkan = filters != null && filters.optBoolean("hflip_vulkan", false);
+            boolean vflipVulkan = filters != null && filters.optBoolean("vflip_vulkan", false);
+            boolean transposeVulkan = filters != null && filters.optBoolean("transpose_vulkan", false);
+
+            sb.append("ffmpeg.openssl=").append(openssl).append(" gnutls=").append(gnutls).append('\n');
+            sb.append("ffmpeg.protocols.http=").append(http).append(" https=").append(https).append(" tls=").append(tls).append('\n');
+            sb.append("ffmpeg.filters.drawbox=").append(drawbox).append('\n');
+            sb.append("ffmpeg.filters.vulkan=").append(scaleVulkan || hflipVulkan || vflipVulkan || transposeVulkan).append('\n');
+            sb.append("ffmpeg.nativeDiag=").append(NativeFFmpegDiagnostics.isDiagnosticsEnabledSafe()).append('\n');
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private boolean containsString(org.json.JSONArray arr, String value) {
+        if (arr == null || TextUtils.isEmpty(value)) {
+            return false;
+        }
+        for (int i = 0; i < arr.length(); i++) {
+            if (value.equalsIgnoreCase(arr.optString(i))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String buildDiagnosticsLogs() {

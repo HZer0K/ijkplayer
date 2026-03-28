@@ -5,6 +5,7 @@ if (ndkHome == null || ndkHome.trim().isEmpty()) {
     ndkHome = System.getenv("ANDROID_NDK_ROOT")
 }
 def enablePrefabPublishing = ndkHome != null && file(ndkHome).exists()
+def enableNativeBuild = project.hasProperty("useNativeBuild") && String.valueOf(project.property("useNativeBuild")).toBoolean()
 
 android {
     // http://tools.android.com/tech-docs/new-build-system/tips
@@ -47,6 +48,28 @@ android {
     sourceSets.main {
         jniLibs.srcDirs 'src/main/libs'
         jni.srcDirs = [] // This prevents the auto generation of Android.mk
+    }
+
+    if (enableNativeBuild) {
+        externalNativeBuild {
+            cmake {
+                path file("src/main/cpp/CMakeLists.txt")
+                version "3.22.1"
+            }
+        }
+        defaultConfig {
+            externalNativeBuild {
+                cmake {
+                    abiFilters "arm64-v8a"
+                }
+            }
+        }
+        packagingOptions {
+            excludes += [
+                    "**/libijkplayer.so",
+                    "**/libijksdl.so"
+            ]
+        }
     }
 }
 

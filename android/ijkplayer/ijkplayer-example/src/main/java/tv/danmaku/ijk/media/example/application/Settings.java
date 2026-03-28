@@ -165,6 +165,16 @@ public class Settings {
         mSharedPreferences.edit().putString(key, String.valueOf(orientation)).apply();
     }
 
+    public boolean getNativeDiagnosticsEnabled() {
+        String key = mAppContext.getString(R.string.pref_key_native_diagnostics_enabled);
+        return mSharedPreferences.getBoolean(key, false);
+    }
+
+    public void setNativeDiagnosticsEnabled(boolean enabled) {
+        String key = mAppContext.getString(R.string.pref_key_native_diagnostics_enabled);
+        mSharedPreferences.edit().putBoolean(key, enabled).apply();
+    }
+
     public String getLastDirectory() {
         String key = mAppContext.getString(R.string.pref_key_last_directory);
         return mSharedPreferences.getString(key, "/");

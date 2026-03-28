@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
 
     <TextView
         android:id="@+id/diagnostics_title"
@@ -18,22 +23,29 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:gravity="end"
-        android:orientation="horizontal">
+        android:orientation="vertical">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_toggle_native_diagnostics"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/native_diagnostics" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_copy_diagnostics"
             style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:text="@string/copy_diagnostics" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_copy_logs"
             style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
+            android:layout_marginTop="10dp"
             android:text="@string/copy_logs" />
     </LinearLayout>
 
@@ -59,7 +71,7 @@
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
-        android:layout_height="320dp"
+        android:layout_height="360dp"
         android:layout_marginTop="12dp"
         app:cardBackgroundColor="?attr/colorSurface"
         app:cardCornerRadius="16dp"
@@ -83,3 +95,4 @@
         </ScrollView>
     </com.google.android.material.card.MaterialCardView>
 </LinearLayout>
+</androidx.core.widget.NestedScrollView>
