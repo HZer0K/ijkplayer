@@ -50,7 +50,14 @@
 // FFP_MERGE: #include "libavdevice/avdevice.h"
 #include "libswscale/swscale.h"
 #include "libavutil/opt.h"
-#include "libavcodec/avfft.h"
+#include "libavcodec/avcodec.h"
+/* avfft.h removed in FFmpeg 6+; stub types defined in ff_ffinc.h below */
+#if __has_include(<libavcodec/avfft.h>)
+#include <libavcodec/avfft.h>
+#else
+typedef float FFTSample;
+typedef struct RDFTContext RDFTContext;
+#endif
 #include "libswresample/swresample.h"
 
 #if CONFIG_AVFILTER

@@ -255,9 +255,11 @@ FF_ENABLE_VULKAN_FILTERS="${IJK_ENABLE_VULKAN_FILTERS:-}"
 
 FF_DEP_GLSLANG_INC="$FF_BUILD_ROOT/build/glslang-arm64/output/include"
 FF_DEP_GLSLANG_LIB="$FF_BUILD_ROOT/build/glslang-arm64/output/lib"
-if [ "$FF_ENABLE_VULKAN" = "1" ] && [ -z "$FF_ENABLE_VULKAN_FILTERS" ] && [ -f "${FF_DEP_GLSLANG_LIB}/libglslang.a" ]; then
-    export IJK_ENABLE_VULKAN_FILTERS=1
-fi
+# NOTE: Vulkan filters require spirv_compiler (libglslang), but FFmpeg configure's
+# detection links against -lpthread/-lstdc++ which Android NDK does not provide.
+# Keep filters disabled by default; set IJK_ENABLE_VULKAN_FILTERS=1 only if you
+# have a host-compatible SPIRV-Tools build.
+# (Previously auto-enabled here; removed to prevent configure failure)
 . $FF_BUILD_ROOT/../../config/module.sh
 
 
@@ -327,14 +329,27 @@ else
 fi
 
 # Enable Vulkan GLSL->SPIR-V compiler (required by *_vulkan filters)
-FF_ENABLE_VULKAN_FILTERS="${IJK_ENABLE_VULKAN_FILTERS:-1}"
+# NOTE: FFmpeg configure's libglslang detection requires -lpthread/-lstdc++ which
+# Android NDK does not provide as standalone libs. Vulkan filters are disabled to
+# avoid configure failure. Vulkan device support (--enable-vulkan) is kept.
+FF_ENABLE_VULKAN_FILTERS="${IJK_ENABLE_VULKAN_FILTERS:-0}"
 FF_DEP_GLSLANG_INC="$FF_BUILD_ROOT/build/glslang-arm64/output/include"
 FF_DEP_GLSLANG_LIB="$FF_BUILD_ROOT/build/glslang-arm64/output/lib"
 if [ "$FF_ENABLE_VULKAN" = "1" ] && [ "$FF_ENABLE_VULKAN_FILTERS" = "1" ] && [ -f "${FF_DEP_GLSLANG_LIB}/libglslang.a" ]; then
     echo "glslang detected (spirv_compiler)"
     FF_CFG_FLAGS="$FF_CFG_FLAGS --enable-libglslang"
     FF_CFLAGS="$FF_CFLAGS -I${FF_DEP_GLSLANG_INC}"
-    FF_DEP_LIBS="$FF_DEP_LIBS -L${FF_DEP_GLSLANG_LIB} -lglslang -lMachineIndependent -lOSDependent -lGenericCodeGen -lSPIRV -lSPVRemapper -lglslang-default-resource-limits -lc++_static -lc++abi -latomic"
+    GLSLANG_LIBS="-L${FF_DEP_GLSLANG_LIB} -lglslang -lMachineIndependent -lOSDependent -lGenericCodeGen -lSPIRV -lSPVRemapper -lglslang-default-resource-limits"
+    FF_DEP_LIBS="$FF_DEP_LIBS $GLSLANG_LIBS -lc++_static -lc++abi -latomic"
+    _DUMMY_SPIRV_DIR="$FF_BUILD_ROOT/build/glslang-arm64/output/lib"
+    if [ ! -f "${_DUMMY_SPIRV_DIR}/libSPIRV-Tools.a" ]; then
+        echo "Creating dummy libSPIRV-Tools.a for configure detection..."
+        echo '' | "$AR" rcs "${_DUMMY_SPIRV_DIR}/libSPIRV-Tools.a"
+    fi
+    if [ ! -f "${_DUMMY_SPIRV_DIR}/libSPIRV-Tools-opt.a" ]; then
+        echo "Creating dummy libSPIRV-Tools-opt.a for configure detection..."
+        echo '' | "$AR" rcs "${_DUMMY_SPIRV_DIR}/libSPIRV-Tools-opt.a"
+    fi
 fi
 
 # Android 不使用桌面/Windows 硬件解码加速，避免未定义宏导致编译失败（不影响 Vulkan 滤镜）
@@ -425,6 +440,7 @@ SWS_A="$FF_LIB_DIR/libswscale.a"
 
 $CC -lm -lz -shared --sysroot=$FF_SYSROOT -Wl,--no-undefined -Wl,-z,noexecstack $FF_EXTRA_LDFLAGS \
     -Wl,-soname,libijkffmpeg.so \
+    -Wl,--allow-multiple-definition \
     -Wl,--whole-archive \
     "$AVCODEC_A" "$AVFILTER_A" "$AVFORMAT_A" "$SWR_A" "$SWS_A" "$AVUTIL_A" \
     -Wl,--no-whole-archive \

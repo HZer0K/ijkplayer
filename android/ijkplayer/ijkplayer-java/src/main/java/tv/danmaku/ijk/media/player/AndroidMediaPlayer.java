@@ -305,10 +305,12 @@ public class AndroidMediaPlayer extends AbstractMediaPlayer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setLogEnabled(boolean enable) {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public boolean isPlayable() {
         return true;
     }
@@ -317,6 +319,7 @@ public class AndroidMediaPlayer extends AbstractMediaPlayer {
      * misc
      */
     @Override
+    @SuppressWarnings("deprecation")
     public void setWakeMode(Context context, int mode) {
         mInternalMediaPlayer.setWakeMode(context, mode);
     }
@@ -327,6 +330,7 @@ public class AndroidMediaPlayer extends AbstractMediaPlayer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setKeepInBackground(boolean keepInBackground) {
     }
 

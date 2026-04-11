@@ -117,10 +117,17 @@ public interface IMediaPlayer {
 
     MediaInfo getMediaInfo();
 
+    /**
+     * @deprecated No-op since API 21. Log level is controlled via
+     * {@link IjkMediaPlayer#setOption(int, String, long)} with OPT_CATEGORY_PLAYER.
+     */
     @SuppressWarnings("EmptyMethod")
     @Deprecated
     void setLogEnabled(boolean enable);
 
+    /**
+     * @deprecated Use {@link #isPlaying()} combined with application lifecycle management instead.
+     */
     @Deprecated
     boolean isPlayable();
 
@@ -184,6 +191,10 @@ public interface IMediaPlayer {
      */
     void setAudioStreamType(int streamtype);
 
+    /**
+     * @deprecated No-op. Background playback should be managed by keeping a
+     * foreground {@link android.app.Service} alive instead.
+     */
     @Deprecated
     void setKeepInBackground(boolean keepInBackground);
 
@@ -191,6 +202,10 @@ public interface IMediaPlayer {
 
     int getVideoSarDen();
 
+    /**
+     * @deprecated Use {@code WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON} in your
+     * Activity/Window instead, or call {@link #setScreenOnWhilePlaying(boolean)}.
+     */
     @Deprecated
     void setWakeMode(Context context, int mode);
 

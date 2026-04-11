@@ -543,6 +543,7 @@ public final class IjkMediaPlayer extends AbstractMediaPlayer {
 
     @SuppressLint("Wakelock")
     @Override
+    @SuppressWarnings("deprecation")
     public void setWakeMode(Context context, int mode) {
         boolean washeld = false;
         if (mWakeLock != null) {
@@ -891,11 +892,13 @@ public final class IjkMediaPlayer extends AbstractMediaPlayer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setLogEnabled(boolean enable) {
         // do nothing
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public boolean isPlayable() {
         return true;
     }
@@ -939,6 +942,7 @@ public final class IjkMediaPlayer extends AbstractMediaPlayer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setKeepInBackground(boolean keepInBackground) {
         // do nothing
     }

@@ -138,7 +138,9 @@ typedef struct HTTPContext {
 #endif
 #include "libswscale/swscale.h"
 #include "libavutil/opt.h"
+#if __has_include(<libavcodec/avfft.h>)
 #include "libavcodec/avfft.h"
+#endif
 #include "libswresample/swresample.h"
 
 #if CONFIG_AVFILTER

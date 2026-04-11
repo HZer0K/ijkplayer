@@ -100,8 +100,8 @@ do_cmake_build () {
     local SUB_CMD=$2
 
     if [ "$ABI_NAME" != "arm64" ]; then
-        echo "Unsupported ABI: $ABI_NAME"
-        exit 1
+        echo "[!] Skipping unsupported ABI: $ABI_NAME (only arm64 is currently supported)"
+        return 0
     fi
 
     local ABI_DIR="arm64-v8a"

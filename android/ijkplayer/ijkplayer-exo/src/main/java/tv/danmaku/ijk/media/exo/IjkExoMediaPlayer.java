@@ -155,6 +155,7 @@ public class IjkExoMediaPlayer extends AbstractMediaPlayer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setWakeMode(Context context, int mode) {
     }
 
@@ -261,10 +262,12 @@ public class IjkExoMediaPlayer extends AbstractMediaPlayer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setLogEnabled(boolean enable) {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public boolean isPlayable() {
         return true;
     }
@@ -274,6 +277,7 @@ public class IjkExoMediaPlayer extends AbstractMediaPlayer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setKeepInBackground(boolean keepInBackground) {
     }
 

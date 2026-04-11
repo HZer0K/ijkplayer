@@ -2,3 +2,14 @@ build
 ffmpeg-*
 libsoxr-*
 openssl-*
+
+# Unsupported ABI build outputs (only arm64 is actively maintained)
+build/ffmpeg-armv7a/
+build/ffmpeg-x86/
+build/ffmpeg-x86_64/
+build/openssl-armv7a/
+build/openssl-x86/
+build/openssl-x86_64/
+build/glslang-armv7a/
+build/glslang-x86/
+build/glslang-x86_64/

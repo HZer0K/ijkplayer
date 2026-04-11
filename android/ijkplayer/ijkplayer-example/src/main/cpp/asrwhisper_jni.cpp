@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <thread>
 
 #include "whisper.h"
 
@@ -14,6 +15,8 @@ static void loge(const char *msg) {
     __android_log_print(ANDROID_LOG_ERROR, "asrwhisper", "%s", msg);
 }
 
+// NOTE: Uses linear interpolation for resampling, which may reduce ASR accuracy
+// for large sample rate differences. Consider using libswresample for higher quality.
 static std::vector<float> pcm16_to_f32_mono_16k(const int16_t *pcm, int samples, int sample_rate, int channels) {
     if (!pcm || samples <= 0) return {};
     int ch = channels > 0 ? channels : 1;
@@ -130,6 +133,8 @@ Java_tv_danmaku_ijk_media_example_util_WhisperAsrEngine_nativeTranscribePcm16(JN
     params.max_tokens = 0;
     params.temperature = 0.0f;
     params.n_threads = 4;
+    int cpu_count = (int) std::thread::hardware_concurrency();
+    if (cpu_count > 1) params.n_threads = std::min(cpu_count, 8);
 
     const char *lang = language ? env->GetStringUTFChars(language, nullptr) : nullptr;
     std::string lang_s = lang ? lang : "";

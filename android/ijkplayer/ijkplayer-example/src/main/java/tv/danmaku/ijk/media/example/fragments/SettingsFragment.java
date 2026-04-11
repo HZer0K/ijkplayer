@@ -210,6 +210,10 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
                 @Override
                 public void onError(Throwable t) {
+                    // Delete incomplete download file to allow clean retry
+                    if (mWhisperModelDownloadedFile != null && mWhisperModelDownloadedFile.exists()) {
+                        mWhisperModelDownloadedFile.delete();
+                    }
                     mHandler.post(() -> {
                         Toast.makeText(context, getString(R.string.subtitle_asr_whisper_download_failed), Toast.LENGTH_SHORT).show();
                         setWhisperDownloadSummary(getString(R.string.subtitle_asr_whisper_download_failed));

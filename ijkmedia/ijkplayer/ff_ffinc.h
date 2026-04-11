@@ -32,7 +32,18 @@
 #include "libavutil/avstring.h"
 #include "libavutil/time.h"
 #include "libavformat/avformat.h"
-#include "libavcodec/avfft.h"
+/* avfft.h was removed in FFmpeg 6.0; RDFTContext is only used for audio
+ * visualization which is not active in this build. Provide stub types/functions
+ * so existing code compiles without modification. */
+#if __has_include(<libavcodec/avfft.h>)
+#include <libavcodec/avfft.h>
+#else
+typedef float FFTSample;
+typedef struct RDFTContext RDFTContext;
+static inline RDFTContext *av_rdft_init(int nbits, int trans) { (void)nbits; (void)trans; return NULL; }
+static inline void av_rdft_calc(RDFTContext *s, FFTSample *data) { (void)s; (void)data; }
+static inline void av_rdft_end(RDFTContext *s) { (void)s; }
+#endif
 #include "libswscale/swscale.h"
 #include "libavutil/base64.h"
 #include "libavutil/error.h"

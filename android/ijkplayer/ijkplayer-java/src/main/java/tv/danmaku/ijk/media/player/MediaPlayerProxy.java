@@ -168,11 +168,13 @@ public class MediaPlayerProxy implements IMediaPlayer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setLogEnabled(boolean enable) {
 
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public boolean isPlayable() {
         return false;
     }
@@ -303,6 +305,7 @@ public class MediaPlayerProxy implements IMediaPlayer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setKeepInBackground(boolean keepInBackground) {
         mBackEndMediaPlayer.setKeepInBackground(keepInBackground);
     }
@@ -318,6 +321,7 @@ public class MediaPlayerProxy implements IMediaPlayer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setWakeMode(Context context, int mode) {
         mBackEndMediaPlayer.setWakeMode(context, mode);
     }

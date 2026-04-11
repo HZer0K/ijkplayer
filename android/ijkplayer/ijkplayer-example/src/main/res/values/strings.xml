@@ -141,7 +141,7 @@
     <string name="subtitle_asr_whisper_disabled_detail">Whisper native 已打包但未启用（WHISPER_ENABLED=%1$s）。请开启 enableWhisper=true 后 Rebuild</string>
     <string name="subtitle_asr_whisper_missing_model">请在设置里填写 Whisper Model Path 或 Model URL</string>
     <string name="subtitle_asr_whisper_downloading">Whisper 模型下载中…</string>
-    <string name="subtitle_asr_whisper_download_failed">Whisper 模型下载失败</string>
+    <string name="subtitle_asr_whisper_download_failed">Whisper 模型下载失败，请重试</string>
     <string name="subtitle_asr_whisper_ready">Whisper：开始离线识别</string>
     <string name="subtitle_asr_whisper_downloading_progress">Whisper 模型下载中…%1$d%% (%2$s/%3$s)</string>
     <string name="subtitle_asr_whisper_downloaded_ready">Whisper 模型已下载，可以开始使用</string>
