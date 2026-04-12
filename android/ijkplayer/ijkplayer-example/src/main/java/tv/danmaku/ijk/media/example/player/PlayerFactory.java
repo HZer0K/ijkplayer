@@ -138,24 +138,24 @@ public final class PlayerFactory {
 
     /**
      * Build a software-only vf0 string for brightness/contrast/saturation.
-     * Uses FFmpeg "eq" filter: brightness [-1,1], contrast [0,2], saturation [0,3].
-     * All parameters are optional; pass Float.NaN to omit.
+     * Uses FFmpeg "curves" filter (LGPL, no GPL required).
+     * preset: "lighter", "darker", "increase_contrast", "cross_process", or custom.
+     * For simple bright/dark: use preset="lighter" or preset="darker".
      */
+    public static String buildCurvesVf0(String preset) {
+        return "curves=preset=" + preset;
+    }
+
+    /**
+     * @deprecated Use {@link #buildCurvesVf0(String)} instead. FFmpeg eq filter requires GPL.
+     */
+    @Deprecated
     public static String buildEqVf0(float brightness, float contrast, float saturation) {
-        StringBuilder sb = new StringBuilder("eq");
-        boolean any = false;
-        if (!Float.isNaN(brightness)) {
-            sb.append(any ? ":" : "=").append("brightness=").append(brightness);
-            any = true;
-        }
-        if (!Float.isNaN(contrast)) {
-            sb.append(any ? ":" : "=").append("contrast=").append(contrast);
-            any = true;
-        }
-        if (!Float.isNaN(saturation)) {
-            sb.append(any ? ":" : "=").append("saturation=").append(saturation);
-        }
-        return sb.toString();
+        // eq requires --enable-gpl; not available in current build.
+        // Fall back to curves filter.
+        if (brightness > 0) return buildCurvesVf0("lighter");
+        if (brightness < 0) return buildCurvesVf0("darker");
+        return buildCurvesVf0("linear_contrast");
     }
 
     public IMediaPlayer wrapIfNeeded(IMediaPlayer mediaPlayer, Settings settings) {

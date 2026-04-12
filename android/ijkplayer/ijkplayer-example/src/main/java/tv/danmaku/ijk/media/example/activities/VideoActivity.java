@@ -1303,10 +1303,10 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             applyFfmpegFilter("gblur=sigma=5", id, getString(R.string.filter_ffmpeg_gblur));
             return true;
         } else if (id == R.id.action_filter_ffmpeg_eq_bright) {
-            applyFfmpegFilter(PlayerFactory.buildEqVf0(0.3f, Float.NaN, Float.NaN), id, getString(R.string.filter_ffmpeg_eq_bright));
+            applyFfmpegFilter(PlayerFactory.buildCurvesVf0("lighter"), id, getString(R.string.filter_ffmpeg_eq_bright));
             return true;
         } else if (id == R.id.action_filter_ffmpeg_eq_dark) {
-            applyFfmpegFilter(PlayerFactory.buildEqVf0(-0.3f, Float.NaN, Float.NaN), id, getString(R.string.filter_ffmpeg_eq_dark));
+            applyFfmpegFilter(PlayerFactory.buildCurvesVf0("darker"), id, getString(R.string.filter_ffmpeg_eq_dark));
             return true;
         } else if (id == R.id.action_toggle_mirror) {
             boolean next = !mSettings.getVideoMirrorHorizontal();
@@ -2792,8 +2792,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         String[] vf0Values = {
                 "hflip", "vflip",
                 "gblur=sigma=5",
-                PlayerFactory.buildEqVf0(0.3f, Float.NaN, Float.NaN),
-                PlayerFactory.buildEqVf0(-0.3f, Float.NaN, Float.NaN)
+                PlayerFactory.buildCurvesVf0("lighter"),
+                PlayerFactory.buildCurvesVf0("darker")
         };
         if (menu != null) {
             for (int i = 0; i < vf0MenuIds.length; i++) {

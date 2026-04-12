@@ -114,7 +114,7 @@
                 android:checkable="true"
                 android:title="@string/filter_rotate90"
                 app:showAsAction="never" />
-            <!-- FFmpeg software filters (requires recompiled FFmpeg with --enable-filters) -->
+            <!-- FFmpeg software filters (requires recompiled FFmpeg with enable-filters) -->
             <item
                 android:id="@+id/action_filter_ffmpeg_hflip"
                 android:checkable="true"

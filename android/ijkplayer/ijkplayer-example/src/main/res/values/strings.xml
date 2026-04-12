@@ -205,8 +205,8 @@
     <string name="filter_ffmpeg_hflip">[FFmpeg] 水平翻转</string>
     <string name="filter_ffmpeg_vflip">[FFmpeg] 垂直翻转</string>
     <string name="filter_ffmpeg_gblur">[FFmpeg] 高斯模糊</string>
-    <string name="filter_ffmpeg_eq_bright">[FFmpeg] 提亮(eq)</string>
-    <string name="filter_ffmpeg_eq_dark">[FFmpeg] 压暗(eq)</string>
+    <string name="filter_ffmpeg_eq_bright">[FFmpeg] 提亮(curves)</string>
+    <string name="filter_ffmpeg_eq_dark">[FFmpeg] 压暗(curves)</string>
 
     <!-- TestHub Vulkan capability check -->
     <string name="test_hub_vulkan_title">Vulkan 能力检测</string>
