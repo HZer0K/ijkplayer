@@ -186,6 +186,13 @@ case "$UNAME_S" in
         FF_SYSROOT="$(cygpath -am $FF_SYSROOT)"
         FF_PREFIX="$(cygpath -am $FF_PREFIX)"
     ;;
+    MINGW64_NT*|MINGW32_NT*)
+        # Convert POSIX /d/... paths to Windows-native paths for clang on MINGW
+        if command -v cygpath >/dev/null 2>&1; then
+            FF_SYSROOT="$(cygpath -m $FF_SYSROOT)"
+            FF_PREFIX="$(cygpath -m $FF_PREFIX)"
+        fi
+    ;;
 esac
 
 
@@ -219,7 +226,9 @@ FF_CFLAGS="-O3 -Wall -pipe \
     -DANDROID -DNDEBUG"
 FF_CFLAGS="$FF_CFLAGS -fPIC"
 FF_CFLAGS="$FF_CFLAGS -Wno-int-conversion -Wno-unused-variable -Wno-incompatible-function-pointer-types"
-FF_CFLAGS="$FF_CFLAGS --target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT"
+# Note: --target and --sysroot are already embedded in CC (see line above) and passed
+# to configure via --sysroot. Do NOT repeat them in extra-cflags; on MINGW the duplicate
+# sysroot path causes clang to mis-resolve relative includes (e.g. 'macros.h' not found).
 FF_EXTRA_LDFLAGS="$FF_EXTRA_LDFLAGS --target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT -fuse-ld=lld"
 
 # add API-specific library search (-B) to satisfy crtbegin/crtend
