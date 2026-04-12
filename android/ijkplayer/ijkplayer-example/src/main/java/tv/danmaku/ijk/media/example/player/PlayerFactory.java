@@ -94,6 +94,7 @@ public final class PlayerFactory {
                 }
             }
         } else if (enableVulkan && deviceSupportsVulkan && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            // Prefer Vulkan GPU passthrough scale; falls back to software if filters not compiled
             vf0ToApply = "hwupload,scale_vulkan=w=iw:h=ih,hwdownload,format=yuv420p";
         }
 
@@ -123,12 +124,38 @@ public final class PlayerFactory {
         out = out.replace("transpose_vulkan", "transpose");
         out = out.replace("gblur_vulkan", "gblur");
         out = out.replace("avgblur_vulkan", "avgblur");
-        out = out.replace("chromaber_vulkan", "chromaber");
+        // chromaber_vulkan / blend_vulkan / overlay_vulkan have no direct CPU equivalent;
+        // remove them gracefully so the filter graph still parses.
+        out = out.replace("chromaber_vulkan", "null");
+        out = out.replace("blend_vulkan", "null");
+        out = out.replace("overlay_vulkan", "null");
         out = out.replace("hwupload,", "");
         out = out.replace(",hwdownload,format=yuv420p", "");
         out = out.replace(",hwdownload", "");
         out = out.replace("hwdownload,", "");
         return out;
+    }
+
+    /**
+     * Build a software-only vf0 string for brightness/contrast/saturation.
+     * Uses FFmpeg "eq" filter: brightness [-1,1], contrast [0,2], saturation [0,3].
+     * All parameters are optional; pass Float.NaN to omit.
+     */
+    public static String buildEqVf0(float brightness, float contrast, float saturation) {
+        StringBuilder sb = new StringBuilder("eq");
+        boolean any = false;
+        if (!Float.isNaN(brightness)) {
+            sb.append(any ? ":" : "=").append("brightness=").append(brightness);
+            any = true;
+        }
+        if (!Float.isNaN(contrast)) {
+            sb.append(any ? ":" : "=").append("contrast=").append(contrast);
+            any = true;
+        }
+        if (!Float.isNaN(saturation)) {
+            sb.append(any ? ":" : "=").append("saturation=").append(saturation);
+        }
+        return sb.toString();
     }
 
     public IMediaPlayer wrapIfNeeded(IMediaPlayer mediaPlayer, Settings settings) {

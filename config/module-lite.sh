@@ -156,8 +156,39 @@ export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --disable-protocol=unix"
 #
 export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --disable-devices"
 export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --disable-filters"
-if [ "${IJK_ENABLE_VULKAN_FILTERS:-0}" = "1" ] || [ "${IJK_ENABLE_FILTERS:-0}" = "1" ]; then
-    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=buffer --enable-filter=buffersink --enable-filter=format --enable-filter=pad --enable-filter=scale --enable-filter=drawbox --enable-filter=hflip --enable-filter=vflip --enable-filter=transpose --enable-filter=hwupload --enable-filter=hwdownload --enable-filter=scale_vulkan --enable-filter=hflip_vulkan --enable-filter=vflip_vulkan --enable-filter=transpose_vulkan --enable-filter=gblur_vulkan --enable-filter=avgblur_vulkan --enable-filter=chromaber_vulkan --enable-filter=blend_vulkan --enable-filter=overlay_vulkan"
+# IJK_ENABLE_FILTERS=1  : enable CPU software filters (hflip/vflip/gblur/format/eq etc.)
+# IJK_ENABLE_VULKAN_FILTERS=1 : additionally enable Vulkan GPU filters (requires glslang)
+if [ "${IJK_ENABLE_VULKAN_FILTERS:-0}" = "1" ] || [ "${IJK_ENABLE_FILTERS:-1}" = "1" ]; then
+    # Core buffer/format filters required by filter graph
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=buffer"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=buffersink"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=format"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=pad"
+    # Geometric transforms (CPU)
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=scale"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=hflip"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=vflip"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=transpose"
+    # Image processing (CPU)
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=gblur"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=eq"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=colorchannelmixer"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=drawbox"
+    # HW upload/download (bridge between CPU and Vulkan GPU)
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=hwupload"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=hwdownload"
+fi
+if [ "${IJK_ENABLE_VULKAN_FILTERS:-0}" = "1" ]; then
+    # Vulkan GPU filters (require libglslang / SPIR-V compiler)
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=scale_vulkan"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=hflip_vulkan"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=vflip_vulkan"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=transpose_vulkan"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=gblur_vulkan"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=avgblur_vulkan"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=chromaber_vulkan"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=blend_vulkan"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=overlay_vulkan"
 fi
 
 # External library support:

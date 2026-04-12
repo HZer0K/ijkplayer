@@ -78,6 +78,7 @@
         android:title="@string/menu_filter"
         app:showAsAction="never">
         <menu>
+            <!-- Render-layer filters (instant, no rebuild) -->
             <item
                 android:id="@+id/action_filter_none"
                 android:checkable="true"
@@ -112,6 +113,32 @@
                 android:id="@+id/action_filter_rotate90"
                 android:checkable="true"
                 android:title="@string/filter_rotate90"
+                app:showAsAction="never" />
+            <!-- FFmpeg software filters (requires recompiled FFmpeg with --enable-filters) -->
+            <item
+                android:id="@+id/action_filter_ffmpeg_hflip"
+                android:checkable="true"
+                android:title="@string/filter_ffmpeg_hflip"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_ffmpeg_vflip"
+                android:checkable="true"
+                android:title="@string/filter_ffmpeg_vflip"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_ffmpeg_gblur"
+                android:checkable="true"
+                android:title="@string/filter_ffmpeg_gblur"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_ffmpeg_eq_bright"
+                android:checkable="true"
+                android:title="@string/filter_ffmpeg_eq_bright"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_ffmpeg_eq_dark"
+                android:checkable="true"
+                android:title="@string/filter_ffmpeg_eq_dark"
                 app:showAsAction="never" />
         </menu>
     </item>

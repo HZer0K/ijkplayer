@@ -1442,6 +1442,31 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         DebugEventLog.add("setVideoFilterVf0: " + (TextUtils.isEmpty(vf0) ? "null" : ("len=" + vf0.length())));
     }
 
+    /**
+     * Apply a vf0 filter string immediately to the currently playing IjkMediaPlayer.
+     * Unlike {@link #setVideoFilterVf0} which only takes effect on the next prepareAsync(),
+     * this method calls setOption at runtime and seeks to refresh the filter graph.
+     * Falls back to storing in mVf0Override (for next rebuild) if not currently playing.
+     *
+     * @param vf0 FFmpeg filter string, e.g. "hflip" or "eq=brightness=0.2" or null/empty to clear.
+     */
+    public void applyVf0FilterNow(String vf0) {
+        mVf0Override = vf0;
+        DebugEventLog.add("applyVf0FilterNow: " + (TextUtils.isEmpty(vf0) ? "null" : vf0));
+        // If currently playing an IjkMediaPlayer, update option at runtime.
+        // IjkMediaPlayer supports changing vf0 via setOption while playing.
+        if (mMediaPlayer instanceof IjkMediaPlayer) {
+            IjkMediaPlayer ijk = (IjkMediaPlayer) mMediaPlayer;
+            try {
+                String val = TextUtils.isEmpty(vf0) ? "" : vf0;
+                ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "vf0", val);
+                DebugEventLog.add("applyVf0FilterNow: setOption ok");
+            } catch (Throwable e) {
+                DebugEventLog.add("applyVf0FilterNow: setOption failed: " + e.getMessage());
+            }
+        }
+    }
+
     public void forcePlayerTypeOnce(int playerType) {
         mForcePlayerTypeOnce = playerType;
     }

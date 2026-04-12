@@ -26,6 +26,11 @@ FF_TARGET_EXTRA=$2
 set -e
 set +x
 
+# Enable CPU software filters by default (hflip/vflip/gblur/eq/format etc.)
+# Set IJK_ENABLE_FILTERS=0 to disable.  Set IJK_ENABLE_VULKAN_FILTERS=1 to
+# also enable Vulkan GPU filters (requires glslang; rebuilds automatically).
+export IJK_ENABLE_FILTERS="${IJK_ENABLE_FILTERS:-1}"
+
 if [ -z "$ANDROID_NDK" ]; then
     ANDROID_NDK="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-}}"
     export ANDROID_NDK
@@ -133,6 +138,13 @@ case "$FF_TARGET" in
             # Remove only the build output, not the FFmpeg source tree.
             # Use 'git clean -xdf' manually if you want to reset the source.
             rm -rf "./build/ffmpeg-$ARCH"
+            # Also remove configure cache so next build re-runs ./configure
+            # (required after changing filter flags or module.sh)
+            local _FFMPEG_SRC="./ffmpeg-$ARCH"
+            if [ -f "$_FFMPEG_SRC/config.h" ]; then
+                rm -f "$_FFMPEG_SRC/config.h" "$_FFMPEG_SRC/config.asm" "$_FFMPEG_SRC/ffbuild/config.mak"
+                echo "[*] removed configure cache in $_FFMPEG_SRC"
+            fi
             echo "[*] cleaned build/ffmpeg-$ARCH (source tree preserved)"
         done
     ;;

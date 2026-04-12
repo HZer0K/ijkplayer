@@ -89,6 +89,7 @@ import tv.danmaku.ijk.media.example.content.RecentMediaStorage;
 import tv.danmaku.ijk.media.example.fragments.DiagnosticsBottomSheetDialogFragment;
 import tv.danmaku.ijk.media.example.fragments.TracksFragment;
 import tv.danmaku.ijk.media.example.player.MediaSourceUtil;
+import tv.danmaku.ijk.media.example.player.PlayerFactory;
 import tv.danmaku.ijk.media.example.player.PlayerToggle;
 import tv.danmaku.ijk.media.example.util.DebugEventLog;
 import tv.danmaku.ijk.media.example.util.AsrAudioTrackDecoder;
@@ -157,6 +158,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     // --- Video filter ---
     /** Current render-layer filter type; 0 = no filter */
     private int mCurrentFilterType = IjkVideoView.RENDER_FILTER_NONE;
+    /** Current FFmpeg vf0 filter string; null = no FFmpeg filter active */
+    private String mCurrentVf0Filter = null;
 
     // --- Gesture: brightness / volume ---
     /** true while a brightness/volume vertical gesture is in progress */
@@ -942,7 +945,44 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     private void applyVideoFilter(int filterType, String label) {
         if (mVideoView == null) return;
         mCurrentFilterType = filterType;
+        // Clear FFmpeg vf0 filter when switching to render-layer filter
+        if (mCurrentVf0Filter != null) {
+            mCurrentVf0Filter = null;
+            mVideoView.applyVf0FilterNow(null);
+        }
         mVideoView.setRenderFilter(filterType);
+        mToastTextView.setText(getString(R.string.filter_applied, label));
+        mMediaController.showOnce(mToastTextView);
+        invalidateOptionsMenu();
+    }
+
+    /**
+     * Apply an FFmpeg software filter via vf0 (requires recompiled FFmpeg with --enable-filters).
+     * Uses applyVf0FilterNow for runtime update without rebuild.
+     * Clears any active render-layer filter first.
+     *
+     * @param vf0   FFmpeg vf0 filter string, or null/empty to clear
+     * @param menuId the menu item id to associate (for onPrepareOptionsMenu check state)
+     * @param label  Human-readable label for toast
+     */
+    private void applyFfmpegFilter(String vf0, int menuId, String label) {
+        if (mVideoView == null) return;
+        // Toggle off if already active
+        if (vf0 != null && vf0.equals(mCurrentVf0Filter)) {
+            mCurrentVf0Filter = null;
+            mVideoView.applyVf0FilterNow(null);
+            mToastTextView.setText(getString(R.string.filter_applied, getString(R.string.filter_none)));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+            return;
+        }
+        // Clear render-layer filter
+        if (mCurrentFilterType != IjkVideoView.RENDER_FILTER_NONE) {
+            mCurrentFilterType = IjkVideoView.RENDER_FILTER_NONE;
+            mVideoView.setRenderFilter(IjkVideoView.RENDER_FILTER_NONE);
+        }
+        mCurrentVf0Filter = vf0;
+        mVideoView.applyVf0FilterNow(vf0);
         mToastTextView.setText(getString(R.string.filter_applied, label));
         mMediaController.showOnce(mToastTextView);
         invalidateOptionsMenu();
@@ -1252,6 +1292,21 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             return true;
         } else if (id == R.id.action_filter_rotate90) {
             applyVideoFilter(IjkVideoView.RENDER_FILTER_ROTATE90, getString(R.string.filter_rotate90));
+            return true;
+        } else if (id == R.id.action_filter_ffmpeg_hflip) {
+            applyFfmpegFilter("hflip", id, getString(R.string.filter_ffmpeg_hflip));
+            return true;
+        } else if (id == R.id.action_filter_ffmpeg_vflip) {
+            applyFfmpegFilter("vflip", id, getString(R.string.filter_ffmpeg_vflip));
+            return true;
+        } else if (id == R.id.action_filter_ffmpeg_gblur) {
+            applyFfmpegFilter("gblur=sigma=5", id, getString(R.string.filter_ffmpeg_gblur));
+            return true;
+        } else if (id == R.id.action_filter_ffmpeg_eq_bright) {
+            applyFfmpegFilter(PlayerFactory.buildEqVf0(0.3f, Float.NaN, Float.NaN), id, getString(R.string.filter_ffmpeg_eq_bright));
+            return true;
+        } else if (id == R.id.action_filter_ffmpeg_eq_dark) {
+            applyFfmpegFilter(PlayerFactory.buildEqVf0(-0.3f, Float.NaN, Float.NaN), id, getString(R.string.filter_ffmpeg_eq_dark));
             return true;
         } else if (id == R.id.action_toggle_mirror) {
             boolean next = !mSettings.getVideoMirrorHorizontal();
@@ -2725,6 +2780,26 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 MenuItem fi = menu.findItem(filterIds[i]);
                 if (fi != null) {
                     fi.setChecked(mCurrentFilterType == filterTypes[i]);
+                }
+            }
+        }
+        // Sync FFmpeg vf0 filter check state
+        int[] vf0MenuIds = {
+                R.id.action_filter_ffmpeg_hflip, R.id.action_filter_ffmpeg_vflip,
+                R.id.action_filter_ffmpeg_gblur,
+                R.id.action_filter_ffmpeg_eq_bright, R.id.action_filter_ffmpeg_eq_dark
+        };
+        String[] vf0Values = {
+                "hflip", "vflip",
+                "gblur=sigma=5",
+                PlayerFactory.buildEqVf0(0.3f, Float.NaN, Float.NaN),
+                PlayerFactory.buildEqVf0(-0.3f, Float.NaN, Float.NaN)
+        };
+        if (menu != null) {
+            for (int i = 0; i < vf0MenuIds.length; i++) {
+                MenuItem fi = menu.findItem(vf0MenuIds[i]);
+                if (fi != null) {
+                    fi.setChecked(vf0Values[i].equals(mCurrentVf0Filter));
                 }
             }
         }

@@ -2,6 +2,9 @@ package tv.danmaku.ijk.media.example.fragments;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -14,11 +17,16 @@ import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import org.json.JSONObject;
+import org.json.JSONArray;
+
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.io.File;
 
@@ -27,6 +35,7 @@ import tv.danmaku.ijk.media.example.activities.SampleMediaActivity;
 import tv.danmaku.ijk.media.example.activities.TestHubActivity;
 import tv.danmaku.ijk.media.example.activities.VideoActivity;
 import tv.danmaku.ijk.media.example.application.Settings;
+import tv.danmaku.ijk.media.example.util.NativeFFmpegDiagnostics;
 
 public class TestHubFragment extends Fragment {
     private static final String ARG_MODE = "mode";
@@ -136,6 +145,13 @@ public class TestHubFragment extends Fragment {
         mAdapter.add(HubItem.header(activity.getString(R.string.test_hub_feature_snapshot)));
         mAdapter.add(HubItem.item("截图测试", "打开样例视频，可通过菜单手动截图", () ->
             VideoActivity.intentTo(activity, DEMO_MP4_URL, "截图测试")));
+
+        // Vulkan capability check
+        mAdapter.add(HubItem.header(activity.getString(R.string.test_hub_vulkan_title)));
+        mAdapter.add(HubItem.item(
+                activity.getString(R.string.test_hub_vulkan_title),
+                activity.getString(R.string.test_hub_vulkan_desc),
+                () -> showVulkanCapabilityDialog(activity)));
     }
 
     private void openLocalBrowser(Activity activity) {
@@ -169,6 +185,87 @@ public class TestHubFragment extends Fragment {
                     }
                 })
                 .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void showVulkanCapabilityDialog(Activity activity) {
+        StringBuilder sb = new StringBuilder();
+
+        // 1. Device Vulkan hardware support
+        boolean deviceVulkan = false;
+        try {
+            android.content.pm.PackageManager pm = activity.getPackageManager();
+            boolean hasLevel = pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL);
+            boolean hasVersion = pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_VULKAN_HARDWARE_VERSION);
+            deviceVulkan = hasLevel || hasVersion;
+        } catch (Throwable ignored) {}
+        sb.append(activity.getString(R.string.vulkan_check_device_support)).append(": ")
+          .append(deviceVulkan ? activity.getString(R.string.vulkan_check_yes) : activity.getString(R.string.vulkan_check_no))
+          .append("\n");
+
+        // 2. Build-time Vulkan / filter flags from native diagnostics
+        String capsJson = NativeFFmpegDiagnostics.getCapabilitiesJsonOrNull();
+        if (capsJson == null) {
+            sb.append(activity.getString(R.string.vulkan_check_build_enabled)).append(": ")
+              .append(activity.getString(R.string.vulkan_check_unknown)).append("\n");
+            sb.append(activity.getString(R.string.vulkan_check_filters_enabled)).append(": ")
+              .append(activity.getString(R.string.vulkan_check_unknown)).append("\n");
+        } else {
+            try {
+                JSONObject caps = new JSONObject(capsJson);
+                boolean buildVulkan = caps.optBoolean("build_vulkan_enabled", false);
+                boolean buildFilters = caps.optBoolean("build_vulkan_filters_enabled", false);
+                int filtersCount = caps.optInt("filters_count", -1);
+
+                sb.append(activity.getString(R.string.vulkan_check_build_enabled)).append(": ")
+                  .append(buildVulkan ? activity.getString(R.string.vulkan_check_yes) : activity.getString(R.string.vulkan_check_no))
+                  .append("\n");
+                sb.append(activity.getString(R.string.vulkan_check_filters_enabled)).append(": ")
+                  .append(buildFilters ? activity.getString(R.string.vulkan_check_yes) : activity.getString(R.string.vulkan_check_no))
+                  .append("\n");
+                if (filtersCount >= 0) {
+                    sb.append(activity.getString(R.string.vulkan_check_filters_count)).append(": ")
+                      .append(filtersCount).append("\n");
+                }
+
+                // Per-filter presence table
+                JSONObject fp = caps.optJSONObject("filter_presence");
+                if (fp != null) {
+                    sb.append("\n--- 滤镜存在表 ---\n");
+                    // Key filters to highlight
+                    String[] checkFilters = {
+                        "hflip", "vflip", "gblur", "eq", "scale", "format",
+                        "hwupload", "hwdownload",
+                        "scale_vulkan", "hflip_vulkan", "vflip_vulkan",
+                        "gblur_vulkan", "avgblur_vulkan", "chromaber_vulkan"
+                    };
+                    for (String f : checkFilters) {
+                        if (fp.has(f)) {
+                            boolean present = fp.optBoolean(f, false);
+                            sb.append("  ").append(present ? "✓" : "✗")
+                              .append(" ").append(f).append("\n");
+                        }
+                    }
+                }
+            } catch (Throwable e) {
+                sb.append("(JSON 解析失败: ").append(e.getMessage()).append(")\n");
+            }
+        }
+
+        final String report = sb.toString();
+        new AlertDialog.Builder(activity)
+                .setTitle(activity.getString(R.string.test_hub_vulkan_title))
+                .setMessage(report)
+                .setPositiveButton(android.R.string.ok, null)
+                .setNeutralButton(android.R.string.copy, (dialog, which) -> {
+                    try {
+                        ClipboardManager cm = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                        if (cm != null) {
+                            cm.setPrimaryClip(ClipData.newPlainText("vulkan_report", report));
+                            Toast.makeText(activity, R.string.vulkan_check_copied, Toast.LENGTH_SHORT).show();
+                        }
+                    } catch (Throwable ignored) {}
+                })
                 .show();
     }
 

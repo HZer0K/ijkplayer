@@ -201,5 +201,25 @@
     <string name="filter_dark">压暗</string>
     <string name="filter_rotate90">旋转90°</string>
     <string name="filter_applied">滤镜：%1$s</string>
+    <!-- FFmpeg software filters (require recompiled FFmpeg) -->
+    <string name="filter_ffmpeg_hflip">[FFmpeg] 水平翻转</string>
+    <string name="filter_ffmpeg_vflip">[FFmpeg] 垂直翻转</string>
+    <string name="filter_ffmpeg_gblur">[FFmpeg] 高斯模糊</string>
+    <string name="filter_ffmpeg_eq_bright">[FFmpeg] 提亮(eq)</string>
+    <string name="filter_ffmpeg_eq_dark">[FFmpeg] 压暗(eq)</string>
+
+    <!-- TestHub Vulkan capability check -->
+    <string name="test_hub_vulkan_title">Vulkan 能力检测</string>
+    <string name="test_hub_vulkan_desc">检测当前设备 Vulkan 支持与 FFmpeg 滤镜编译情况</string>
+    <string name="vulkan_check_device_support">设备 Vulkan 支持</string>
+    <string name="vulkan_check_build_enabled">编译时 Vulkan 开启（CONFIG_VULKAN）</string>
+    <string name="vulkan_check_filters_enabled">编译时 Vulkan 滤镜开启（CONFIG_LIBGLSLANG）</string>
+    <string name="vulkan_check_filters_count">已注册 FFmpeg 滤镜数量</string>
+    <string name="vulkan_check_filter_present">滤镜存在</string>
+    <string name="vulkan_check_filter_absent">滤镜缺失</string>
+    <string name="vulkan_check_yes">✓ 是</string>
+    <string name="vulkan_check_no">✗ 否</string>
+    <string name="vulkan_check_unknown">未知（native 未加载）</string>
+    <string name="vulkan_check_copied">已复制报告到剪贴板</string>
 
 </resources>
