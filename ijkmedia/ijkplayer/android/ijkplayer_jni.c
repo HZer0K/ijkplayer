@@ -578,6 +578,27 @@ LABEL_RETURN:
     ijkmp_dec_ref_p(&mp);
 }
 
+static void
+IjkMediaPlayer_setVideoFilter(JNIEnv *env, jobject thiz, jstring filter)
+{
+    MPTRACE("%s\n", __func__);
+    IjkMediaPlayer *mp = jni_get_media_player(env, thiz);
+    const char *c_filter = NULL;
+    JNI_CHECK_GOTO(mp, env, "java/lang/IllegalStateException", "mpjni: setVideoFilter: null mp", LABEL_RETURN);
+
+    if (filter) {
+        c_filter = (*env)->GetStringUTFChars(env, filter, NULL);
+        JNI_CHECK_GOTO(c_filter, env, "java/lang/OutOfMemoryError", "mpjni: setVideoFilter: filter.string oom", LABEL_RETURN);
+    }
+
+    ijkmp_set_video_filter(mp, c_filter);
+
+LABEL_RETURN:
+    if (c_filter)
+        (*env)->ReleaseStringUTFChars(env, filter, c_filter);
+    ijkmp_dec_ref_p(&mp);
+}
+
 static jstring
 IjkMediaPlayer_getColorFormatName(JNIEnv *env, jclass clazz, jint mediaCodecColorFormat)
 {
@@ -1188,6 +1209,7 @@ static JNINativeMethod g_methods[] = {
 
     { "_setOption",             "(ILjava/lang/String;Ljava/lang/String;)V", (void *) IjkMediaPlayer_setOption },
     { "_setOption",             "(ILjava/lang/String;J)V",                  (void *) IjkMediaPlayer_setOptionLong },
+    { "_setVideoFilter",        "(Ljava/lang/String;)V",                    (void *) IjkMediaPlayer_setVideoFilter },
 
     { "_getColorFormatName",    "(I)Ljava/lang/String;",    (void *) IjkMediaPlayer_getColorFormatName },
     { "_getVideoCodecInfo",     "()Ljava/lang/String;",     (void *) IjkMediaPlayer_getVideoCodecInfo },

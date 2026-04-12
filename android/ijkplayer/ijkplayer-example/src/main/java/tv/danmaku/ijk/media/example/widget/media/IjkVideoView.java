@@ -253,7 +253,12 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         applyMirrorToRenderView();
         // Re-apply render filter to new render view
         if (mCurrentRenderFilterType != RENDER_FILTER_NONE) {
-            applyRenderFilterToView(renderUIView, mCurrentRenderFilterType);
+            if (mCurrentRenderFilterType == RENDER_FILTER_ROTATE90) {
+                // Use proper rotation path (updates MeasureHelper + TextureView transform)
+                mRenderView.setVideoRotation(mVideoRotationDegree + 90);
+            } else {
+                applyRenderFilterToView(renderUIView, mCurrentRenderFilterType);
+            }
         }
     }
 
@@ -361,6 +366,26 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         if (mRenderView == null) return;
         View view = mRenderView.getView();
         if (view == null) return;
+
+        // ROTATE90 must go through setVideoRotation so MeasureHelper swaps w/h
+        // and TextureView applies the correct transform matrix.
+        if (filterType == RENDER_FILTER_ROTATE90) {
+            // Reset any View-level transforms first
+            float scaleX = mMirrorHorizontal ? -1.0f : 1.0f;
+            view.setScaleX(scaleX);
+            view.setScaleY(1.0f);
+            view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+            mRenderView.setVideoRotation(mVideoRotationDegree + 90);
+            return;
+        }
+
+        // For all other filters, restore original video rotation first
+        if (mVideoRotationDegree != 0) {
+            mRenderView.setVideoRotation(mVideoRotationDegree);
+        } else {
+            // Ensure rotation is cleared back to 0
+            mRenderView.setVideoRotation(0);
+        }
         applyRenderFilterToView(view, filterType);
     }
 
@@ -396,16 +421,18 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                 break;
             }
             case RENDER_FILTER_ROTATE90: {
+                // Handled in setRenderFilter() via mRenderView.setVideoRotation(); should not reach here.
+                // Fallback: just do the raw View rotation (no layout swap, may look wrong on SurfaceView).
                 view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 view.setRotation(90f);
                 break;
             }
             case RENDER_FILTER_BRIGHT: {
-                // Increase brightness by adding +50 to RGB channels
+                // Increase brightness: add +80 to RGB channels (~31% boost)
                 ColorMatrix cm = new ColorMatrix(new float[]{
-                        1, 0, 0, 0, 50,
-                        0, 1, 0, 0, 50,
-                        0, 0, 1, 0, 50,
+                        1, 0, 0, 0, 80,
+                        0, 1, 0, 0, 80,
+                        0, 0, 1, 0, 80,
                         0, 0, 0, 1,  0
                 });
                 Paint p = new Paint();
@@ -414,12 +441,12 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                 break;
             }
             case RENDER_FILTER_DARK: {
-                // Decrease brightness by multiplying RGB channels by 0.5
+                // Decrease brightness: multiply RGB by 0.35 (~65% reduction)
                 ColorMatrix cm = new ColorMatrix(new float[]{
-                        0.5f, 0,    0,    0, 0,
-                        0,    0.5f, 0,    0, 0,
-                        0,    0,    0.5f, 0, 0,
-                        0,    0,    0,    1, 0
+                        0.35f, 0,     0,     0, 0,
+                        0,     0.35f, 0,     0, 0,
+                        0,     0,     0.35f, 0, 0,
+                        0,     0,     0,     1, 0
                 });
                 Paint p = new Paint();
                 p.setColorFilter(new ColorMatrixColorFilter(cm));

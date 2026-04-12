@@ -191,6 +191,14 @@ void ijkmp_set_option_int(IjkMediaPlayer *mp, int opt_category, const char *name
     // MPTRACE("%s()=void\n", __func__);
 }
 
+void ijkmp_set_video_filter(IjkMediaPlayer *mp, const char *vfilter)
+{
+    assert(mp);
+    pthread_mutex_lock(&mp->mutex);
+    ffp_set_video_filter(mp->ffplayer, vfilter);
+    pthread_mutex_unlock(&mp->mutex);
+}
+
 int ijkmp_get_video_codec_info(IjkMediaPlayer *mp, char **codec_info)
 {
     assert(mp);

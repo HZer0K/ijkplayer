@@ -925,6 +925,16 @@ public final class IjkMediaPlayer extends AbstractMediaPlayer {
     private native void _setOption(int category, String name, String value);
     private native void _setOption(int category, String name, long value);
 
+    /**
+     * Set or replace the video filter chain at runtime (thread-safe).
+     * Pass null or empty string to disable all filters.
+     * Example: setVideoFilter("hflip"), setVideoFilter("vflip"), setVideoFilter("hflip,vflip")
+     */
+    public void setVideoFilter(String filter) {
+        _setVideoFilter(filter);
+    }
+    private native void _setVideoFilter(String filter);
+
     public Bundle getMediaMeta() {
         return _getMediaMeta();
     }

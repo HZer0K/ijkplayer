@@ -24,12 +24,12 @@
 
 #include "libffmpeg/config.h"
 
-// FIXME: merge filter related code and enable it
-// remove these lines to enable avfilter
+// CONFIG_AVFILTER is now enabled to support runtime video filter switching (hflip/vflip/etc.)
+// The filter graph code in ff_ffplay.c is compatible with FFmpeg 8.
 #ifdef CONFIG_AVFILTER
 #undef CONFIG_AVFILTER
 #endif
-#define CONFIG_AVFILTER 0
+#define CONFIG_AVFILTER 1
 
 #ifdef FFP_MERGE
 #undef FFP_MERGE

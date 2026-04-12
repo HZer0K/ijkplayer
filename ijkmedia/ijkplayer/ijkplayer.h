@@ -169,6 +169,7 @@ void*            ijkmp_set_ijkio_inject_opaque(IjkMediaPlayer *mp, void *opaque)
 
 void            ijkmp_set_option(IjkMediaPlayer *mp, int opt_category, const char *name, const char *value);
 void            ijkmp_set_option_int(IjkMediaPlayer *mp, int opt_category, const char *name, int64_t value);
+void            ijkmp_set_video_filter(IjkMediaPlayer *mp, const char *vfilter);
 
 int             ijkmp_get_video_codec_info(IjkMediaPlayer *mp, char **codec_info);
 int             ijkmp_get_audio_codec_info(IjkMediaPlayer *mp, char **codec_info);

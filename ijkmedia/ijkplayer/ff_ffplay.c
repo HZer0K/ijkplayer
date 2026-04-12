@@ -197,6 +197,82 @@ typedef struct HTTPContext {
 static AVPacket flush_pkt;
 
 #if CONFIG_AVFILTER
+/* Replace all occurrences of 'from' with 'to' in a heap-allocated string *src.
+ * The string may be reallocated; caller must av_freep the result. */
+static void str_replace_inplace(char **src, const char *from, const char *to)
+{
+    if (!src || !*src || !from || !to) return;
+    size_t from_len = strlen(from);
+    size_t to_len   = strlen(to);
+    if (from_len == 0) return;
+    /* count occurrences */
+    int count = 0;
+    const char *p = *src;
+    while ((p = strstr(p, from)) != NULL) { count++; p += from_len; }
+    if (count == 0) return;
+    size_t new_len = strlen(*src) + count * ((int)to_len - (int)from_len) + 1;
+    char *result = av_malloc(new_len);
+    if (!result) return;
+    char *dst = result;
+    p = *src;
+    const char *q;
+    while ((q = strstr(p, from)) != NULL) {
+        size_t prefix = q - p;
+        memcpy(dst, p, prefix); dst += prefix;
+        memcpy(dst, to, to_len); dst += to_len;
+        p = q + from_len;
+    }
+    strcpy(dst, p);
+    av_freep(src);
+    *src = result;
+}
+
+/* Remove all filter nodes whose name starts with 'filter_prefix' from a
+ * comma-separated FFmpeg filtergraph string *src (heap-allocated).
+ * E.g. str_remove_filter_node(&s, "chromaber_vulkan") removes
+ * "chromaber_vulkan=dist_x=10:dist_y=6" from "a,chromaber_vulkan=...,b" → "a,b".
+ * Handles leading/trailing commas gracefully. */
+static void str_remove_filter_node(char **src, const char *filter_prefix)
+{
+    if (!src || !*src || !filter_prefix) return;
+    size_t prefix_len = strlen(filter_prefix);
+    if (prefix_len == 0) return;
+
+    char *buf = av_strdup(*src);
+    if (!buf) return;
+
+    /* result buffer, same max size */
+    char *result = av_malloc(strlen(*src) + 1);
+    if (!result) { av_free(buf); return; }
+    result[0] = '\0';
+
+    char *out = result;
+    char *tok = buf;
+    char *comma;
+    int first_out = 1;
+    while (tok) {
+        /* find next comma */
+        comma = strchr(tok, ',');
+        if (comma) *comma = '\0';
+        /* tok is one filter node, e.g. "chromaber_vulkan=dist_x=10:dist_y=6" */
+        int skip = (strncmp(tok, filter_prefix, prefix_len) == 0 &&
+                    (tok[prefix_len] == '\0' || tok[prefix_len] == '='));
+        if (!skip) {
+            if (!first_out) { *out++ = ','; }
+            size_t tlen = strlen(tok);
+            memcpy(out, tok, tlen);
+            out += tlen;
+            first_out = 0;
+        }
+        tok = comma ? comma + 1 : NULL;
+    }
+    *out = '\0';
+
+    av_free(buf);
+    av_freep(src);
+    *src = result;
+}
+
 // FFP_MERGE: opt_add_vfilter
 #endif
 
@@ -1854,12 +1930,20 @@ static int configure_filtergraph(AVFilterGraph *graph, const char *filtergraph,
         FFSWAP(AVFilterContext*, graph->filters[i], graph->filters[i + nb_filters]);
 
     ret = avfilter_graph_config(graph, NULL);
-    if (g_ijkplayer_diag_enabled && ret >= 0) {
-        ALOGI("diag: filtergraph=%s nb_filters=%d", filtergraph ? filtergraph : "null", graph->nb_filters);
-        for (i = 0; i < graph->nb_filters; i++) {
-            AVFilterContext *ctx = graph->filters[i];
-            const char *n = (ctx && ctx->filter && ctx->filter->name) ? ctx->filter->name : "null";
-            ALOGI("diag: filter[%d]=%s", i, n);
+    if (ret < 0) {
+        char errbuf[128];
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        av_log(NULL, AV_LOG_ERROR, "[vfilter] avfilter_graph_config FAILED: filtergraph='%s' err=%d(%s)\n",
+               filtergraph ? filtergraph : "(null)", ret, errbuf);
+    } else {
+        av_log(NULL, AV_LOG_WARNING, "[vfilter] avfilter_graph_config OK: filtergraph='%s' nb_filters=%d\n",
+               filtergraph ? filtergraph : "(null)", graph->nb_filters);
+        for (int _fi = 0; _fi < graph->nb_filters; _fi++) {
+            AVFilterContext *_fc = graph->filters[_fi];
+            av_log(NULL, AV_LOG_WARNING, "[vfilter]   filter[%d]: name='%s' instance='%s'\n",
+                   _fi,
+                   (_fc && _fc->filter) ? _fc->filter->name : "?",
+                   (_fc && _fc->name) ? _fc->name : "?");
         }
     }
 fail:
@@ -1870,7 +1954,13 @@ fail:
 
 static int configure_video_filters(FFPlayer *ffp, AVFilterGraph *graph, VideoState *is, const char *vfilters, AVFrame *frame)
 {
-    static const enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_YUV420P, AV_PIX_FMT_BGRA, AV_PIX_FMT_NONE };
+    av_log(NULL, AV_LOG_WARNING, "[vfilter] configure_video_filters: vfilters='%s' frame=%dx%d fmt=%s\n",
+           vfilters ? vfilters : "(null)",
+           frame ? frame->width : 0,
+           frame ? frame->height : 0,
+           frame ? av_get_pix_fmt_name(frame->format) : "(null)");
+    /* pix_fmts constraint removed: buffersink negotiates format freely;
+     * SDL_VoutFillFrameYUVOverlay handles any format via libyuv conversion. */
     char sws_flags_str[512] = "";
     char buffersrc_args[256];
     int ret;
@@ -1890,16 +1980,9 @@ static int configure_video_filters(FFPlayer *ffp, AVFilterGraph *graph, VideoSta
 
     graph->scale_sws_opts = av_strdup(sws_flags_str);
 
-    if (vfilters && strstr(vfilters, "vulkan")) {
-        if (!graph->hw_device_ctx) {
-            AVBufferRef *hw_device_ctx = NULL;
-            ret = av_hwdevice_ctx_create(&hw_device_ctx, AV_HWDEVICE_TYPE_VULKAN, NULL, NULL, 0);
-            if (ret < 0) {
-                return ret;
-            }
-            graph->hw_device_ctx = hw_device_ctx;
-        }
-    }
+    /* Note: AVFilterGraph.hw_device_ctx was removed in FFmpeg 5+.
+     * Vulkan hw device ctx is set per-filter via avfilter_graph_set_auto_convert or
+     * individual filter options. Skip the graph-level hw_device_ctx assignment. */
 
     snprintf(buffersrc_args, sizeof(buffersrc_args),
              "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
@@ -1909,20 +1992,28 @@ static int configure_video_filters(FFPlayer *ffp, AVFilterGraph *graph, VideoSta
     if (fr.num && fr.den)
         av_strlcatf(buffersrc_args, sizeof(buffersrc_args), ":frame_rate=%d/%d", fr.num, fr.den);
 
+    av_log(NULL, AV_LOG_WARNING, "[vfilter] buffersrc_args='%s'\n", buffersrc_args);
     if ((ret = avfilter_graph_create_filter(&filt_src,
                                             avfilter_get_by_name("buffer"),
                                             "ffplay_buffer", buffersrc_args, NULL,
-                                            graph)) < 0)
+                                            graph)) < 0) {
+        av_log(NULL, AV_LOG_ERROR, "[vfilter] buffer filter create FAILED ret=%d\n", ret);
         goto fail;
+    }
 
-    ret = avfilter_graph_create_filter(&filt_out,
-                                       avfilter_get_by_name("buffersink"),
-                                       "ffplay_buffersink", NULL, NULL, graph);
-    if (ret < 0)
-        goto fail;
-
-    if ((ret = av_opt_set_int_list(filt_out, "pix_fmts", pix_fmts,  AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN)) < 0)
-        goto fail;
+    /* In FFmpeg 8, buffersink options must be set BEFORE initialization via
+     * avfilter_graph_alloc_filter + av_opt_set + avfilter_init_dict.
+     * We skip the pix_fmts constraint and let the graph negotiate freely;
+     * SDL_VoutFillFrameYUVOverlay handles format conversion via libyuv. */
+    {
+        const AVFilter *buffersink_filt = avfilter_get_by_name("buffersink");
+        filt_out = avfilter_graph_alloc_filter(graph, buffersink_filt, "ffplay_buffersink");
+        if (!filt_out) { ret = AVERROR(ENOMEM); goto fail; }
+        if ((ret = avfilter_init_dict(filt_out, NULL)) < 0) {
+            av_log(NULL, AV_LOG_ERROR, "[vfilter] buffersink init FAILED ret=%d\n", ret);
+            goto fail;
+        }
+    }
 
     last_filter = filt_out;
 
@@ -1973,8 +2064,15 @@ static int configure_video_filters(FFPlayer *ffp, AVFilterGraph *graph, VideoSta
     }
 #endif
 
-    if ((ret = configure_filtergraph(graph, vfilters, filt_src, last_filter)) < 0)
+    if ((ret = configure_filtergraph(graph, vfilters, filt_src, last_filter)) < 0) {
+        char errbuf[128];
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        av_log(NULL, AV_LOG_ERROR, "[vfilter] configure_filtergraph FAILED: vfilters='%s' err=%d(%s)\n",
+               vfilters ? vfilters : "(null)", ret, errbuf);
         goto fail;
+    }
+    av_log(NULL, AV_LOG_INFO, "[vfilter] configure_filtergraph OK: vfilters='%s' nb_filters=%d\n",
+           vfilters ? vfilters : "(null)", graph->nb_filters);
 
     is->in_video_filter  = filt_src;
     is->out_video_filter = filt_out;
@@ -1988,8 +2086,6 @@ static int configure_audio_filters(FFPlayer *ffp, const char *afilters, int forc
     VideoState *is = ffp->is;
     static const enum AVSampleFormat sample_fmts[] = { AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE };
     int sample_rates[2] = { 0, -1 };
-    int64_t channel_layouts[2] = { 0, -1 };
-    int channels[2] = { 0, -1 };
     AVFilterContext *filt_asrc = NULL, *filt_asink = NULL;
     char aresample_swr_opts[512] = "";
     AVDictionaryEntry *e = NULL;
@@ -2007,14 +2103,26 @@ static int configure_audio_filters(FFPlayer *ffp, const char *afilters, int forc
         aresample_swr_opts[strlen(aresample_swr_opts)-1] = '\0';
     av_opt_set(is->agraph, "aresample_swr_opts", aresample_swr_opts, 0);
 
-    ret = snprintf(asrc_args, sizeof(asrc_args),
-                   "sample_rate=%d:sample_fmt=%s:channels=%d:time_base=%d/%d",
-                   is->audio_filter_src.freq, av_get_sample_fmt_name(is->audio_filter_src.fmt),
-                   is->audio_filter_src.channels,
-                   1, is->audio_filter_src.freq);
-    if (is->audio_filter_src.channel_layout)
-        snprintf(asrc_args + ret, sizeof(asrc_args) - ret,
-                 ":channel_layout=0x%"PRIx64,  is->audio_filter_src.channel_layout);
+    /* Build abuffer args using new ch_layout parameter (FFmpeg 5+) */
+    {
+        char chl_str[64] = "";
+        if (is->audio_filter_src.channel_layout) {
+            AVChannelLayout chl = AV_CHANNEL_LAYOUT_MASK(is->audio_filter_src.channels,
+                                                          is->audio_filter_src.channel_layout);
+            av_channel_layout_describe(&chl, chl_str, sizeof(chl_str));
+        } else {
+            /* fallback: default layout for given channel count */
+            AVChannelLayout chl = {0};
+            av_channel_layout_default(&chl, is->audio_filter_src.channels);
+            av_channel_layout_describe(&chl, chl_str, sizeof(chl_str));
+            av_channel_layout_uninit(&chl);
+        }
+        ret = snprintf(asrc_args, sizeof(asrc_args),
+                       "sample_rate=%d:sample_fmt=%s:channels=%d:time_base=%d/%d:ch_layout=%s",
+                       is->audio_filter_src.freq, av_get_sample_fmt_name(is->audio_filter_src.fmt),
+                       is->audio_filter_src.channels,
+                       1, is->audio_filter_src.freq, chl_str);
+    }
 
     ret = avfilter_graph_create_filter(&filt_asrc,
                                        avfilter_get_by_name("abuffer"), "ffplay_abuffer",
@@ -2035,16 +2143,24 @@ static int configure_audio_filters(FFPlayer *ffp, const char *afilters, int forc
         goto end;
 
     if (force_output_format) {
-        channel_layouts[0] = is->audio_tgt.channel_layout;
-        channels       [0] = is->audio_tgt.channels;
-        sample_rates   [0] = is->audio_tgt.freq;
+        /* Use new ch_layouts string option instead of deprecated channel_layouts/channel_counts */
+        char tgt_chl_str[64] = "";
+        if (is->audio_tgt.channel_layout) {
+            AVChannelLayout tgt_chl = AV_CHANNEL_LAYOUT_MASK(is->audio_tgt.channels,
+                                                               is->audio_tgt.channel_layout);
+            av_channel_layout_describe(&tgt_chl, tgt_chl_str, sizeof(tgt_chl_str));
+        } else {
+            AVChannelLayout tgt_chl = {0};
+            av_channel_layout_default(&tgt_chl, is->audio_tgt.channels);
+            av_channel_layout_describe(&tgt_chl, tgt_chl_str, sizeof(tgt_chl_str));
+            av_channel_layout_uninit(&tgt_chl);
+        }
+        sample_rates[0] = is->audio_tgt.freq;
         if ((ret = av_opt_set_int(filt_asink, "all_channel_counts", 0, AV_OPT_SEARCH_CHILDREN)) < 0)
             goto end;
-        if ((ret = av_opt_set_int_list(filt_asink, "channel_layouts", channel_layouts,  -1, AV_OPT_SEARCH_CHILDREN)) < 0)
+        if ((ret = av_opt_set(filt_asink, "ch_layouts", tgt_chl_str, AV_OPT_SEARCH_CHILDREN)) < 0)
             goto end;
-        if ((ret = av_opt_set_int_list(filt_asink, "channel_counts" , channels       ,  -1, AV_OPT_SEARCH_CHILDREN)) < 0)
-            goto end;
-        if ((ret = av_opt_set_int_list(filt_asink, "sample_rates"   , sample_rates   ,  -1, AV_OPT_SEARCH_CHILDREN)) < 0)
+        if ((ret = av_opt_set_int_list(filt_asink, "sample_rates", sample_rates, -1, AV_OPT_SEARCH_CHILDREN)) < 0)
             goto end;
     }
 
@@ -2200,11 +2316,11 @@ static int audio_thread(void *arg)
                 }
 
 #if CONFIG_AVFILTER
-                dec_channel_layout = get_valid_channel_layout(frame->channel_layout, frame->channels);
+                dec_channel_layout = get_valid_channel_layout(IJK_FRAME_CH_LAYOUT(frame), IJK_FRAME_CHANNELS(frame));
 
                 reconfigure =
                     cmp_audio_fmts(is->audio_filter_src.fmt, is->audio_filter_src.channels,
-                                   frame->format, frame->channels)    ||
+                                   frame->format, IJK_FRAME_CHANNELS(frame))    ||
                     is->audio_filter_src.channel_layout != dec_channel_layout ||
                     is->audio_filter_src.freq           != frame->sample_rate ||
                     is->auddec.pkt_serial               != last_serial        ||
@@ -2214,15 +2330,33 @@ static int audio_thread(void *arg)
                     SDL_LockMutex(ffp->af_mutex);
                     ffp->af_changed = 0;
                     char buf1[1024], buf2[1024];
-                    av_get_channel_layout_string(buf1, sizeof(buf1), -1, is->audio_filter_src.channel_layout);
-                    av_get_channel_layout_string(buf2, sizeof(buf2), -1, dec_channel_layout);
+                    /* describe old layout */
+                    if (is->audio_filter_src.channel_layout) {
+                        AVChannelLayout src_chl = AV_CHANNEL_LAYOUT_MASK(is->audio_filter_src.channels, is->audio_filter_src.channel_layout);
+                        av_channel_layout_describe(&src_chl, buf1, sizeof(buf1));
+                    } else {
+                        AVChannelLayout src_chl = {0};
+                        av_channel_layout_default(&src_chl, is->audio_filter_src.channels);
+                        av_channel_layout_describe(&src_chl, buf1, sizeof(buf1));
+                        av_channel_layout_uninit(&src_chl);
+                    }
+                    /* describe new layout */
+                    if (dec_channel_layout) {
+                        AVChannelLayout dec_chl = AV_CHANNEL_LAYOUT_MASK(IJK_FRAME_CHANNELS(frame), dec_channel_layout);
+                        av_channel_layout_describe(&dec_chl, buf2, sizeof(buf2));
+                    } else {
+                        AVChannelLayout dec_chl = {0};
+                        av_channel_layout_default(&dec_chl, IJK_FRAME_CHANNELS(frame));
+                        av_channel_layout_describe(&dec_chl, buf2, sizeof(buf2));
+                        av_channel_layout_uninit(&dec_chl);
+                    }
                     av_log(NULL, AV_LOG_DEBUG,
                            "Audio frame changed from rate:%d ch:%d fmt:%s layout:%s serial:%d to rate:%d ch:%d fmt:%s layout:%s serial:%d\n",
                            is->audio_filter_src.freq, is->audio_filter_src.channels, av_get_sample_fmt_name(is->audio_filter_src.fmt), buf1, last_serial,
-                           frame->sample_rate, frame->channels, av_get_sample_fmt_name(frame->format), buf2, is->auddec.pkt_serial);
+                           frame->sample_rate, IJK_FRAME_CHANNELS(frame), av_get_sample_fmt_name(frame->format), buf2, is->auddec.pkt_serial);
 
                     is->audio_filter_src.fmt            = frame->format;
-                    is->audio_filter_src.channels       = frame->channels;
+                    is->audio_filter_src.channels       = IJK_FRAME_CHANNELS(frame);
                     is->audio_filter_src.channel_layout = dec_channel_layout;
                     is->audio_filter_src.freq           = frame->sample_rate;
                     last_serial                         = is->auddec.pkt_serial;
@@ -2378,6 +2512,11 @@ static int ffplay_video_thread(void *arg)
             || last_vfilter_idx != is->vfilter_idx) {
             SDL_LockMutex(ffp->vf_mutex);
             ffp->vf_changed = 0;
+            av_log(NULL, AV_LOG_WARNING,
+                   "[vfilter] reconfigure: vfilter_idx=%d nb_vfilters=%d vfilters='%s'\n",
+                   is->vfilter_idx, ffp->nb_vfilters,
+                   (ffp->vfilters_list && ffp->vfilters_list[is->vfilter_idx])
+                       ? ffp->vfilters_list[is->vfilter_idx] : "(null)");
             av_log(NULL, AV_LOG_DEBUG,
                    "Video frame changed from size:%dx%d format:%s serial:%d to size:%dx%d format:%s serial:%d\n",
                    last_w, last_h,
@@ -2386,10 +2525,45 @@ static int ffplay_video_thread(void *arg)
                    (const char *)av_x_if_null(av_get_pix_fmt_name(frame->format), "none"), is->viddec.pkt_serial);
             avfilter_graph_free(&graph);
             graph = avfilter_graph_alloc();
-            if ((ret = configure_video_filters(ffp, graph, is, ffp->vfilters_list ? ffp->vfilters_list[is->vfilter_idx] : NULL, frame)) < 0) {
-                // FIXME: post error
-                SDL_UnlockMutex(ffp->vf_mutex);
-                goto the_end;
+            const char *vfilters_to_use = ffp->vfilters_list ? ffp->vfilters_list[is->vfilter_idx] : NULL;
+            if ((ret = configure_video_filters(ffp, graph, is, vfilters_to_use, frame)) < 0) {
+                av_log(NULL, AV_LOG_WARNING, "[vfilter] configure_video_filters FAILED (ret=%d), falling back to passthrough\n", ret);
+                /* Try software fallback: replace Vulkan filters with CPU equivalents */
+                char *sw_vfilters = NULL;
+                if (vfilters_to_use && strstr(vfilters_to_use, "vulkan")) {
+                    sw_vfilters = av_strdup(vfilters_to_use);
+                    /* strip hwupload/hwdownload wrappers */
+                    str_replace_inplace(&sw_vfilters, "hwupload,", "");
+                    str_replace_inplace(&sw_vfilters, ",hwdownload,format=yuv420p", "");
+                    str_replace_inplace(&sw_vfilters, ",hwdownload", "");
+                    str_replace_inplace(&sw_vfilters, "hwdownload,", "");
+                    /* map _vulkan variants to CPU equivalents */
+                    str_replace_inplace(&sw_vfilters, "scale_vulkan", "scale");
+                    str_replace_inplace(&sw_vfilters, "hflip_vulkan", "hflip");
+                    str_replace_inplace(&sw_vfilters, "vflip_vulkan", "vflip");
+                    str_replace_inplace(&sw_vfilters, "transpose_vulkan", "transpose");
+                    str_replace_inplace(&sw_vfilters, "gblur_vulkan", "gblur");
+                    str_replace_inplace(&sw_vfilters, "avgblur_vulkan", "avgblur");
+                    /* These have no CPU equivalent: remove the entire node (including its params) */
+                    str_remove_filter_node(&sw_vfilters, "chromaber_vulkan");
+                    str_remove_filter_node(&sw_vfilters, "blend_vulkan");
+                    str_remove_filter_node(&sw_vfilters, "overlay_vulkan");
+                    av_log(NULL, AV_LOG_WARNING, "[vfilter] Vulkan fallback to software: '%s'\n", sw_vfilters);
+                    avfilter_graph_free(&graph);
+                    graph = avfilter_graph_alloc();
+                    ret = configure_video_filters(ffp, graph, is, sw_vfilters, frame);
+                    av_freep(&sw_vfilters);
+                }
+                if (ret < 0) {
+                    /* Final fallback: passthrough (no filters at all) */
+                    avfilter_graph_free(&graph);
+                    graph = avfilter_graph_alloc();
+                    if ((ret = configure_video_filters(ffp, graph, is, NULL, frame)) < 0) {
+                        av_log(NULL, AV_LOG_ERROR, "[vfilter] configure_video_filters passthrough FAILED (ret=%d), exiting video thread\n", ret);
+                        SDL_UnlockMutex(ffp->vf_mutex);
+                        goto the_end;
+                    }
+                }
             }
             filt_in  = is->in_video_filter;
             filt_out = is->out_video_filter;
@@ -3000,8 +3174,8 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
             AVFilterContext *sink;
 
             is->audio_filter_src.freq           = avctx->sample_rate;
-            is->audio_filter_src.channels       = avctx->channels;
-            is->audio_filter_src.channel_layout = get_valid_channel_layout(avctx->channel_layout, avctx->channels);
+            is->audio_filter_src.channels       = avctx->ch_layout.nb_channels;
+            is->audio_filter_src.channel_layout = get_valid_channel_layout(avctx->ch_layout.u.mask, avctx->ch_layout.nb_channels);
             is->audio_filter_src.fmt            = avctx->sample_fmt;
             SDL_LockMutex(ffp->af_mutex);
             if ((ret = configure_audio_filters(ffp, ffp->afilters, 0)) < 0) {
@@ -3013,7 +3187,12 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
             sink = is->out_audio_filter;
             sample_rate    = av_buffersink_get_sample_rate(sink);
             nb_channels    = av_buffersink_get_channels(sink);
-            channel_layout = av_buffersink_get_channel_layout(sink);
+            {
+                AVChannelLayout sink_chl = {0};
+                av_buffersink_get_ch_layout(sink, &sink_chl);
+                channel_layout = sink_chl.u.mask;
+                av_channel_layout_uninit(&sink_chl);
+            }
         }
 #else
         sample_rate    = avctx->sample_rate;
@@ -4075,9 +4254,7 @@ void ffp_global_init()
 #if CONFIG_AVDEVICE
     avdevice_register_all();
 #endif
-#if CONFIG_AVFILTER
-    avfilter_register_all();
-#endif
+/* avfilter_register_all() was removed in FFmpeg 4.0; filters are registered automatically */
     av_register_all();
 
     ijkav_register_all();
@@ -4364,6 +4541,32 @@ void *ffp_set_inject_opaque(FFPlayer *ffp, void *opaque)
     return prev_weak_thiz;
 }
 
+void ffp_set_video_filter(FFPlayer *ffp, const char *vfilter)
+{
+    if (!ffp)
+        return;
+#if CONFIG_AVFILTER
+    SDL_LockMutex(ffp->vf_mutex);
+    av_freep(&ffp->vfilter0);
+    if (vfilter && vfilter[0]) {
+        ffp->vfilter0 = av_strdup(vfilter);
+    }
+    /* rebuild vfilters_list from vfilter0 */
+    av_freep(&ffp->vfilters_list);
+    ffp->nb_vfilters = 0;
+    if (ffp->vfilter0) {
+        GROW_ARRAY(ffp->vfilters_list, ffp->nb_vfilters);
+        ffp->vfilters_list[ffp->nb_vfilters - 1] = ffp->vfilter0;
+    }
+    ffp->vf_changed = 1;
+    av_log(NULL, AV_LOG_INFO, "[vfilter] ffp_set_video_filter: '%s' -> vf_changed=1\n",
+           vfilter ? vfilter : "(null, filters cleared)");
+    SDL_UnlockMutex(ffp->vf_mutex);
+#else
+    av_log(NULL, AV_LOG_WARNING, "[vfilter] ffp_set_video_filter: CONFIG_AVFILTER not enabled\n");
+#endif
+}
+
 void ffp_set_option(FFPlayer *ffp, int opt_category, const char *name, const char *value)
 {
     if (!ffp)
@@ -4514,6 +4717,9 @@ int ffp_prepare_async_l(FFPlayer *ffp, const char *file_name)
     if (ffp->vfilter0) {
         GROW_ARRAY(ffp->vfilters_list, ffp->nb_vfilters);
         ffp->vfilters_list[ffp->nb_vfilters - 1] = ffp->vfilter0;
+        av_log(NULL, AV_LOG_INFO, "[vfilter] vfilter0 set: '%s'\n", ffp->vfilter0);
+    } else {
+        av_log(NULL, AV_LOG_INFO, "[vfilter] vfilter0 is NULL/empty, no video filter will be applied\n");
     }
 #endif
 
