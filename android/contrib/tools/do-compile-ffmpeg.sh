@@ -352,9 +352,6 @@ fi
 
 # Android 不使用桌面/Windows 硬件解码加速，避免未定义宏导致编译失败（不影响 Vulkan 滤镜）
 FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-hwaccels"
-# 显式禁用 Vulkan video 编解码，保留 Vulkan 滤镜与设备
-FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-decoder=av1_vulkan,h264_vulkan,hevc_vulkan"
-FF_CFG_FLAGS="$FF_CFG_FLAGS --disable-encoder=av1_vulkan,h264_vulkan,hevc_vulkan"
 # 保险起见补充相关宏为0，规避上游宏缺省（仅在某些路径仍引用时有效）
 FF_CFLAGS="$FF_CFLAGS -DCONFIG_HEVC_D3D12VA_HWACCEL=0 -DCONFIG_HEVC_VULKAN_HWACCEL=0 -DCONFIG_VULKAN_VERSION=1"
 
@@ -415,7 +412,8 @@ echo "--------------------"
 echo "[*] compile ffmpeg"
 echo "--------------------"
 cp config.* $FF_PREFIX
-"$IJK_MAKE" $FF_MAKE_FLAGS > /dev/null
+# Explicitly target 'all' to avoid make defaulting into tests/ on MINGW/Windows
+"$IJK_MAKE" $FF_MAKE_FLAGS all > /dev/null
 "$IJK_MAKE" install
 mkdir -p $FF_PREFIX/include/libffmpeg
 cp -f config.h $FF_PREFIX/include/libffmpeg/config.h

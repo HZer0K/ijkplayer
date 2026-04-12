@@ -159,11 +159,7 @@ export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --disable-filters"
 # IJK_ENABLE_FILTERS=1  : enable CPU software filters (hflip/vflip/gblur/format/eq etc.)
 # IJK_ENABLE_VULKAN_FILTERS=1 : additionally enable Vulkan GPU filters (requires glslang)
 if [ "${IJK_ENABLE_VULKAN_FILTERS:-0}" = "1" ] || [ "${IJK_ENABLE_FILTERS:-1}" = "1" ]; then
-    # Core buffer/format filters required by filter graph
-    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=buffer"
-    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=buffersink"
-    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=format"
-    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=pad"
+    # Note: buffer/buffersink/format are FFmpeg 8 built-in filters; do NOT use --enable-filter= for them
     # Geometric transforms (CPU)
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=scale"
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=hflip"
@@ -173,7 +169,7 @@ if [ "${IJK_ENABLE_VULKAN_FILTERS:-0}" = "1" ] || [ "${IJK_ENABLE_FILTERS:-1}" =
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=gblur"
     # eq requires --enable-gpl which is disabled; use curves instead for brightness/contrast
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=curves"
-    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=levels"
+    # Note: levels is also a built-in in FFmpeg 8; skip --enable-filter=levels
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=colorchannelmixer"
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=drawbox"
     # HW upload/download (bridge between CPU and Vulkan GPU)
