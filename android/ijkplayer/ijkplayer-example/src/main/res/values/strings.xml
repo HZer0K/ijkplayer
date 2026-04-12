@@ -191,4 +191,14 @@
     <string name="pref_key_skip_loop_filter">pref_key_skip_loop_filter</string>
     <string name="pref_key_playback_speed">pref_key_playback_speed</string>
 
+    <!-- Video filter -->
+    <string name="menu_filter">视频滤镜</string>
+    <string name="filter_none">无滤镜</string>
+    <string name="filter_grayscale">灰度</string>
+    <string name="filter_hflip">水平翻转</string>
+    <string name="filter_vflip">垂直翻转</string>
+    <string name="filter_blur">高斯模糊</string>
+    <string name="filter_rotate90">旋转90°</string>
+    <string name="filter_applied">滤镜：%1$s</string>
+
 </resources>

@@ -75,6 +75,43 @@
     </item>
 
     <item
+        android:title="@string/menu_filter"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_filter_none"
+                android:checkable="true"
+                android:title="@string/filter_none"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_grayscale"
+                android:checkable="true"
+                android:title="@string/filter_grayscale"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_hflip"
+                android:checkable="true"
+                android:title="@string/filter_hflip"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_vflip"
+                android:checkable="true"
+                android:title="@string/filter_vflip"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_blur"
+                android:checkable="true"
+                android:title="@string/filter_blur"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_rotate90"
+                android:checkable="true"
+                android:title="@string/filter_rotate90"
+                app:showAsAction="never" />
+        </menu>
+    </item>
+
+    <item
         android:title="@string/menu_tools"
         app:showAsAction="never">
         <menu>

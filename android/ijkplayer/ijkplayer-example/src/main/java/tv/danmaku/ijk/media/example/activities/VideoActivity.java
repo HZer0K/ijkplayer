@@ -70,6 +70,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -152,6 +153,10 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
     // --- Loop playback ---
     private boolean mLoopEnabled = false;
+
+    // --- Video filter ---
+    /** Current vf0 filter string; null means no filter */
+    private String mCurrentFilterVf0 = null;
 
     // --- Gesture: brightness / volume ---
     /** true while a brightness/volume vertical gesture is in progress */
@@ -923,6 +928,43 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         return MediaSourceUtil.getCurrentSource(mVideoPath, mVideoUri);
     }
 
+    /**
+     * Apply a video filter by rebuilding the player with the given vf0 string.
+     * Playback position is preserved via the normal onPrepared restore path.
+     *
+     * @param vf0   FFmpeg vf0 filter string, or null to remove the filter
+     * @param label Human-readable label shown in the toast
+     */
+    private void applyVideoFilter(String vf0, String label) {
+        String source = getCurrentSource();
+        if (TextUtils.isEmpty(source)) return;
+
+        mCurrentFilterVf0 = vf0;
+        // Do NOT skip position restore — let onPrepared resume from current position
+        try {
+            DebugEventLog.add("applyVideoFilter: vf0=" + (vf0 == null ? "null" : vf0) + ", source=" + source);
+            mVideoView.stopPlayback();
+            mVideoView.release(true);
+            mVideoView.setVideoFilterVf0(vf0);
+            if (!TextUtils.isEmpty(vf0)) {
+                // vf0 requires software decoder + TextureView
+                mVideoView.forcePlayerTypeOnce(Settings.PV_PLAYER__IjkMediaPlayer);
+                mVideoView.setRender(IjkVideoView.RENDER_TEXTURE_VIEW);
+            }
+            if (MediaSourceUtil.isManifestStringSource(source)) {
+                mVideoView.setVideoPath(source);
+            } else {
+                mVideoView.setVideoURI(Uri.parse(source));
+            }
+            mVideoView.start();
+            mToastTextView.setText(getString(R.string.filter_applied, label));
+            mMediaController.showOnce(mToastTextView);
+            invalidateOptionsMenu();
+        } catch (Exception e) {
+            Log.e(TAG, "applyVideoFilter error", e);
+        }
+    }
+
     private void rebuildAndPlayCurrent() {
         String source = getCurrentSource();
         if (TextUtils.isEmpty(source))
@@ -1206,6 +1248,24 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             item.setChecked(mLoopEnabled);
             mToastTextView.setText(getString(mLoopEnabled ? R.string.loop_on : R.string.loop_off));
             mMediaController.showOnce(mToastTextView);
+            return true;
+        } else if (id == R.id.action_filter_none) {
+            applyVideoFilter(null, getString(R.string.filter_none));
+            return true;
+        } else if (id == R.id.action_filter_grayscale) {
+            applyVideoFilter("format=gray,format=yuv420p", getString(R.string.filter_grayscale));
+            return true;
+        } else if (id == R.id.action_filter_hflip) {
+            applyVideoFilter("hflip", getString(R.string.filter_hflip));
+            return true;
+        } else if (id == R.id.action_filter_vflip) {
+            applyVideoFilter("vflip", getString(R.string.filter_vflip));
+            return true;
+        } else if (id == R.id.action_filter_blur) {
+            applyVideoFilter("gblur=sigma=10", getString(R.string.filter_blur));
+            return true;
+        } else if (id == R.id.action_filter_rotate90) {
+            applyVideoFilter("transpose=1", getString(R.string.filter_rotate90));
             return true;
         } else if (id == R.id.action_toggle_mirror) {
             boolean next = !mSettings.getVideoMirrorHorizontal();
@@ -2662,6 +2722,24 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         MenuItem loop = menu != null ? menu.findItem(R.id.action_toggle_loop) : null;
         if (loop != null) {
             loop.setChecked(mLoopEnabled);
+        }
+        // Sync filter check state
+        int[] filterIds = {
+                R.id.action_filter_none, R.id.action_filter_grayscale,
+                R.id.action_filter_hflip, R.id.action_filter_vflip,
+                R.id.action_filter_blur, R.id.action_filter_rotate90
+        };
+        String[] filterVf0s = {
+                null, "format=gray,format=yuv420p",
+                "hflip", "vflip", "gblur=sigma=10", "transpose=1"
+        };
+        if (menu != null) {
+            for (int i = 0; i < filterIds.length; i++) {
+                MenuItem fi = menu.findItem(filterIds[i]);
+                if (fi != null) {
+                    fi.setChecked(Objects.equals(mCurrentFilterVf0, filterVf0s[i]));
+                }
+            }
         }
         return super.onPrepareOptionsMenu(menu);
     }
