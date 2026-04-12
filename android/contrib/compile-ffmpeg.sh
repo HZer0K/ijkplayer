@@ -140,7 +140,7 @@ case "$FF_TARGET" in
             rm -rf "./build/ffmpeg-$ARCH"
             # Also remove configure cache so next build re-runs ./configure
             # (required after changing filter flags or module.sh)
-            local _FFMPEG_SRC="./ffmpeg-$ARCH"
+            _FFMPEG_SRC="./ffmpeg-$ARCH"
             if [ -f "$_FFMPEG_SRC/config.h" ]; then
                 rm -f "$_FFMPEG_SRC/config.h" "$_FFMPEG_SRC/config.asm" "$_FFMPEG_SRC/ffbuild/config.mak"
                 echo "[*] removed configure cache in $_FFMPEG_SRC"
