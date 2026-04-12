@@ -179,6 +179,10 @@
     <!-- Gesture control -->
     <string name="brightness_label">亮度</string>
     <string name="volume_label">音量</string>
+    <string name="playback_paused">已暂停</string>
+    <string name="playback_resumed_play">已恢复播放</string>
+    <string name="seek_forward_hint">快进 +%1$ds</string>
+    <string name="seek_backward_hint">快退 -%1$ds</string>
 
     <!-- Preference keys (referenced from Settings.java) -->
     <string name="pref_key_skip_loop_filter">pref_key_skip_loop_filter</string>
@@ -190,8 +194,8 @@
     <string name="filter_grayscale">灰度</string>
     <string name="filter_hflip">水平翻转</string>
     <string name="filter_vflip">垂直翻转</string>
-    <string name="filter_blur">提亮</string>
-    <string name="filter_dark">压暗</string>
+    <string name="filter_blur">提亮（Bright）</string>
+    <string name="filter_dark">压暗（Dark）</string>
     <string name="filter_rotate90">旋转90°</string>
     <string name="filter_applied">滤镜：%1$s</string>
     <!-- FFmpeg software filters (require recompiled FFmpeg) -->
@@ -200,6 +204,14 @@
     <string name="filter_ffmpeg_gblur">[FFmpeg] 高斯模糊</string>
     <string name="filter_ffmpeg_eq_bright">[FFmpeg] 提亮(curves)</string>
     <string name="filter_ffmpeg_eq_dark">[FFmpeg] 压暗(curves)</string>
+    <string name="filter_ffmpeg_sharpen">[FFmpeg] 锐化(unsharp)</string>
+    <string name="filter_ffmpeg_custom">[FFmpeg] 自定义滤镜串…</string>
+    <string name="filter_ffmpeg_custom_dialog_title">输入 FFmpeg 滤镜串</string>
+    <string name="filter_ffmpeg_custom_hint">例：gblur=sigma=5 或 hflip,vflip</string>
+    <!-- Render-layer tone/sharpness filters -->
+    <string name="filter_warm">暖色调</string>
+    <string name="filter_cool">冷色调</string>
+    <string name="filter_sharpen">锐化</string>
 
     <!-- TestHub Vulkan capability check -->
     <string name="test_hub_vulkan_title">Vulkan 能力检测</string>
