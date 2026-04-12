@@ -205,8 +205,11 @@ echo "--------------------"
 echo "[*] check ffmpeg env"
 echo "--------------------"
 export PATH=$IJK_LLVM_BIN:$PATH
-export CC="$IJK_LLVM_BIN/clang --target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT"
-export CXX="$IJK_LLVM_BIN/clang++ --target=$TARGET_TRIPLE --sysroot=$FF_SYSROOT"
+# CC embeds --target for cross-compile. --sysroot is passed separately to ./configure
+# via --sysroot=, so do NOT include it here to avoid duplicate sysroot in CPPFLAGS
+# (which breaks clang include path resolution on Windows/MINGW).
+export CC="$IJK_LLVM_BIN/clang --target=$TARGET_TRIPLE"
+export CXX="$IJK_LLVM_BIN/clang++ --target=$TARGET_TRIPLE"
 export LD="$IJK_LLVM_BIN/ld.lld"
 export AR="$IJK_LLVM_BIN/llvm-ar"
 export STRIP="$IJK_LLVM_BIN/llvm-strip"
