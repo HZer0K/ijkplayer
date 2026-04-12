@@ -25,6 +25,9 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Paint;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -248,6 +251,10 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         mRenderView.addRenderCallback(mSHCallback);
         mRenderView.setVideoRotation(mVideoRotationDegree);
         applyMirrorToRenderView();
+        // Re-apply render filter to new render view
+        if (mCurrentRenderFilterType != RENDER_FILTER_NONE) {
+            applyRenderFilterToView(renderUIView, mCurrentRenderFilterType);
+        }
     }
 
     public void setRender(int render) {
@@ -330,6 +337,101 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         if (view == null)
             return;
         view.setScaleX(mMirrorHorizontal ? -1.0f : 1.0f);
+    }
+
+    // ---- Render-layer filter (no FFmpeg required) ----
+
+    /** Filter type constants */
+    public static final int RENDER_FILTER_NONE      = 0;
+    public static final int RENDER_FILTER_GRAYSCALE = 1;
+    public static final int RENDER_FILTER_HFLIP     = 2;
+    public static final int RENDER_FILTER_VFLIP     = 3;
+    public static final int RENDER_FILTER_ROTATE90  = 4;
+    public static final int RENDER_FILTER_BRIGHT    = 5;
+    public static final int RENDER_FILTER_DARK      = 6;
+
+    private int mCurrentRenderFilterType = RENDER_FILTER_NONE;
+
+    /**
+     * Apply a visual filter on the render view layer (no FFmpeg/rebuild required).
+     * Works with both SurfaceView and TextureView.
+     */
+    public void setRenderFilter(int filterType) {
+        mCurrentRenderFilterType = filterType;
+        if (mRenderView == null) return;
+        View view = mRenderView.getView();
+        if (view == null) return;
+        applyRenderFilterToView(view, filterType);
+    }
+
+    public int getRenderFilter() {
+        return mCurrentRenderFilterType;
+    }
+
+    private void applyRenderFilterToView(View view, int filterType) {
+        // Reset transforms first
+        float scaleX = mMirrorHorizontal ? -1.0f : 1.0f;
+        view.setScaleX(scaleX);
+        view.setScaleY(1.0f);
+        view.setRotation(0f);
+
+        switch (filterType) {
+            case RENDER_FILTER_GRAYSCALE: {
+                ColorMatrix cm = new ColorMatrix();
+                cm.setSaturation(0f);
+                Paint p = new Paint();
+                p.setColorFilter(new ColorMatrixColorFilter(cm));
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, p);
+                break;
+            }
+            case RENDER_FILTER_HFLIP: {
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                // Flip on top of existing mirror: mirror XOR hflip
+                view.setScaleX(mMirrorHorizontal ? 1.0f : -1.0f);
+                break;
+            }
+            case RENDER_FILTER_VFLIP: {
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                view.setScaleY(-1.0f);
+                break;
+            }
+            case RENDER_FILTER_ROTATE90: {
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                view.setRotation(90f);
+                break;
+            }
+            case RENDER_FILTER_BRIGHT: {
+                // Increase brightness by adding +50 to RGB channels
+                ColorMatrix cm = new ColorMatrix(new float[]{
+                        1, 0, 0, 0, 50,
+                        0, 1, 0, 0, 50,
+                        0, 0, 1, 0, 50,
+                        0, 0, 0, 1,  0
+                });
+                Paint p = new Paint();
+                p.setColorFilter(new ColorMatrixColorFilter(cm));
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, p);
+                break;
+            }
+            case RENDER_FILTER_DARK: {
+                // Decrease brightness by multiplying RGB channels by 0.5
+                ColorMatrix cm = new ColorMatrix(new float[]{
+                        0.5f, 0,    0,    0, 0,
+                        0,    0.5f, 0,    0, 0,
+                        0,    0,    0.5f, 0, 0,
+                        0,    0,    0,    1, 0
+                });
+                Paint p = new Paint();
+                p.setColorFilter(new ColorMatrixColorFilter(cm));
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, p);
+                break;
+            }
+            case RENDER_FILTER_NONE:
+            default: {
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                break;
+            }
+        }
     }
 
     /**

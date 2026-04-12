@@ -197,7 +197,8 @@
     <string name="filter_grayscale">灰度</string>
     <string name="filter_hflip">水平翻转</string>
     <string name="filter_vflip">垂直翻转</string>
-    <string name="filter_blur">高斯模糊</string>
+    <string name="filter_blur">提亮</string>
+    <string name="filter_dark">压暗</string>
     <string name="filter_rotate90">旋转90°</string>
     <string name="filter_applied">滤镜：%1$s</string>
 

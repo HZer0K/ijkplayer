@@ -104,6 +104,11 @@
                 android:title="@string/filter_blur"
                 app:showAsAction="never" />
             <item
+                android:id="@+id/action_filter_dark"
+                android:checkable="true"
+                android:title="@string/filter_dark"
+                app:showAsAction="never" />
+            <item
                 android:id="@+id/action_filter_rotate90"
                 android:checkable="true"
                 android:title="@string/filter_rotate90"
