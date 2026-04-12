@@ -40,7 +40,7 @@ fi
 
 
 FF_BUILD_ROOT=`pwd`
-FF_ANDROID_PLATFORM=android-9
+# FF_ANDROID_PLATFORM is not used after NDK r17; API level is set per-arch via TARGET_TRIPLE below.
 
 
 FF_BUILD_NAME=
@@ -251,7 +251,7 @@ FF_EXTRA_LDFLAGS="$FF_EXTRA_LDFLAGS -B$FF_API_LIB_DIR"
 export COMMON_FF_CFG_FLAGS=
 
 FF_ENABLE_VULKAN="${IJK_ENABLE_VULKAN:-1}"
-FF_ENABLE_VULKAN_FILTERS="${IJK_ENABLE_VULKAN_FILTERS:-}"
+FF_ENABLE_VULKAN_FILTERS="${IJK_ENABLE_VULKAN_FILTERS:-0}"
 
 FF_DEP_GLSLANG_INC="$FF_BUILD_ROOT/build/glslang-arm64/output/include"
 FF_DEP_GLSLANG_LIB="$FF_BUILD_ROOT/build/glslang-arm64/output/lib"
@@ -284,8 +284,8 @@ fi
 
 FF_CFG_FLAGS="$FF_CFG_FLAGS $COMMON_FF_CFG_FLAGS"
 
-# Vulkan support (enable Vulkan filters; depends on spirv_compiler + Vulkan-Headers)
-FF_ENABLE_VULKAN="${IJK_ENABLE_VULKAN:-1}"
+# Vulkan support (enable Vulkan device; IJK_ENABLE_VULKAN=1 by default)
+# NOTE: FF_ENABLE_VULKAN was already set above; do not reassign here.
 if [ "$FF_ENABLE_VULKAN" = "1" ]; then
     # Ensure Vulkan-Headers are available even if NDK headers are missing vk_video/*
     VULKAN_HEADERS_VER=1.3.280
@@ -329,12 +329,10 @@ else
 fi
 
 # Enable Vulkan GLSL->SPIR-V compiler (required by *_vulkan filters)
-# NOTE: FFmpeg configure's libglslang detection requires -lpthread/-lstdc++ which
+# NOTE: FF_ENABLE_VULKAN_FILTERS and FF_DEP_GLSLANG_* were already set above.
+# FFmpeg configure's libglslang detection requires -lpthread/-lstdc++ which
 # Android NDK does not provide as standalone libs. Vulkan filters are disabled to
 # avoid configure failure. Vulkan device support (--enable-vulkan) is kept.
-FF_ENABLE_VULKAN_FILTERS="${IJK_ENABLE_VULKAN_FILTERS:-0}"
-FF_DEP_GLSLANG_INC="$FF_BUILD_ROOT/build/glslang-arm64/output/include"
-FF_DEP_GLSLANG_LIB="$FF_BUILD_ROOT/build/glslang-arm64/output/lib"
 if [ "$FF_ENABLE_VULKAN" = "1" ] && [ "$FF_ENABLE_VULKAN_FILTERS" = "1" ] && [ -f "${FF_DEP_GLSLANG_LIB}/libglslang.a" ]; then
     echo "glslang detected (spirv_compiler)"
     FF_CFG_FLAGS="$FF_CFG_FLAGS --enable-libglslang"

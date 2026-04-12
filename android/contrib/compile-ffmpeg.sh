@@ -97,8 +97,8 @@ echo_nextstep_help() {
     echo "--------------------"
     echo "[*] Finished"
     echo "--------------------"
-    echo "# to continue to build ijkplayer, run script below,"
-    echo "sh compile-ijk.sh "
+    echo "# to continue to build ijkplayer native libs, run from android/ directory:"
+    echo "#   cd .. && ./compile-ijk.sh"
 }
 
 #----------
@@ -130,11 +130,11 @@ case "$FF_TARGET" in
         echo_archs FF_ACT_ARCHS_64
         for ARCH in $FF_ACT_ARCHS_ALL
         do
-            if [ -d ffmpeg-$ARCH ]; then
-                cd ffmpeg-$ARCH && git clean -xdf && cd -
-            fi
+            # Remove only the build output, not the FFmpeg source tree.
+            # Use 'git clean -xdf' manually if you want to reset the source.
+            rm -rf "./build/ffmpeg-$ARCH"
+            echo "[*] cleaned build/ffmpeg-$ARCH (source tree preserved)"
         done
-        rm -rf ./build/ffmpeg-*
     ;;
     check)
         echo_archs FF_ACT_ARCHS_ALL

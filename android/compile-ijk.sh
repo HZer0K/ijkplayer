@@ -22,6 +22,14 @@ ACT_ABI_64="arm64"
 ACT_ABI_ALL=$ACT_ABI_64
 
 ANDROID_ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+# Detect host platform for NDK prebuilt path
+UNAME_S=$(uname -s 2>/dev/null || echo "Linux")
+case "$UNAME_S" in
+    CYGWIN*|MINGW*|MSYS*) HOST_TAG="windows-x86_64" ;;
+    Darwin*)              HOST_TAG="darwin-x86_64" ;;
+    *)                    HOST_TAG="linux-x86_64" ;;
+esac
 LOG_DIR="${IJK_LOG_DIR:-$ANDROID_ROOT/build/logs}"
 mkdir -p "$LOG_DIR"
 LOG_TS="$(date +%Y%m%d_%H%M%S)"
@@ -117,6 +125,9 @@ do_cmake_build () {
 
     if [ "$SUB_CMD" = "clean" ]; then
         rm -rf "$BUILD_DIR"
+        # Also remove compiled .so files so stale binaries don't end up in the APK
+        rm -f "$OUT_LIB_DIR/libijkplayer.so" "$OUT_LIB_DIR/libijksdl.so" "$OUT_LIB_DIR/libc++_shared.so"
+        echo "[*] cleaned: $BUILD_DIR and $OUT_LIB_DIR/*.so"
         return 0
     fi
 
@@ -153,8 +164,14 @@ do_cmake_build () {
     mkdir -p "$OUT_LIB_DIR"
 
     if [ -f "$BUILD_DIR/CMakeCache.txt" ]; then
-        if ! grep -q "^CMAKE_HOME_DIRECTORY:INTERNAL=$CMAKE_DIR$" "$BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
-            echo "[*] CMake cache path mismatch, cleaning: $BUILD_DIR"
+        # CMake < 3.15 uses CMAKE_HOME_DIRECTORY, newer versions use CMAKE_SOURCE_DIR
+        local CACHE_SRC_OK=0
+        grep -q "^CMAKE_HOME_DIRECTORY:INTERNAL=$CMAKE_DIR$" "$BUILD_DIR/CMakeCache.txt" 2>/dev/null && CACHE_SRC_OK=1
+        grep -q "^CMAKE_SOURCE_DIR:STATIC=$CMAKE_DIR$"      "$BUILD_DIR/CMakeCache.txt" 2>/dev/null && CACHE_SRC_OK=1
+        # Also invalidate cache if ANDROID_STL changed
+        grep -q "ANDROID_STL.*c++_shared" "$BUILD_DIR/CMakeCache.txt" 2>/dev/null || CACHE_SRC_OK=0
+        if [ "$CACHE_SRC_OK" = "0" ]; then
+            echo "[*] CMake cache stale (path or STL mismatch), cleaning: $BUILD_DIR"
             rm -rf "$BUILD_DIR"
             mkdir -p "$BUILD_DIR"
         fi
@@ -184,17 +201,15 @@ do_cmake_build () {
         cp -f "$BUILD_DIR/lib/libijkplayer.so" "$OUT_LIB_DIR/"
     fi
 
-    # Copy libc++_shared.so so the APK can find it at runtime
-    local LIBCXX_SHARED="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
-    if [ ! -f "$LIBCXX_SHARED" ]; then
-        # Fallback: windows host
-        LIBCXX_SHARED="$ANDROID_NDK/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
-    fi
+    # Copy libc++_shared.so so the APK can find it at runtime.
+    # HOST_TAG is detected from uname at the top of this script.
+    local LIBCXX_SHARED="$ANDROID_NDK/toolchains/llvm/prebuilt/${HOST_TAG}/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
     if [ -f "$LIBCXX_SHARED" ]; then
         cp -f "$LIBCXX_SHARED" "$OUT_LIB_DIR/"
-        echo "[*] copied libc++_shared.so -> $OUT_LIB_DIR/"
+        echo "[*] copied libc++_shared.so ($HOST_TAG) -> $OUT_LIB_DIR/"
     else
-        echo "[!] WARNING: libc++_shared.so not found in NDK, APK may crash at runtime"
+        echo "[!] WARNING: libc++_shared.so not found at $LIBCXX_SHARED"
+        echo "[!]          APK may crash at runtime with UnsatisfiedLinkError"
     fi
 }
 

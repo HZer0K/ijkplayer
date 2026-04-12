@@ -37,17 +37,31 @@ echo_usage() {
     echo "  compile-glslang.sh arm64"
     echo "  compile-glslang.sh all|all64"
     echo "  compile-glslang.sh clean"
+    echo ""
+    echo "  Note: glslang is only needed when IJK_ENABLE_VULKAN_FILTERS=1."
+    echo "        compile-ffmpeg.sh will call this automatically when that flag is set."
     exit 1
+}
+
+echo_nextstep_help() {
+    echo ""
+    echo "--------------------"
+    echo "[*] Finished"
+    echo "--------------------"
+    echo "# to continue to build ffmpeg (with Vulkan filters), run from android/contrib/ directory:"
+    echo "#   IJK_ENABLE_VULKAN_FILTERS=1 ./compile-ffmpeg.sh"
 }
 
 case "$FF_TARGET" in
     "")
         echo_archs arm64
         bash tools/do-compile-glslang.sh arm64
+        echo_nextstep_help
     ;;
     arm64)
         echo_archs $FF_TARGET
         bash tools/do-compile-glslang.sh $FF_TARGET
+        echo_nextstep_help
     ;;
     all|all64)
         echo_archs $FF_ACT_ARCHS_64
@@ -55,11 +69,13 @@ case "$FF_TARGET" in
         do
             bash tools/do-compile-glslang.sh $ARCH
         done
+        echo_nextstep_help
     ;;
     clean)
         echo_archs FF_ACT_ARCHS_ALL
         rm -rf ./build/glslang-*
         rm -rf ./glslang-*/
+        echo "[*] glslang build output cleaned"
     ;;
     *)
         echo_usage

@@ -53,28 +53,28 @@ echo_nextstep_help() {
     echo "--------------------"
     echo "[*] Finished"
     echo "--------------------"
-    echo "# to continue to build ffmpeg, run script below,"
-    echo "sh compile-ffmpeg.sh "
-    echo "# to continue to build ijkplayer, run script below,"
-    echo "sh compile-ijk.sh "
+    echo "# to continue to build ffmpeg, run from android/contrib/ directory:"
+    echo "#   ./compile-ffmpeg.sh"
+    echo "# to continue to build ijkplayer native libs, run from android/ directory:"
+    echo "#   cd .. && ./compile-ijk.sh"
 }
 
 #----------
 case "$FF_TARGET" in
     "")
         echo_archs arm64
-        sh tools/do-compile-openssl.sh arm64
+        bash tools/do-compile-openssl.sh arm64
     ;;
     arm64)
         echo_archs $FF_TARGET
-        sh tools/do-compile-openssl.sh $FF_TARGET
+        bash tools/do-compile-openssl.sh $FF_TARGET
         echo_nextstep_help
     ;;
     all|all64)
         echo_archs $FF_ACT_ARCHS_64
         for ARCH in $FF_ACT_ARCHS_64
         do
-            sh tools/do-compile-openssl.sh $ARCH
+            bash tools/do-compile-openssl.sh $ARCH
         done
         echo_nextstep_help
     ;;
