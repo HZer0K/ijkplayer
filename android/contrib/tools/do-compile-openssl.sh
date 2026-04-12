@@ -238,11 +238,8 @@ echo ""
 echo "--------------------"
 echo "[*] compile openssl ($FF_ARCH)"
 echo "--------------------"
-if command -v nproc >/dev/null 2>&1; then
-    "$IJK_MAKE" -j"$(nproc)"
-else
-    "$IJK_MAKE" -j4
-fi
+# IJK_MAKE_FLAG is set by do-detect-env.sh (e.g. -j$(nproc) on Linux, -j$(sysctl) on macOS)
+"$IJK_MAKE" $IJK_MAKE_FLAG
 "$IJK_MAKE" install_sw
 
 echo ""
