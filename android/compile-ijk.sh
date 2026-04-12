@@ -165,6 +165,7 @@ do_cmake_build () {
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
         -DANDROID_ABI="$ABI_DIR" \
         -DANDROID_PLATFORM=android-21 \
+        -DANDROID_STL=c++_shared \
         -DIJK_FFMPEG_SOURCE_DIR="$FFMPEG_SOURCE_DIR" \
         -DIJK_FFMPEG_OUTPUT_DIR="$FFMPEG_OUTPUT_DIR" \
         -DCMAKE_BUILD_TYPE=Release
@@ -181,6 +182,19 @@ do_cmake_build () {
         cp -f "$BUILD_DIR/libijkplayer.so" "$OUT_LIB_DIR/"
     elif [ -f "$BUILD_DIR/lib/libijkplayer.so" ]; then
         cp -f "$BUILD_DIR/lib/libijkplayer.so" "$OUT_LIB_DIR/"
+    fi
+
+    # Copy libc++_shared.so so the APK can find it at runtime
+    local LIBCXX_SHARED="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
+    if [ ! -f "$LIBCXX_SHARED" ]; then
+        # Fallback: windows host
+        LIBCXX_SHARED="$ANDROID_NDK/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
+    fi
+    if [ -f "$LIBCXX_SHARED" ]; then
+        cp -f "$LIBCXX_SHARED" "$OUT_LIB_DIR/"
+        echo "[*] copied libc++_shared.so -> $OUT_LIB_DIR/"
+    else
+        echo "[!] WARNING: libc++_shared.so not found in NDK, APK may crash at runtime"
     fi
 }
 
