@@ -404,6 +404,12 @@ echo "--------------------"
 echo "[*] configurate ffmpeg"
 echo "--------------------"
 cd $FF_SOURCE
+# Sanity check: if key header files are missing the source tree is incomplete.
+# In that case force a clean re-configure instead of reusing stale config.
+if [ -f "./config.h" ] && [ ! -f "./libavutil/macros.h" ]; then
+    echo '[!] WARNING: source tree incomplete (libavutil/macros.h missing); forcing re-configure'
+    rm -f ./config.h
+fi
 if [ -f "./config.h" ]; then
     echo 'reuse configure'
 else
