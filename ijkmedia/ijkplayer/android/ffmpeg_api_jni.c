@@ -97,6 +97,21 @@ FFmpegApi_getCapabilitiesJson(JNIEnv *env, jclass clazz)
     cJSON_AddNumberToObject(root, "avfilter_version", (double)avfilter_version());
     cJSON_AddStringToObject(root, "avfilter_configuration", avfilter_configuration());
 
+    /* Build-time capability flags: reflect what was compiled into this binary.
+     * IJK_VULKAN_ENABLED     = --enable-vulkan was passed to FFmpeg configure.
+     * IJK_VULKAN_FILTERS_ENABLED = --enable-libglslang was also passed (Vulkan GPU filters).
+     * These help distinguish "filter not found at runtime" from "disabled at build time". */
+#if CONFIG_VULKAN
+    cJSON_AddBoolToObject(root, "build_vulkan_enabled", 1);
+#else
+    cJSON_AddBoolToObject(root, "build_vulkan_enabled", 0);
+#endif
+#if CONFIG_LIBGLSLANG
+    cJSON_AddBoolToObject(root, "build_vulkan_filters_enabled", 1);
+#else
+    cJSON_AddBoolToObject(root, "build_vulkan_filters_enabled", 0);
+#endif
+
     cJSON *protocols_in = cJSON_CreateArray();
     cJSON *protocols_out = cJSON_CreateArray();
     if (protocols_in) {

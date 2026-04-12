@@ -4,6 +4,8 @@
 #include <vector>
 #include <mutex>
 #include <thread>
+#include <cmath>
+#include <algorithm>
 
 #include "whisper.h"
 
@@ -15,40 +17,60 @@ static void loge(const char *msg) {
     __android_log_print(ANDROID_LOG_ERROR, "asrwhisper", "%s", msg);
 }
 
-// NOTE: Uses linear interpolation for resampling, which may reduce ASR accuracy
-// for large sample rate differences. Consider using libswresample for higher quality.
-static std::vector<float> pcm16_to_f32_mono_16k(const int16_t *pcm, int samples, int sample_rate, int channels) {
-    if (!pcm || samples <= 0) return {};
-    int ch = channels > 0 ? channels : 1;
-    int sr = sample_rate > 0 ? sample_rate : 16000;
+// ---------------------------------------------------------------------------
+// High-quality resampling using a windowed-Sinc (Lanczos) kernel.
+// Provides much better frequency response than linear interpolation for
+// large downsampling ratios (e.g. 48000 -> 16000), reducing aliasing
+// artifacts that hurt ASR accuracy.
+// ---------------------------------------------------------------------------
+static constexpr int SINC_LOBES = 3;  // Lanczos a=3; trade-off: quality vs. cost
 
-    int frames = samples / ch;
+static inline double lanczos_kernel(double x) {
+    if (x == 0.0) return 1.0;
+    if (std::abs(x) >= SINC_LOBES) return 0.0;
+    const double pi = M_PI;
+    return (SINC_LOBES * std::sin(pi * x) * std::sin(pi * x / SINC_LOBES))
+           / (pi * pi * x * x);
+}
+
+static std::vector<float> pcm16_to_f32_mono_16k(const int16_t *pcm, int samples,
+                                                int sample_rate, int channels) {
+    if (!pcm || samples <= 0) return {};
+    const int ch = channels > 0 ? channels : 1;
+    const int sr = sample_rate > 0 ? sample_rate : 16000;
+
+    // Step 1: de-interleave + mix to mono float
+    const int frames = samples / ch;
     std::vector<float> mono(frames);
     for (int i = 0; i < frames; i++) {
         int32_t acc = 0;
-        for (int c = 0; c < ch; c++) {
-            acc += pcm[i * ch + c];
-        }
-        float v = (float) acc / (float) ch;
-        mono[i] = v / 32768.0f;
+        for (int c = 0; c < ch; c++) acc += pcm[i * ch + c];
+        mono[i] = (float)acc / ((float)ch * 32768.0f);
     }
 
-    if (sr == 16000) {
-        return mono;
-    }
+    if (sr == 16000) return mono;
 
-    const double ratio = 16000.0 / (double) sr;
-    int out_frames = (int) (frames * ratio);
-    if (out_frames < 1) out_frames = 1;
+    // Step 2: Lanczos resample to 16000 Hz
+    const double ratio   = 16000.0 / (double)sr;  // < 1 for downsampling
+    const int out_frames = std::max(1, (int)std::round(frames * ratio));
     std::vector<float> out(out_frames);
+
+    // Low-pass cutoff: min(dst_nyquist, src_nyquist) expressed in src samples
+    // For downsampling: cutoff = ratio (fraction of source Nyquist)
+    const double cutoff = std::min(ratio, 1.0);
+
     for (int i = 0; i < out_frames; i++) {
-        double src = i / ratio;
-        int i0 = (int) src;
-        int i1 = i0 + 1;
-        if (i0 < 0) i0 = 0;
-        if (i1 >= frames) i1 = frames - 1;
-        double t = src - i0;
-        out[i] = (float) ((1.0 - t) * mono[i0] + t * mono[i1]);
+        const double src_pos = i / ratio;
+        double sum = 0.0, weight_sum = 0.0;
+        const int i_begin = (int)std::ceil(src_pos - SINC_LOBES / cutoff);
+        const int i_end   = (int)std::floor(src_pos + SINC_LOBES / cutoff);
+        for (int j = std::max(0, i_begin); j <= std::min(frames - 1, i_end); j++) {
+            const double x = (src_pos - j) * cutoff;
+            const double w = lanczos_kernel(x);
+            sum        += mono[j] * w;
+            weight_sum += w;
+        }
+        out[i] = weight_sum > 1e-10 ? (float)(sum / weight_sum) : 0.0f;
     }
     return out;
 }
