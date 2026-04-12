@@ -160,6 +160,8 @@
 
     <!-- Playback / URL error -->
     <string name="error_url_not_direct_video">请输入直接视频链接（mp4/m3u8等），当前为网页地址</string>
+    <!-- Dialog button labels -->
+    <string name="action_play">播放</string>
 
     <!-- Track list section headers -->
     <string name="track_section_video">视频轨</string>

@@ -153,6 +153,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     private static final String PREFS_PLAYBACK_POS = "playback_positions";
     private static final int    POSITION_SAVE_THRESHOLD_MS = 5_000;  // don't save if < 5s
     private static final int    POSITION_RESTORE_THRESHOLD_MS = 3_000; // don't restore if < 3s remain
+    /** Set to true before a manual rebuild/restart to skip position restore for that cycle. */
+    private boolean mSkipNextPositionRestore = false;
 
     private static final int REQ_RECORD_AUDIO = 2201;
     private SpeechRecognizer mSpeechRecognizer;
@@ -293,22 +295,38 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mVideoView.setMediaController(mMediaController);
         mVideoView.setHudView(mHudView);
         mVideoView.setMirrorHorizontal(mSettings.getVideoMirrorHorizontal());
-        // Keep screen on when video starts rendering; release when stopped
+        // Keep screen on when video starts rendering; manage on buffering events
         mVideoView.setOnInfoListener(new IMediaPlayer.OnInfoListener() {
             @Override
             public boolean onInfo(IMediaPlayer mp, int what, int extra) {
-                if (what == IMediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
-                    setScreenKeepOn(true);
+                switch (what) {
+                    case IMediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START:
+                        setScreenKeepOn(true);
+                        break;
+                    case IMediaPlayer.MEDIA_INFO_BUFFERING_END:
+                        // Re-apply screen keep-on if still playing after buffering
+                        if (mVideoView != null && mVideoView.isPlaying()) {
+                            setScreenKeepOn(true);
+                        }
+                        break;
+                    default:
+                        break;
                 }
                 return false;
             }
         });
-        // Restore saved playback position after player is prepared
+        // Restore saved playback position after player is prepared (post to next frame
+        // so IjkVideoView finishes its own onPrepared logic — start(), mSeekWhenPrepared — first)
         mVideoView.setOnPreparedListener(new IMediaPlayer.OnPreparedListener() {
             @Override
             public void onPrepared(IMediaPlayer mp) {
                 restorePlaybackPosition();
             }
+        });
+        // Clear saved position and release screen keep-on when playback completes
+        mVideoView.setOnCompletionListener(mp -> {
+            savePlaybackPosition();  // pos >= dur-3s triggers key removal
+            setScreenKeepOn(false);
         });
         String vf0 = getIntent() != null ? getIntent().getStringExtra(EXTRA_VF0) : null;
         boolean isVulkanDemo = !TextUtils.isEmpty(vf0);
@@ -814,6 +832,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         if (TextUtils.isEmpty(source))
             return;
 
+        // User explicitly requested rebuild: start from the beginning
+        mSkipNextPositionRestore = true;
         try {
             DebugEventLog.add("rebuildAndPlayCurrent: " + source);
             mVideoView.stopPlayback();
@@ -832,6 +852,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     }
 
     private void restartSameSourceSeek0() {
+        // User explicitly restarted to position 0: skip position restore
+        mSkipNextPositionRestore = true;
         try {
             mVideoView.pause();
             mVideoView.seekTo(0);
@@ -850,6 +872,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         DebugEventLog.add("toggleCore: " + current + " -> " + next + ", preferExoForHttp=" + preferExoForHttp);
         mSettings.setPlayer(next);
         mSettings.setPreferExoForHttp(preferExoForHttp);
+        // Switching player engine: treat as fresh start
+        mSkipNextPositionRestore = true;
         rebuildAndPlayCurrent();
 
         String playerText = IjkVideoView.getPlayerText(this, next);
@@ -866,7 +890,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.open_url))
                 .setView(input)
-                .setPositiveButton("播放", (d, which) -> {
+                .setPositiveButton(getString(R.string.action_play), (d, which) -> {
                     String url = input.getText() != null ? input.getText().toString().trim() : "";
                     playUrl(url);
                 })
@@ -913,8 +937,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     /** Persist current URL -> position into SharedPreferences. */
     private void savePlaybackPosition() {
         if (mVideoView == null) return;
-        String url = mVideoPath != null ? mVideoPath :
-                (mVideoUri != null ? mVideoUri.toString() : null);
+        String url = normalizePositionKey(
+                mVideoPath != null ? mVideoPath : (mVideoUri != null ? mVideoUri.toString() : null));
         if (TextUtils.isEmpty(url)) return;
         int pos = mVideoView.getCurrentPosition();
         int dur = mVideoView.getDuration();
@@ -930,17 +954,43 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
     /** Restore saved position for the current URL, seekTo it after player starts. */
     private void restorePlaybackPosition() {
+        // Skip if a manual rebuild/restart requested fresh start
+        if (mSkipNextPositionRestore) {
+            mSkipNextPositionRestore = false;
+            return;
+        }
         if (mVideoView == null) return;
-        String url = mVideoPath != null ? mVideoPath :
-                (mVideoUri != null ? mVideoUri.toString() : null);
+        String url = normalizePositionKey(
+                mVideoPath != null ? mVideoPath : (mVideoUri != null ? mVideoUri.toString() : null));
         if (TextUtils.isEmpty(url)) return;
         android.content.SharedPreferences prefs =
                 getSharedPreferences(PREFS_PLAYBACK_POS, MODE_PRIVATE);
-        int savedPos = prefs.getInt(url, 0);
+        final int savedPos = prefs.getInt(url, 0);
         if (savedPos > POSITION_SAVE_THRESHOLD_MS) {
-            mVideoView.seekTo(savedPos);
-            mToastTextView.setText(getString(R.string.playback_position_resumed));
-            mMediaController.showOnce(mToastTextView);
+            // Post to next frame: let IjkVideoView finish its own onPrepared logic
+            // (start(), mSeekWhenPrepared handling) before we override seek position
+            mVideoView.post(() -> {
+                if (mVideoView != null && savedPos > POSITION_SAVE_THRESHOLD_MS) {
+                    mVideoView.seekTo(savedPos);
+                    mToastTextView.setText(getString(R.string.playback_position_resumed));
+                    mMediaController.showOnce(mToastTextView);
+                }
+            });
+        }
+    }
+
+    /**
+     * Normalize a URL to use as SharedPreferences key.
+     * Strips query parameters and fragment so that the same video with different
+     * token/session params maps to the same key.
+     */
+    private String normalizePositionKey(String url) {
+        if (url == null) return null;
+        try {
+            Uri u = Uri.parse(url);
+            return u.buildUpon().clearQuery().fragment(null).build().toString();
+        } catch (Throwable t) {
+            return url;
         }
     }
 
@@ -961,6 +1011,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         stopAsrListening();
         stopTrackAsr();
         stopRemoteAsr();
+        // Release screen keep-on whenever the activity is no longer in foreground
+        setScreenKeepOn(false);
     }
 
     @Override

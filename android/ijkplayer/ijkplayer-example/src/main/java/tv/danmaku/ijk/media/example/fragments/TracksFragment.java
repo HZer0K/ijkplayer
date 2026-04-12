@@ -21,6 +21,7 @@ import android.os.Build;
 import android.app.Activity;
 import android.content.Context;
 import android.os.Bundle;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import android.util.Log;
@@ -56,10 +57,10 @@ public class TracksFragment extends Fragment {
     }
 
     @Override
-    public void onActivityCreated(@Nullable Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
 
-        final Activity activity = getActivity();
+        final Activity activity = requireActivity();
 
         mAdapter = new TrackAdapter(activity);
         mTrackListView.setAdapter(mAdapter);
