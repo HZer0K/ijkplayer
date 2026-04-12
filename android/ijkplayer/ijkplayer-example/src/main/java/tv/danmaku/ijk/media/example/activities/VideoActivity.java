@@ -78,6 +78,7 @@ import java.util.concurrent.Executors;
 
 import android.widget.Toast;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
+import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.misc.ITrackInfo;
 import tv.danmaku.ijk.media.example.BuildConfig;
 import tv.danmaku.ijk.media.example.R;
@@ -144,6 +145,14 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             mSubtitleHandler.postDelayed(this, 250);
         }
     };
+
+    // --- Screen keep-on ---
+    private boolean mScreenKeepOn = false;
+
+    // --- Playback position memory (URL -> position ms) ---
+    private static final String PREFS_PLAYBACK_POS = "playback_positions";
+    private static final int    POSITION_SAVE_THRESHOLD_MS = 5_000;  // don't save if < 5s
+    private static final int    POSITION_RESTORE_THRESHOLD_MS = 3_000; // don't restore if < 3s remain
 
     private static final int REQ_RECORD_AUDIO = 2201;
     private SpeechRecognizer mSpeechRecognizer;
@@ -284,6 +293,23 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mVideoView.setMediaController(mMediaController);
         mVideoView.setHudView(mHudView);
         mVideoView.setMirrorHorizontal(mSettings.getVideoMirrorHorizontal());
+        // Keep screen on when video starts rendering; release when stopped
+        mVideoView.setOnInfoListener(new IMediaPlayer.OnInfoListener() {
+            @Override
+            public boolean onInfo(IMediaPlayer mp, int what, int extra) {
+                if (what == IMediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
+                    setScreenKeepOn(true);
+                }
+                return false;
+            }
+        });
+        // Restore saved playback position after player is prepared
+        mVideoView.setOnPreparedListener(new IMediaPlayer.OnPreparedListener() {
+            @Override
+            public void onPrepared(IMediaPlayer mp) {
+                restorePlaybackPosition();
+            }
+        });
         String vf0 = getIntent() != null ? getIntent().getStringExtra(EXTRA_VF0) : null;
         boolean isVulkanDemo = !TextUtils.isEmpty(vf0);
         if (!TextUtils.isEmpty(vf0)) {
@@ -770,7 +796,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 mVideoView.start();
                 new RecentMediaStorage(this).saveUrlAsync(url);
             } else {
-                Toast.makeText(this, "请输入直接视频链接（mp4/m3u8等），当前为网页地址", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.error_url_not_direct_video), Toast.LENGTH_SHORT).show();
                 Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                 startActivity(browser);
             }
@@ -860,13 +886,62 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         super.onStop();
 
         if (mBackPressed || !mVideoView.isBackgroundPlayEnabled()) {
+            // Save playback position before stopping
+            savePlaybackPosition();
             mVideoView.stopPlayback();
             mVideoView.release(true);
             mVideoView.stopBackgroundPlay();
         } else {
             mVideoView.enterBackground();
         }
+        // Release screen keep-on when leaving
+        setScreenKeepOn(false);
         IjkMediaPlayer.native_profileEnd();
+    }
+
+    /** Keep screen on while playing; release when paused/stopped. */
+    private void setScreenKeepOn(boolean on) {
+        if (mScreenKeepOn == on) return;
+        mScreenKeepOn = on;
+        if (on) {
+            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+    }
+
+    /** Persist current URL -> position into SharedPreferences. */
+    private void savePlaybackPosition() {
+        if (mVideoView == null) return;
+        String url = mVideoPath != null ? mVideoPath :
+                (mVideoUri != null ? mVideoUri.toString() : null);
+        if (TextUtils.isEmpty(url)) return;
+        int pos = mVideoView.getCurrentPosition();
+        int dur = mVideoView.getDuration();
+        android.content.SharedPreferences prefs =
+                getSharedPreferences(PREFS_PLAYBACK_POS, MODE_PRIVATE);
+        if (pos < POSITION_SAVE_THRESHOLD_MS || (dur > 0 && pos >= dur - POSITION_RESTORE_THRESHOLD_MS)) {
+            // Near start or end: clear saved position
+            prefs.edit().remove(url).apply();
+        } else {
+            prefs.edit().putInt(url, pos).apply();
+        }
+    }
+
+    /** Restore saved position for the current URL, seekTo it after player starts. */
+    private void restorePlaybackPosition() {
+        if (mVideoView == null) return;
+        String url = mVideoPath != null ? mVideoPath :
+                (mVideoUri != null ? mVideoUri.toString() : null);
+        if (TextUtils.isEmpty(url)) return;
+        android.content.SharedPreferences prefs =
+                getSharedPreferences(PREFS_PLAYBACK_POS, MODE_PRIVATE);
+        int savedPos = prefs.getInt(url, 0);
+        if (savedPos > POSITION_SAVE_THRESHOLD_MS) {
+            mVideoView.seekTo(savedPos);
+            mToastTextView.setText(getString(R.string.playback_position_resumed));
+            mMediaController.showOnce(mToastTextView);
+        }
     }
 
     @Override

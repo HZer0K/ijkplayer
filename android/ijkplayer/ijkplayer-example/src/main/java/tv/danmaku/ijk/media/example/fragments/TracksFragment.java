@@ -17,6 +17,7 @@
 
 package tv.danmaku.ijk.media.example.fragments;
 
+import android.os.Build;
 import android.app.Activity;
 import android.content.Context;
 import android.os.Bundle;
@@ -27,10 +28,12 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
+import android.widget.BaseAdapter;
+import android.widget.CheckedTextView;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import java.util.ArrayList;
 import java.util.Locale;
 
 import tv.danmaku.ijk.media.player.misc.ITrackInfo;
@@ -41,8 +44,7 @@ public class TracksFragment extends Fragment {
     private TrackAdapter mAdapter;
 
     public static TracksFragment newInstance() {
-        TracksFragment f = new TracksFragment();
-        return f;
+        return new TracksFragment();
     }
 
     @Nullable
@@ -66,32 +68,26 @@ public class TracksFragment extends Fragment {
             final ITrackHolder trackHolder = (ITrackHolder) activity;
             mAdapter.setTrackHolder(trackHolder);
 
-            int selectedVideoTrack = trackHolder.getSelectedTrack(ITrackInfo.MEDIA_TRACK_TYPE_VIDEO);
-            int selectedAudioTrack = trackHolder.getSelectedTrack(ITrackInfo.MEDIA_TRACK_TYPE_AUDIO);
-            int selectedSubtitleTrack = trackHolder.getSelectedTrack(ITrackInfo.MEDIA_TRACK_TYPE_TIMEDTEXT);
-            if (selectedVideoTrack >= 0)
-                mTrackListView.setItemChecked(selectedVideoTrack, true);
-            if (selectedAudioTrack >= 0)
-                mTrackListView.setItemChecked(selectedAudioTrack, true);
-            if (selectedSubtitleTrack >= 0)
-                mTrackListView.setItemChecked(selectedSubtitleTrack, true);
-
             mTrackListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
                 @Override
                 public void onItemClick(AdapterView<?> parent, View view, final int position, final long id) {
-                    TrackItem trackItem = (TrackItem) mTrackListView.getItemAtPosition(position);
-                    for (int i = 0; i < mAdapter.getCount(); ++i) {
-                        TrackItem compareItem = mAdapter.getItem(i);
-                        if (compareItem.mIndex == trackItem.mIndex)
-                            continue;
+                    ListEntry entry = mAdapter.getEntry(position);
+                    if (entry == null || entry.isHeader) return;
 
-                        if (compareItem.mTrackInfo.getTrackType() != trackItem.mTrackInfo.getTrackType())
-                            continue;
-
-                        if (mTrackListView.isItemChecked(i))
-                            mTrackListView.setItemChecked(i, false);
+                    TrackItem trackItem = entry.trackItem;
+                    // Deselect other tracks of same type
+                    for (int i = 0; i < mAdapter.getCount(); i++) {
+                        ListEntry other = mAdapter.getEntry(i);
+                        if (other == null || other.isHeader) continue;
+                        if (other.trackItem.mIndex == trackItem.mIndex) continue;
+                        if (other.trackItem.mTrackInfo.getTrackType() != trackItem.mTrackInfo.getTrackType()) continue;
+                        other.selected = false;
                     }
-                    if (mTrackListView.isItemChecked(position)) {
+
+                    entry.selected = !entry.selected;
+                    mAdapter.notifyDataSetChanged();
+
+                    if (entry.selected) {
                         trackHolder.selectTrack(trackItem.mIndex);
                     } else {
                         trackHolder.deselectTrack(trackItem.mIndex);
@@ -110,71 +106,159 @@ public class TracksFragment extends Fragment {
         void deselectTrack(int stream);
     }
 
-    final class TrackItem {
+    // -----------------------------------------------------------------------
+    // Data model
+    // -----------------------------------------------------------------------
+
+    static final class TrackItem {
         public int mIndex;
         public ITrackInfo mTrackInfo;
-
-        public String mInfoInline;
 
         public TrackItem(int index, ITrackInfo trackInfo) {
             mIndex = index;
             mTrackInfo = trackInfo;
-            mInfoInline = String.format(Locale.US, "# %d: %s", mIndex, mTrackInfo.getInfoInline());
         }
 
         public String getInfoInline() {
-            return mInfoInline;
+            return String.format(Locale.US, "# %d: %s", mIndex, mTrackInfo.getInfoInline());
         }
     }
 
-    final class TrackAdapter extends ArrayAdapter<TrackItem> {
-        private ITrackHolder mTrackHolder;
-        private ITrackInfo[] mTrackInfos;
+    static final class ListEntry {
+        public boolean isHeader;
+        public String  headerTitle;   // valid when isHeader == true
+        public TrackItem trackItem;   // valid when isHeader == false
+        public boolean selected;      // valid when isHeader == false
+
+        static ListEntry header(String title) {
+            ListEntry e = new ListEntry();
+            e.isHeader = true;
+            e.headerTitle = title;
+            return e;
+        }
+
+        static ListEntry track(TrackItem item, boolean selected) {
+            ListEntry e = new ListEntry();
+            e.isHeader = false;
+            e.trackItem = item;
+            e.selected = selected;
+            return e;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Adapter
+    // -----------------------------------------------------------------------
+
+    final class TrackAdapter extends BaseAdapter {
+        private final Context mContext;
+        private final ArrayList<ListEntry> mEntries = new ArrayList<>();
+
+        private static final int VIEW_TYPE_HEADER = 0;
+        private static final int VIEW_TYPE_TRACK  = 1;
 
         public TrackAdapter(Context context) {
-            super(context, android.R.layout.simple_list_item_checked);
+            mContext = context;
         }
 
         public void setTrackHolder(ITrackHolder trackHolder) {
-            clear();
-            mTrackHolder = trackHolder;
-            mTrackInfos = mTrackHolder.getTrackInfo();
-            if (mTrackInfos != null) {
-                for(ITrackInfo trackInfo: mTrackInfos) {
-                    int index = getCount();
-                    TrackItem item = new TrackItem(index, trackInfo);
-                    add(item);
+            mEntries.clear();
+            ITrackInfo[] infos = trackHolder.getTrackInfo();
+            if (infos == null) {
+                notifyDataSetChanged();
+                return;
+            }
+
+            int selVideo    = trackHolder.getSelectedTrack(ITrackInfo.MEDIA_TRACK_TYPE_VIDEO);
+            int selAudio    = trackHolder.getSelectedTrack(ITrackInfo.MEDIA_TRACK_TYPE_AUDIO);
+            int selSubtitle = trackHolder.getSelectedTrack(ITrackInfo.MEDIA_TRACK_TYPE_TIMEDTEXT);
+
+            // Collect tracks by type
+            ArrayList<TrackItem> videoTracks    = new ArrayList<>();
+            ArrayList<TrackItem> audioTracks    = new ArrayList<>();
+            ArrayList<TrackItem> subtitleTracks = new ArrayList<>();
+            ArrayList<TrackItem> otherTracks    = new ArrayList<>();
+
+            for (int i = 0; i < infos.length; i++) {
+                TrackItem item = new TrackItem(i, infos[i]);
+                switch (infos[i].getTrackType()) {
+                    case ITrackInfo.MEDIA_TRACK_TYPE_VIDEO:     videoTracks.add(item);    break;
+                    case ITrackInfo.MEDIA_TRACK_TYPE_AUDIO:     audioTracks.add(item);    break;
+                    case ITrackInfo.MEDIA_TRACK_TYPE_TIMEDTEXT: subtitleTracks.add(item); break;
+                    default:                                     otherTracks.add(item);    break;
                 }
+            }
+
+            // Build grouped list
+            addGroup(mContext.getString(R.string.track_section_video),    videoTracks,    selVideo);
+            addGroup(mContext.getString(R.string.track_section_audio),    audioTracks,    selAudio);
+            addGroup(mContext.getString(R.string.track_section_subtitle), subtitleTracks, selSubtitle);
+            addGroup(mContext.getString(R.string.track_section_other),    otherTracks,    -1);
+
+            notifyDataSetChanged();
+        }
+
+        private void addGroup(String title, ArrayList<TrackItem> items, int selectedIndex) {
+            if (items.isEmpty()) return;
+            mEntries.add(ListEntry.header(title));
+            for (TrackItem item : items) {
+                boolean sel = (item.mIndex == selectedIndex);
+                mEntries.add(ListEntry.track(item, sel));
             }
         }
 
+        public ListEntry getEntry(int position) {
+            if (position < 0 || position >= mEntries.size()) return null;
+            return mEntries.get(position);
+        }
+
+        @Override public int getCount()              { return mEntries.size(); }
+        @Override public Object getItem(int position){ return mEntries.get(position); }
+        @Override public long getItemId(int position){ return position; }
+        @Override public int getViewTypeCount()      { return 2; }
+
         @Override
-        public long getItemId(int position) {
-            return position;
+        public int getItemViewType(int position) {
+            return mEntries.get(position).isHeader ? VIEW_TYPE_HEADER : VIEW_TYPE_TRACK;
+        }
+
+        @Override
+        public boolean isEnabled(int position) {
+            return !mEntries.get(position).isHeader;
         }
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            View view = convertView;
-            if (view == null) {
-                LayoutInflater inflater = LayoutInflater.from(parent.getContext());
-                view = inflater.inflate(android.R.layout.simple_list_item_checked, parent, false);
+            ListEntry entry = mEntries.get(position);
+            if (entry.isHeader) {
+                // Section header — ListView recycles by view type, so convertView is always a header view
+                if (convertView == null) {
+                    convertView = LayoutInflater.from(mContext)
+                            .inflate(android.R.layout.simple_list_item_1, parent, false);
+                    TextView headerTv = (TextView) convertView.findViewById(android.R.id.text1);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        headerTv.setTextAppearance(android.R.style.TextAppearance_Medium);
+                    } else {
+                        //noinspection deprecation
+                        headerTv.setTextAppearance(mContext, android.R.style.TextAppearance_Medium);
+                    }
+                    headerTv.setEnabled(false);
+                }
+                ((TextView) convertView.findViewById(android.R.id.text1))
+                        .setText(entry.headerTitle);
+                return convertView;
+            } else {
+                // Track item with checkmark
+                if (convertView == null) {
+                    convertView = LayoutInflater.from(mContext)
+                            .inflate(android.R.layout.simple_list_item_checked, parent, false);
+                }
+                CheckedTextView ctv = (CheckedTextView) convertView.findViewById(android.R.id.text1);
+                String suffix = entry.selected ? mContext.getString(R.string.track_selected_suffix) : "";
+                ctv.setText(entry.trackItem.getInfoInline() + suffix);
+                ctv.setChecked(entry.selected);
+                return convertView;
             }
-
-            ViewHolder viewHolder = (ViewHolder) view.getTag();
-            if (viewHolder == null) {
-                viewHolder = new ViewHolder();
-                viewHolder.mNameTextView = (TextView) view.findViewById(android.R.id.text1);
-            }
-
-            TrackItem item = getItem(position);
-            viewHolder.mNameTextView.setText(item.getInfoInline());
-
-            return view;
-        }
-
-        final class ViewHolder {
-            public TextView mNameTextView;
         }
     }
 }
