@@ -118,21 +118,29 @@ public final class PlayerFactory {
 
     private String mapVulkanVf0ToSoftware(String vf0) {
         String out = vf0;
+        // Strip hwupload/hwdownload wrappers first
+        out = out.replace("hwupload,", "");
+        out = out.replace(",hwdownload,format=yuv420p", "");
+        out = out.replace(",hwdownload", "");
+        out = out.replace("hwdownload,", "");
+        // Map Vulkan filter names to CPU equivalents
         out = out.replace("scale_vulkan", "scale");
         out = out.replace("hflip_vulkan", "hflip");
         out = out.replace("vflip_vulkan", "vflip");
         out = out.replace("transpose_vulkan", "transpose");
         out = out.replace("gblur_vulkan", "gblur");
         out = out.replace("avgblur_vulkan", "avgblur");
-        // chromaber_vulkan / blend_vulkan / overlay_vulkan have no direct CPU equivalent;
-        // remove them gracefully so the filter graph still parses.
-        out = out.replace("chromaber_vulkan", "null");
-        out = out.replace("blend_vulkan", "null");
-        out = out.replace("overlay_vulkan", "null");
-        out = out.replace("hwupload,", "");
-        out = out.replace(",hwdownload,format=yuv420p", "");
-        out = out.replace(",hwdownload", "");
-        out = out.replace("hwdownload,", "");
+        // gblur_vulkan uses "size" (kernel half-width) which is not a valid param
+        // for the software gblur filter (it uses "steps").  Strip it.
+        out = out.replaceAll("(gblur=[^,]*):size=\\d+", "$1");
+        // chromaber_vulkan / blend_vulkan / overlay_vulkan have no direct CPU equivalent.
+        // Remove the entire node (name + all params) using a regex to avoid leftover params.
+        out = out.replaceAll("(?:^|,)chromaber_vulkan(?:=[^,]*)?", "");
+        out = out.replaceAll("(?:^|,)blend_vulkan(?:=[^,]*)?", "");
+        out = out.replaceAll("(?:^|,)overlay_vulkan(?:=[^,]*)?", "");
+        // Collapse any leading/trailing commas introduced by node removal
+        out = out.replaceAll("^,+|,+$", "");
+        out = out.replaceAll(",{2,}", ",");
         return out;
     }
 

@@ -101,19 +101,39 @@
     "name": "Vulkan 高斯模糊（gblur_vulkan）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "hwupload,gblur_vulkan=sigma=8:size=31,hwdownload,format=yuv420p",
-    "expected": "画面明显变模糊（gblur_vulkan）",
-    "logKeywords": ["apply vf0="],
-    "hint": "提高 sigma/size 让模糊更明显（gblur_vulkan）"
+    "expected": "设备支持 Vulkan 时画面明显变模糊；不支持时自动回落软件 gblur",
+    "logKeywords": ["apply vf0=", "Vulkan fallback to software"],
+    "hint": "验证 Vulkan 高斯模糊；不支持 Vulkan 时回落至软件 gblur=sigma=8"
+  },
+  {
+    "category": "滤镜/软件",
+    "tags": ["filter", "blur", "software"],
+    "name": "高斯模糊（软件 gblur）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "gblur=sigma=8:steps=3",
+    "expected": "画面明显变模糊（软件 gblur，差异于菜单里 sigma=5 的较弱模糊）",
+    "logKeywords": ["avfilter_graph_config OK"],
+    "hint": "软件高斯模糊，sigma=8 steps=3 效果比菜单 sigma=5 更强"
   },
   {
     "category": "滤镜/Vulkan",
     "tags": ["vulkan", "blur"],
-    "name": "Vulkan 均值模糊（avgblur_vulkan）",
+    "name": "Vulkan 均値模糊（avgblur_vulkan）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "hwupload,avgblur_vulkan=sizeX=16:sizeY=16,hwdownload,format=yuv420p",
-    "expected": "画面明显变模糊（avgblur_vulkan）",
-    "logKeywords": ["apply vf0="],
-    "hint": "增大模糊半径让效果更明显（avgblur_vulkan）"
+    "expected": "设备支持 Vulkan 时画面明显变模糊；不支持时自动回落软件 avgblur",
+    "logKeywords": ["apply vf0=", "Vulkan fallback to software"],
+    "hint": "验证 Vulkan 均値模糊；不支持 Vulkan 时回落至软件 avgblur=sizeX=16:sizeY=16"
+  },
+  {
+    "category": "滤镜/软件",
+    "tags": ["filter", "blur", "software"],
+    "name": "均値模糊（软件 avgblur）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "avgblur=sizeX=16:sizeY=16",
+    "expected": "画面明显变模糊（软件 avgblur，模糊半径 16）",
+    "logKeywords": ["avfilter_graph_config OK"],
+    "hint": "软件均值模糊，sizeX=sizeY=16 效果明显；可增大到 32 效果更强"
   },
   {
     "category": "滤镜/Vulkan",

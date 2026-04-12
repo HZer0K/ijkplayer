@@ -16,8 +16,6 @@
     <string name="show_info">媒体信息</string>
     <string name="vdec">vdec</string>
     <string name="open_url">打开URL</string>
-    <string name="demo_hls">HLS样例</string>
-    <string name="demo_mp4">MP4样例</string>
     <string name="rebuild_play">清空并播放</string>
     <string name="restart_seek0">同源重开(Seek=0)</string>
     <string name="playback_speed">倍速</string>
@@ -28,6 +26,7 @@
     <string name="supported">支持</string>
     <string name="unsupported">不支持</string>
     <string name="vulkan_demo_enabled_detail">Vulkan demo：已强制 Ijk + Texture（设备Vulkan：%1$s）</string>
+    <string name="vulkan_only_effect_unavailable">此效果仅支持 Vulkan 设备，当前设备不支持，已跳过</string>
     <string name="vulkan_demo_downloading">Vulkan demo：正在下载样例到本地…</string>
     <string name="vulkan_demo_downloaded">Vulkan demo：样例已下载，开始播放</string>
     <string name="vulkan_demo_download_failed">Vulkan demo：样例下载失败</string>
@@ -91,7 +90,6 @@
     <string name="toggle_mirror">镜像</string>
     <string name="mirror_on">镜像：开</string>
     <string name="mirror_off">镜像：关</string>
-    <string name="menu_sources">视频源</string>
     <string name="menu_playback">播放</string>
     <string name="menu_display">显示</string>
     <string name="menu_tools">工具</string>
@@ -181,11 +179,6 @@
     <!-- Gesture control -->
     <string name="brightness_label">亮度</string>
     <string name="volume_label">音量</string>
-
-    <!-- TestHub feature items -->
-    <string name="test_hub_feature_speed">播放速率测试</string>
-    <string name="test_hub_feature_loop">循环播放测试</string>
-    <string name="test_hub_feature_snapshot">截图测试</string>
 
     <!-- Preference keys (referenced from Settings.java) -->
     <string name="pref_key_skip_loop_filter">pref_key_skip_loop_filter</string>

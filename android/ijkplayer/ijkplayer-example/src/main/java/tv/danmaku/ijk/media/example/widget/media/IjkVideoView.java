@@ -1480,16 +1480,17 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     public void applyVf0FilterNow(String vf0) {
         mVf0Override = vf0;
         DebugEventLog.add("applyVf0FilterNow: " + (TextUtils.isEmpty(vf0) ? "null" : vf0));
-        // If currently playing an IjkMediaPlayer, update option at runtime.
-        // IjkMediaPlayer supports changing vf0 via setOption while playing.
+        // If currently playing an IjkMediaPlayer, call setVideoFilter() at runtime.
+        // This invokes ffp_set_video_filter() which sets vf_changed=1 and triggers
+        // filter graph rebuild in the video thread — NOT setOption("vf0") which only
+        // writes to AVDictionary and is ignored while playing.
         if (mMediaPlayer instanceof IjkMediaPlayer) {
             IjkMediaPlayer ijk = (IjkMediaPlayer) mMediaPlayer;
             try {
-                String val = TextUtils.isEmpty(vf0) ? "" : vf0;
-                ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "vf0", val);
-                DebugEventLog.add("applyVf0FilterNow: setOption ok");
+                ijk.setVideoFilter(TextUtils.isEmpty(vf0) ? null : vf0);
+                DebugEventLog.add("applyVf0FilterNow: setVideoFilter ok");
             } catch (Throwable e) {
-                DebugEventLog.add("applyVf0FilterNow: setOption failed: " + e.getMessage());
+                DebugEventLog.add("applyVf0FilterNow: setVideoFilter failed: " + e.getMessage());
             }
         }
     }

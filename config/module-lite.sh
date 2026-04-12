@@ -167,6 +167,8 @@ if [ "${IJK_ENABLE_VULKAN_FILTERS:-0}" = "1" ] || [ "${IJK_ENABLE_FILTERS:-1}" =
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=transpose"
     # Image processing (CPU)
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=gblur"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=avgblur"
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=pad"
     # eq requires --enable-gpl which is disabled; use curves instead for brightness/contrast
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=curves"
     # Note: levels is also a built-in in FFmpeg 8; skip --enable-filter=levels

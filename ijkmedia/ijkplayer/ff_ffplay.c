@@ -273,6 +273,88 @@ static void str_remove_filter_node(char **src, const char *filter_prefix)
     *src = result;
 }
 
+/**
+ * Remove a specific option key (e.g. "size") from a named filter node within
+ * a comma-separated filter chain.  Other nodes are left untouched.
+ *
+ * Example: str_remove_filter_option(&s, "gblur", "size")
+ *   "gblur=sigma=8:size=31"  ->  "gblur=sigma=8"
+ *   "scale=w=iw:h=ih"        ->  "scale=w=iw:h=ih"  (unchanged)
+ */
+static void str_remove_filter_option(char **src, const char *filter_name,
+                                     const char *opt_key)
+{
+    if (!src || !*src || !filter_name || !opt_key) return;
+    size_t fname_len = strlen(filter_name);
+    size_t key_len   = strlen(opt_key);
+    if (fname_len == 0 || key_len == 0) return;
+
+    char *buf = av_strdup(*src);
+    if (!buf) return;
+
+    /* worst-case output is same length as input */
+    char *result = av_malloc(strlen(*src) + 1);
+    if (!result) { av_free(buf); return; }
+
+    char *out   = result;
+    char *tok   = buf;
+    char *comma;
+    int first_node = 1;
+
+    while (tok) {
+        comma = strchr(tok, ',');
+        if (comma) *comma = '\0';
+
+        /* Check if this node is the target filter */
+        int is_target = (strncmp(tok, filter_name, fname_len) == 0 &&
+                         (tok[fname_len] == '\0' || tok[fname_len] == '='));
+
+        if (!first_node) *out++ = ',';
+        first_node = 0;
+
+        if (!is_target || tok[fname_len] != '=') {
+            /* Not the target, or no options at all: copy verbatim */
+            size_t tlen = strlen(tok);
+            memcpy(out, tok, tlen);
+            out += tlen;
+        } else {
+            /* Copy filter name */
+            memcpy(out, tok, fname_len);
+            out += fname_len;
+
+            /* Walk through the colon-separated options, skip the unwanted key */
+            char *opts = tok + fname_len + 1; /* skip the leading '=' */
+            char *opt  = opts;
+            char *colon;
+            int first_opt = 1;
+
+            while (opt) {
+                colon = strchr(opt, ':');
+                if (colon) *colon = '\0';
+                /* opt is now "key=value" or just "value" */
+                /* Check if it starts with opt_key= */
+                int skip_opt = (strncmp(opt, opt_key, key_len) == 0 &&
+                                (opt[key_len] == '=' || opt[key_len] == '\0'));
+                if (!skip_opt) {
+                    if (first_opt) { *out++ = '='; } else { *out++ = ':'; }
+                    size_t olen = strlen(opt);
+                    memcpy(out, opt, olen);
+                    out += olen;
+                    first_opt = 0;
+                }
+                opt = colon ? colon + 1 : NULL;
+            }
+        }
+
+        tok = comma ? comma + 1 : NULL;
+    }
+    *out = '\0';
+
+    av_free(buf);
+    av_freep(src);
+    *src = result;
+}
+
 // FFP_MERGE: opt_add_vfilter
 #endif
 
@@ -2543,12 +2625,24 @@ static int ffplay_video_thread(void *arg)
                     str_replace_inplace(&sw_vfilters, "vflip_vulkan", "vflip");
                     str_replace_inplace(&sw_vfilters, "transpose_vulkan", "transpose");
                     str_replace_inplace(&sw_vfilters, "gblur_vulkan", "gblur");
+                    /* gblur_vulkan uses "size" (kernel half-width); software gblur uses
+                     * "steps" (iteration count, not a size).  Remove the incompatible
+                     * "size" param so gblur falls back cleanly with sigma only. */
+                    str_remove_filter_option(&sw_vfilters, "gblur", "size");
                     str_replace_inplace(&sw_vfilters, "avgblur_vulkan", "avgblur");
                     /* These have no CPU equivalent: remove the entire node (including its params) */
                     str_remove_filter_node(&sw_vfilters, "chromaber_vulkan");
                     str_remove_filter_node(&sw_vfilters, "blend_vulkan");
                     str_remove_filter_node(&sw_vfilters, "overlay_vulkan");
-                    av_log(NULL, AV_LOG_WARNING, "[vfilter] Vulkan fallback to software: '%s'\n", sw_vfilters);
+                    /* Normalise: empty string is not the same as NULL in configure_filtergraph
+                     * (empty string triggers avfilter_graph_parse_ptr with "" which returns EINVAL).
+                     * Treat empty result as passthrough. */
+                    if (sw_vfilters && sw_vfilters[0] == '\0') {
+                        av_freep(&sw_vfilters);
+                        sw_vfilters = NULL;
+                    }
+                    av_log(NULL, AV_LOG_WARNING, "[vfilter] Vulkan fallback to software: '%s'\n",
+                           sw_vfilters ? sw_vfilters : "(passthrough — no CPU equivalent)");
                     avfilter_graph_free(&graph);
                     graph = avfilter_graph_alloc();
                     ret = configure_video_filters(ffp, graph, is, sw_vfilters, frame);

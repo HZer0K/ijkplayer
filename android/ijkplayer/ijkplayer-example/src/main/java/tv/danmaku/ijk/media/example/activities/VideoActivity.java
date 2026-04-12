@@ -382,8 +382,16 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 mVideoView.setMirrorHorizontal(false);
             }
             mVideoView.setAspectRatio(IRenderView.AR_ASPECT_FIT_PARENT);
-            String support = mVideoView.isDeviceSupportsVulkan() ? getString(R.string.supported) : getString(R.string.unsupported);
-            mToastTextView.setText(getString(R.string.vulkan_demo_enabled_detail, support));
+            boolean deviceVulkan = mVideoView.isDeviceSupportsVulkan();
+            String support = deviceVulkan ? getString(R.string.supported) : getString(R.string.unsupported);
+            // Detect Vulkan-only effects that have no CPU fallback
+            boolean isVulkanOnly = !deviceVulkan && (vf0.contains("chromaber_vulkan")
+                    || vf0.contains("blend_vulkan") || vf0.contains("overlay_vulkan"));
+            if (isVulkanOnly) {
+                mToastTextView.setText(getString(R.string.vulkan_only_effect_unavailable));
+            } else {
+                mToastTextView.setText(getString(R.string.vulkan_demo_enabled_detail, support));
+            }
             mMediaController.showOnce(mToastTextView);
         } else {
             DebugEventLog.add("VideoActivity: vulkanDemo=false, clear vf0");
@@ -1206,22 +1214,13 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.action_open_url) {
-            showOpenUrlDialog();
-            return true;
-        } else if (id == R.id.action_toggle_orientation) {
+        if (id == R.id.action_toggle_orientation) {
             int next = nextOrientation(mSettings.getPlayerOrientation());
             mSettings.setPlayerOrientation(next);
             applyPlayerOrientation(next);
             mToastTextView.setText(getString(R.string.toggle_orientation) + ": " + getOrientationText(next));
             mMediaController.showOnce(mToastTextView);
             invalidateOptionsMenu();
-            return true;
-        } else if (id == R.id.action_demo_hls) {
-            playUrl("https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8");
-            return true;
-        } else if (id == R.id.action_demo_mp4) {
-            playUrl("https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4");
             return true;
         } else if (id == R.id.action_rebuild_play) {
             rebuildAndPlayCurrent();

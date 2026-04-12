@@ -153,7 +153,29 @@ echo 'enableWhisper=true' >> android/ijkplayer/gradle.properties
 ### 播放功能
 - **双内核切换**：运行时点击 *Player* 按钮，在 IjkMediaPlayer（FFmpeg）和 ExoPlayer 之间切换
 - **样例媒体**：从 `ijkplayer-example/src/main/res/raw/sample_media.json` 加载，按 category 分组展示
-- **Open URL**：顶部菜单手动输入任意 URL 播放
+- **Open URL**：TestHub 页面手动输入任意 URL 播放
+
+### 视频滤镜
+播放页右上角菜单提供两类滤镜，均可运行时实时切换，无需重启播放：
+
+**渲染层滤镜**（TextureView ColorMatrix / View 变换，不消耗 FFmpeg 解码线程）：
+- 无滤镜 / 灰度 / 水平翻转 / 垂直翻转 / 提亮 / 压暗 / 旋转90°
+
+**FFmpeg 软件滤镜**（通过 vf0 传入 FFmpeg filter graph，需 `CONFIG_AVFILTER=1` 和对应 filter 编译进 so）：
+- 水平翻转（hflip）/ 垂直翻转（vflip）/ 高斯模糊（gblur=sigma=5）/ FFmpeg 提亮 / FFmpeg 压暗
+
+> 注意：FFmpeg 滤镜调用 `setVideoFilter()` 运行时更新 filter graph（设置 `vf_changed=1`），**不是** `setOption("vf0", ...)`（后者仅写 AVDictionary，不触发重建）。
+
+### 功能测试（TestHub）
+主页 → TestHub 页面包含：
+- **功能测试**（TestCaseList）：按 category 分组的测试用例，JSON 驱动（`res/raw/test_feature_cases.json`），点击用例自动打开播放页并预设 vf0 滤镜
+  - 软件滤镜：hflip 链路自检
+  - Vulkan 滤镜：scale / hflip / vflip / transpose / gblur / avgblur / chromaber（需 Vulkan 设备）
+  - 软件模糊：gblur=sigma=8:steps=3 / avgblur=sizeX=16:sizeY=16（无需 Vulkan，任意设备可用）
+- **Vulkan 能力检查**：检测设备 Vulkan 硬件支持、build-time Vulkan/filter 开关
+- **样例列表 / 格式样例**：网络视频样例（HLS / MP4 / LAS 等）
+
+> Vulkan 专属效果（chromaber_vulkan 色差、blend_vulkan、overlay_vulkan）无 CPU 等效实现，设备不支持 Vulkan 时自动 passthrough 并弹出提示。
 
 ### 调试与诊断
 - **失败弹窗**：显示错误码、分类提示、HTTP 状态码/最终 URL，以及最近 20 行关键日志（可一键复制）
@@ -204,6 +226,9 @@ target_link_libraries(myapp ijkplayer::ijkplayer ijkplayer::ijkffmpeg)
 ---
 
 ## 常见问题
+
+**Q: 均值模糊（avgblur）或其他软件 filter 报 `Filter not found`？**  
+A: `module-lite.sh` 精确控制了哪些 FFmpeg filter 被编译进 so。`avgblur`、`pad` 等与 Vulkan 无关的 CPU filter 需要在 `IJK_ENABLE_FILTERS=1` 段显式 `--enable-filter=avgblur`。当前 `module-lite.sh` 已包含 `avgblur` 和 `pad`；若使用自定义配置，请确保所用 filter 均已显式启用，然后重新编译 FFmpeg so。
 
 **Q: FFmpeg 编译报 `spirv_compiler not found`？**  
 A: 这是 Android NDK 下 `libglslang` 检测失败的已知问题（NDK libc 内置 pthread/stdc++，configure 无法独立链接）。已通过默认禁用 Vulkan filters（`IJK_ENABLE_VULKAN_FILTERS=0`）解决，Vulkan 设备支持不受影响。
