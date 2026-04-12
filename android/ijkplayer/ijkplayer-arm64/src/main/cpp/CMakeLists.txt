@@ -133,8 +133,8 @@ target_include_directories(ijksdl PRIVATE
         "${IJK_MEDIA_ROOT}"
         "${IJK_MEDIA_ROOT}/ijksdl"
         "${IJK_MEDIA_ROOT}/ijkj4a"
-        "${IJK_FFMPEG_INCLUDE_DIR}"
-        "${IJK_FFMPEG_SOURCE_DIR}")
+        "${IJK_FFMPEG_INCLUDE_DIR}")
+target_include_directories(ijksdl SYSTEM PRIVATE "${IJK_FFMPEG_SOURCE_DIR}")
 target_compile_options(ijksdl PRIVATE -Wall -Wextra)
 target_link_libraries(ijksdl PRIVATE
         ijkffmpeg
@@ -174,8 +174,8 @@ target_include_directories(ijkplayer PRIVATE
         "${IJK_MEDIA_ROOT}/ijkplayer"
         "${IJK_MEDIA_ROOT}/ijkj4a"
         "${IJK_MEDIA_ROOT}/compat"
-        "${IJK_FFMPEG_INCLUDE_DIR}"
-        "${IJK_FFMPEG_SOURCE_DIR}")
+        "${IJK_FFMPEG_INCLUDE_DIR}")
+target_include_directories(ijkplayer SYSTEM PRIVATE "${IJK_FFMPEG_SOURCE_DIR}")
 target_compile_options(ijkplayer PRIVATE -Wall -Wextra)
 target_link_libraries(ijkplayer PRIVATE
         ijkffmpeg

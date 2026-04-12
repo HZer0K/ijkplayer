@@ -199,9 +199,14 @@ AVDictionary **setup_find_stream_info_opts(AVFormatContext *s,
                "Could not alloc memory for stream options.\n");
         return NULL;
     }
-    for (i = 0; i < s->nb_streams; i++)
+    for (i = 0; i < s->nb_streams; i++) {
+        if (!s->streams[i] || !s->streams[i]->codecpar) {
+            opts[i] = NULL;
+            continue;
+        }
         opts[i] = filter_codec_opts(codec_opts, s->streams[i]->codecpar->codec_id,
                                     s, s->streams[i], NULL);
+    }
     return opts;
 }
 
