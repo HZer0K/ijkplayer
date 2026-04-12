@@ -412,7 +412,13 @@ echo "--------------------"
 echo "[*] compile ffmpeg"
 echo "--------------------"
 cp config.* $FF_PREFIX
-# Explicitly target 'all' to avoid make defaulting into tests/ on MINGW/Windows
+# On MINGW/Windows the tests/ subtree may be incomplete (shallow clone), causing
+# "include tests/fate/bmp.mak: No such file" at Makefile parse time.
+# Patch out the unconditional 'include tests/Makefile' line to skip tests entirely.
+if grep -q 'include $(SRC_PATH)/tests/Makefile' Makefile 2>/dev/null; then
+    sed -i 's|include $(SRC_PATH)/tests/Makefile|# include $(SRC_PATH)/tests/Makefile  # patched by compile-ffmpeg.sh: tests not needed for Android build|' Makefile
+    echo "[*] patched Makefile: disabled tests/Makefile include"
+fi
 "$IJK_MAKE" $FF_MAKE_FLAGS all > /dev/null
 "$IJK_MAKE" install
 mkdir -p $FF_PREFIX/include/libffmpeg
