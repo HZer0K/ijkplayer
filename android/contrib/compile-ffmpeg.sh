@@ -44,7 +44,7 @@ FF_ACT_ARCHS_ALL=$FF_ACT_ARCHS_64
 
 maybe_build_glslang() {
     local ARCH="$1"
-    if [ "${IJK_ENABLE_VULKAN_FILTERS:-1}" != "1" ]; then
+    if [ "${IJK_ENABLE_VULKAN_FILTERS:-0}" != "1" ]; then
         return 0
     fi
     local GLSLANG_LIB="./build/glslang-${ARCH}/output/lib/libglslang.a"
