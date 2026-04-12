@@ -88,6 +88,8 @@ public class TestHubFragment extends Fragment {
 
         if (TestHubActivity.MODE_CONTENT.equals(mode)) {
             buildContentItems(activity);
+        } else {
+            buildFeatureItems(activity);
         }
     }
 
@@ -101,6 +103,39 @@ public class TestHubFragment extends Fragment {
         mAdapter.add(HubItem.item("格式样例（按格式分组）", "按 HLS / MP4 / LAS 分组展示网络样例", () -> SampleMediaActivity.intentToByGroup(activity, SampleMediaActivity.GROUP_BY_TYPE)));
 
         mAdapter.add(HubItem.item("打开URL", "输入网络地址并直接播放", () -> showOpenUrlDialog(activity)));
+    }
+
+    private static final String DEMO_MP4_URL = "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4";
+
+    private void buildFeatureItems(Activity activity) {
+        mAdapter.add(HubItem.header(activity.getString(R.string.test_hub_feature_title)));
+
+        // Speed test entries
+        mAdapter.add(HubItem.header(activity.getString(R.string.test_hub_feature_speed)));
+        float[] speeds = {0.5f, 1.0f, 1.5f, 2.0f};
+        for (float spd : speeds) {
+            String label = spd + "x 播放速率测试";
+            String desc = "打开样例视频，初始速率 " + spd + "x";
+            final float finalSpd = spd;
+            mAdapter.add(HubItem.item(label, desc, () -> {
+                Intent intent = VideoActivity.newIntent(activity, DEMO_MP4_URL, "Speed=" + finalSpd + "x");
+                intent.putExtra("initialSpeed", finalSpd);
+                activity.startActivity(intent);
+            }));
+        }
+
+        // Loop playback test
+        mAdapter.add(HubItem.header(activity.getString(R.string.test_hub_feature_loop)));
+        mAdapter.add(HubItem.item("循环播放测试", "打开样例视频并自动循环", () -> {
+            Intent intent = VideoActivity.newIntent(activity, DEMO_MP4_URL, "循环播放");
+            intent.putExtra("enableLoop", true);
+            activity.startActivity(intent);
+        }));
+
+        // Snapshot test
+        mAdapter.add(HubItem.header(activity.getString(R.string.test_hub_feature_snapshot)));
+        mAdapter.add(HubItem.item("截图测试", "打开样例视频，可通过菜单手动截图", () ->
+            VideoActivity.intentTo(activity, DEMO_MP4_URL, "截图测试")));
     }
 
     private void openLocalBrowser(Activity activity) {

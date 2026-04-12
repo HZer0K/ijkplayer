@@ -1216,6 +1216,22 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
         mCurrentSpeedIndex++;
         mCurrentSpeedIndex %= s_allSpeed.length;
         float speed = s_allSpeed[mCurrentSpeedIndex];
+        applySpeed(speed);
+        return speed;
+    }
+
+    /** Set a specific playback speed and update the internal index if it matches a preset. */
+    public void setSpeed(float speed) {
+        for (int i = 0; i < s_allSpeed.length; i++) {
+            if (Math.abs(s_allSpeed[i] - speed) < 0.01f) {
+                mCurrentSpeedIndex = i;
+                break;
+            }
+        }
+        applySpeed(speed);
+    }
+
+    private void applySpeed(float speed) {
         if (mMediaPlayer instanceof IjkMediaPlayer) {
             ((IjkMediaPlayer) mMediaPlayer).setSpeed(speed);
         } else if (mMediaPlayer instanceof MediaPlayerProxy) {
@@ -1224,7 +1240,6 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                 ((IjkMediaPlayer) internal).setSpeed(speed);
             }
         }
-        return speed;
     }
 
     //-------------------------

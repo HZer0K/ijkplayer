@@ -73,7 +73,9 @@ public final class PlayerFactory {
         ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "framedrop", 1);
         ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "start-on-prepared", 0);
         ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "http-detect-range-support", 0);
-        ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_CODEC, "skip_loop_filter", 48);
+        // Use skip_loop_filter=0 by default for best quality;
+        // callers may pass settings.getSkipLoopFilter() to allow per-device tuning.
+        ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_CODEC, "skip_loop_filter", settings.getSkipLoopFilter());
 
         String vf0ToApply = null;
         if (hasVf0Override) {

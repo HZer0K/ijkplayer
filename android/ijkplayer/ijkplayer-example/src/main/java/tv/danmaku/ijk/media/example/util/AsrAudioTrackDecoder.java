@@ -60,6 +60,7 @@ public final class AsrAudioTrackDecoder {
     private void runDecode(android.content.Context context, String dataSource, int startPlayerMs, Listener listener) {
         MediaExtractor extractor = null;
         MediaCodec codec = null;
+        boolean codecStarted = false;
         try {
             extractor = new MediaExtractor();
             if (dataSource.startsWith("content://")) {
@@ -87,6 +88,7 @@ public final class AsrAudioTrackDecoder {
             codec = MediaCodec.createDecoderByType(mime);
             codec.configure(inputFormat, null, null, 0);
             codec.start();
+            codecStarted = true;
 
             MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
             boolean inputDone = false;
@@ -156,7 +158,8 @@ public final class AsrAudioTrackDecoder {
             listener.onError(t);
         } finally {
             try {
-                if (codec != null) {
+                // Only call stop() if codec was successfully started; avoids double-stop crash
+                if (codec != null && codecStarted) {
                     codec.stop();
                 }
             } catch (Throwable ignored) {

@@ -31,6 +31,11 @@
                 android:title="@string/playback_speed"
                 app:showAsAction="never" />
             <item
+                android:id="@+id/action_toggle_loop"
+                android:checkable="true"
+                android:title="@string/loop_playback"
+                app:showAsAction="never" />
+            <item
                 android:id="@+id/action_rebuild_play"
                 android:title="@string/rebuild_play"
                 app:showAsAction="never" />

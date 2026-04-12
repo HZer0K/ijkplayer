@@ -173,4 +173,22 @@
     <!-- Playback position resume -->
     <string name="playback_position_resumed">已恢复上次播放位置</string>
 
+    <!-- Loop playback -->
+    <string name="loop_playback">循环播放</string>
+    <string name="loop_on">循环播放：开</string>
+    <string name="loop_off">循环播放：关</string>
+
+    <!-- Gesture control -->
+    <string name="brightness_label">亮度</string>
+    <string name="volume_label">音量</string>
+
+    <!-- TestHub feature items -->
+    <string name="test_hub_feature_speed">播放速率测试</string>
+    <string name="test_hub_feature_loop">循环播放测试</string>
+    <string name="test_hub_feature_snapshot">截图测试</string>
+
+    <!-- Preference keys (referenced from Settings.java) -->
+    <string name="pref_key_skip_loop_filter">pref_key_skip_loop_filter</string>
+    <string name="pref_key_playback_speed">pref_key_playback_speed</string>
+
 </resources>

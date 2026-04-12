@@ -30,6 +30,7 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.app.DownloadManager;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaScannerConnection;
 import android.media.MediaRecorder;
@@ -148,6 +149,22 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
     // --- Screen keep-on ---
     private boolean mScreenKeepOn = false;
+
+    // --- Loop playback ---
+    private boolean mLoopEnabled = false;
+
+    // --- Gesture: brightness / volume ---
+    /** true while a brightness/volume vertical gesture is in progress */
+    private boolean mGestureActive = false;
+    /** true = brightness side (left half), false = volume side (right half) */
+    private boolean mGestureBrightnessSide = false;
+    private float mGestureDownX;
+    private float mGestureDownY;
+    /** Brightness value [0,1] at the start of a gesture */
+    private float mGestureStartBrightness;
+    /** Volume level at the start of a gesture */
+    private int mGestureStartVolume;
+    private int mGestureMaxVolume;
 
     // --- Playback position memory (URL -> position ms) ---
     private static final String PREFS_PLAYBACK_POS = "playback_positions";
@@ -295,6 +312,11 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mVideoView.setMediaController(mMediaController);
         mVideoView.setHudView(mHudView);
         mVideoView.setMirrorHorizontal(mSettings.getVideoMirrorHorizontal());
+        // Initialize AudioManager for gesture-based volume control
+        AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+        if (am != null) {
+            mGestureMaxVolume = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        }
         // Keep screen on when video starts rendering; manage on buffering events
         mVideoView.setOnInfoListener(new IMediaPlayer.OnInfoListener() {
             @Override
@@ -321,12 +343,24 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             @Override
             public void onPrepared(IMediaPlayer mp) {
                 restorePlaybackPosition();
+                // Restore persisted playback speed
+                float savedSpeed = mSettings != null ? mSettings.getPlaybackSpeed() : 1.0f;
+                if (savedSpeed != 1.0f && mVideoView != null) {
+                    mVideoView.setSpeed(savedSpeed);
+                }
             }
         });
         // Clear saved position and release screen keep-on when playback completes
         mVideoView.setOnCompletionListener(mp -> {
-            savePlaybackPosition();  // pos >= dur-3s triggers key removal
-            setScreenKeepOn(false);
+            if (mLoopEnabled && mVideoView != null) {
+                // Loop: seek to beginning and restart without saving position
+                mSkipNextPositionRestore = true;
+                mVideoView.seekTo(0);
+                mVideoView.start();
+            } else {
+                savePlaybackPosition();  // pos >= dur-3s triggers key removal
+                setScreenKeepOn(false);
+            }
         });
         String vf0 = getIntent() != null ? getIntent().getStringExtra(EXTRA_VF0) : null;
         boolean isVulkanDemo = !TextUtils.isEmpty(vf0);
@@ -348,6 +382,19 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             mVideoView.setVideoFilterVf0(null);
         }
         installEdgeBackHelper();
+        // Read test-hub feature extras
+        float initialSpeed = getIntent() != null ? getIntent().getFloatExtra("initialSpeed", 0f) : 0f;
+        if (initialSpeed >= 0.25f && initialSpeed <= 4.0f) {
+            mVideoView.post(() -> {
+                if (mVideoView != null) {
+                    mVideoView.setSpeed(initialSpeed);
+                }
+            });
+        }
+        boolean enableLoopExtra = getIntent() != null && getIntent().getBooleanExtra("enableLoop", false);
+        if (enableLoopExtra) {
+            mLoopEnabled = true;
+        }
         DebugEventLog.add("VideoActivity: onCreate, source=" + (mVideoPath != null ? mVideoPath : (mVideoUri != null ? mVideoUri.toString() : "null")));
         DebugEventLog.add("VideoActivity: pref.player=" + mSettings.getPlayer() + ", preferExoForHttp=" + mSettings.getPreferExoForHttp());
         // prefer mVideoPath
@@ -384,6 +431,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        // Release SpeechRecognizer to avoid service leak
+        stopAsrListening();
         if (mVulkanDownloadReceiver != null) {
             try {
                 unregisterReceiver(mVulkanDownloadReceiver);
@@ -439,6 +488,10 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 } else {
                     mEdgeBackActive = false;
                 }
+                // Initialize gesture control state
+                mGestureActive = false;
+                mGestureDownX = ev.getX();
+                mGestureDownY = ev.getY();
             } else if (action == MotionEvent.ACTION_MOVE) {
                 if (mEdgeBackActive) {
                     float dx = ev.getX() - mEdgeBackDownX;
@@ -455,8 +508,51 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                         }
                     }
                 }
+                // Brightness/Volume vertical gesture (only when not in edge-back zone)
+                if (!mEdgeBackActive) {
+                    float dx = ev.getX() - mGestureDownX;
+                    float dy = ev.getY() - mGestureDownY;
+                    int width = getWindow() != null && getWindow().getDecorView() != null ? getWindow().getDecorView().getWidth() : 0;
+                    int height = getWindow() != null && getWindow().getDecorView() != null ? getWindow().getDecorView().getHeight() : 0;
+                    if (!mGestureActive && height > 0 && Math.abs(dy) > mEdgeBackTouchSlop && Math.abs(dy) > Math.abs(dx) * 1.5f) {
+                        mGestureActive = true;
+                        mGestureBrightnessSide = (width > 0 && mGestureDownX < width / 2f);
+                        // Capture initial brightness/volume
+                        android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+                        mGestureStartBrightness = (lp.screenBrightness < 0f) ? 0.5f : lp.screenBrightness;
+                        AudioManager audioMgr = (AudioManager) getSystemService(AUDIO_SERVICE);
+                        mGestureStartVolume = audioMgr != null ? audioMgr.getStreamVolume(AudioManager.STREAM_MUSIC) : 0;
+                        if (mGestureMaxVolume <= 0 && audioMgr != null) {
+                            mGestureMaxVolume = audioMgr.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                        }
+                    }
+                    if (mGestureActive && height > 0) {
+                        float fraction = -dy / (height * 0.6f);  // 60% screen height = full range
+                        if (mGestureBrightnessSide) {
+                            float newBrightness = Math.max(0.01f, Math.min(1.0f, mGestureStartBrightness + fraction));
+                            android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+                            lp.screenBrightness = newBrightness;
+                            getWindow().setAttributes(lp);
+                            int pct = (int) (newBrightness * 100);
+                            mToastTextView.setText(getString(R.string.brightness_label) + ": " + pct + "%");
+                            mMediaController.showOnce(mToastTextView);
+                        } else {
+                            int max = mGestureMaxVolume > 0 ? mGestureMaxVolume : 15;
+                            int newVol = Math.max(0, Math.min(max, (int) Math.round(mGestureStartVolume + fraction * max)));
+                            AudioManager audioMgr = (AudioManager) getSystemService(AUDIO_SERVICE);
+                            if (audioMgr != null) {
+                                audioMgr.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0);
+                            }
+                            int pct = max > 0 ? (int) (newVol * 100.0f / max) : 0;
+                            mToastTextView.setText(getString(R.string.volume_label) + ": " + pct + "%");
+                            mMediaController.showOnce(mToastTextView);
+                        }
+                        return true;
+                    }
+                }
             } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 mEdgeBackActive = false;
+                mGestureActive = false;
             }
         }
         return super.dispatchTouchEvent(ev);
@@ -887,6 +983,27 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         input.setText(current);
         input.setSingleLine(true);
 
+        // Auto-fill from clipboard if it looks like a media URL and differs from current
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (cm != null && cm.hasPrimaryClip()) {
+                ClipData.Item clipItem = cm.getPrimaryClip().getItemAt(0);
+                if (clipItem != null) {
+                    CharSequence seq = clipItem.getText();
+                    if (seq != null) {
+                        String clipText = normalizeUrl(seq.toString());
+                        if (!TextUtils.isEmpty(clipText)
+                                && (clipText.startsWith("http://") || clipText.startsWith("https://"))
+                                && !clipText.equals(current)) {
+                            input.setText(clipText);
+                            input.setSelection(clipText.length());
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
         new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.open_url))
                 .setView(input)
@@ -1078,7 +1195,16 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             return true;
         } else if (id == R.id.action_toggle_speed) {
             float speed = mVideoView.toggleSpeed();
+            if (mSettings != null) {
+                mSettings.setPlaybackSpeed(speed);
+            }
             mToastTextView.setText(String.format(Locale.US, "%s: %.1fx", getString(R.string.playback_speed), speed));
+            mMediaController.showOnce(mToastTextView);
+            return true;
+        } else if (id == R.id.action_toggle_loop) {
+            mLoopEnabled = !mLoopEnabled;
+            item.setChecked(mLoopEnabled);
+            mToastTextView.setText(getString(mLoopEnabled ? R.string.loop_on : R.string.loop_off));
             mMediaController.showOnce(mToastTextView);
             return true;
         } else if (id == R.id.action_toggle_mirror) {
@@ -1409,6 +1535,8 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         try {
             if (mSpeechRecognizer != null) {
                 mSpeechRecognizer.cancel();
+                mSpeechRecognizer.destroy();
+                mSpeechRecognizer = null;
             }
         } catch (Throwable ignored) {
         }
@@ -1603,8 +1731,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             } else {
                 boolean started = prepareAsrTrackSource(finalSource);
                 if (started) {
-                    mToastTextView.setText(getString(R.string.subtitle_asr_track_need_download));
-                    mMediaController.showOnce(mToastTextView);
                     mToastTextView.setText(getString(R.string.subtitle_asr_track_downloading));
                     mMediaController.showOnce(mToastTextView);
                     return;
@@ -1798,8 +1924,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             } else {
                 boolean started = prepareAsrTrackSource(finalSource);
                 if (started) {
-                    mToastTextView.setText(getString(R.string.subtitle_asr_track_need_download));
-                    mMediaController.showOnce(mToastTextView);
                     mToastTextView.setText(getString(R.string.subtitle_asr_track_downloading));
                     mMediaController.showOnce(mToastTextView);
                     return;
@@ -2534,6 +2658,10 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         MenuItem asr = menu != null ? menu.findItem(R.id.action_subtitle_asr_toggle) : null;
         if (asr != null) {
             asr.setChecked(mAsrEnabled);
+        }
+        MenuItem loop = menu != null ? menu.findItem(R.id.action_toggle_loop) : null;
+        if (loop != null) {
+            loop.setChecked(mLoopEnabled);
         }
         return super.onPrepareOptionsMenu(menu);
     }

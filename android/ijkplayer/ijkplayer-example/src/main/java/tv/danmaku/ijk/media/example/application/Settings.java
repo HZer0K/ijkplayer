@@ -229,4 +229,36 @@ public class Settings {
         String v = mSharedPreferences.getString(key, "");
         return v != null ? v : "";
     }
+
+    /**
+     * Returns the skip_loop_filter value to pass to FFmpeg decoder.
+     * 0 = AVDISCARD_NONE (best quality, default)
+     * 48 = AVDISCARD_BIDIR (skip bidirectional frames, lower CPU on weak devices)
+     */
+    public int getSkipLoopFilter() {
+        String key = mAppContext.getString(R.string.pref_key_skip_loop_filter);
+        String value = mSharedPreferences.getString(key, "0");
+        try {
+            int v = Integer.parseInt(value);
+            // Only allow known values
+            return (v == 0 || v == 48) ? v : 0;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    public float getPlaybackSpeed() {
+        String key = mAppContext.getString(R.string.pref_key_playback_speed);
+        float v = mSharedPreferences.getFloat(key, 1.0f);
+        // Clamp to supported range [0.25, 4.0]
+        if (v < 0.25f || v > 4.0f) {
+            return 1.0f;
+        }
+        return v;
+    }
+
+    public void setPlaybackSpeed(float speed) {
+        String key = mAppContext.getString(R.string.pref_key_playback_speed);
+        mSharedPreferences.edit().putFloat(key, speed).apply();
+    }
 }

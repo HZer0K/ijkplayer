@@ -143,7 +143,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         }
         try {
             url = normalizeUrl(url);
-            if (TextUtils.isEmpty(url)) {
+            // Guard: only allow http/https URLs, reject local paths
+            if (TextUtils.isEmpty(url) || (!url.startsWith("http://") && !url.startsWith("https://"))) {
                 return false;
             }
             File modelDir = new File(context.getFilesDir(), "asr/models");
