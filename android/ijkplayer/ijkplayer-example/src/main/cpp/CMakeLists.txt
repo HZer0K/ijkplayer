@@ -38,4 +38,4 @@ else()
 endif()
 
 find_library(log-lib log)
-target_link_libraries(asrwhisper PRIVATE ${log-lib})
+target_link_libraries(asrwhisper PRIVATE ${log-lib} c++_shared)

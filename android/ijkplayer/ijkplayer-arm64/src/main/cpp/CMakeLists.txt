@@ -182,5 +182,6 @@ target_link_libraries(ijkplayer PRIVATE
         ijksdl
         ijksoundtouch
         ${log_lib}
-        ${android_lib})
+        ${android_lib}
+        c++_shared)
 

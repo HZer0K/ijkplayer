@@ -340,7 +340,7 @@ if [ "$FF_ENABLE_VULKAN" = "1" ] && [ "$FF_ENABLE_VULKAN_FILTERS" = "1" ] && [ -
     FF_CFG_FLAGS="$FF_CFG_FLAGS --enable-libglslang"
     FF_CFLAGS="$FF_CFLAGS -I${FF_DEP_GLSLANG_INC}"
     GLSLANG_LIBS="-L${FF_DEP_GLSLANG_LIB} -lglslang -lMachineIndependent -lOSDependent -lGenericCodeGen -lSPIRV -lSPVRemapper -lglslang-default-resource-limits"
-    FF_DEP_LIBS="$FF_DEP_LIBS $GLSLANG_LIBS -lc++_static -lc++abi -latomic"
+    FF_DEP_LIBS="$FF_DEP_LIBS $GLSLANG_LIBS -lc++_shared -latomic"
     _DUMMY_SPIRV_DIR="$FF_BUILD_ROOT/build/glslang-arm64/output/lib"
     if [ ! -f "${_DUMMY_SPIRV_DIR}/libSPIRV-Tools.a" ]; then
         echo "Creating dummy libSPIRV-Tools.a for configure detection..."
