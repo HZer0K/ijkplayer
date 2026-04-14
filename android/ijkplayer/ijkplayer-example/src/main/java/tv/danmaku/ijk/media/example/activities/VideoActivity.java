@@ -97,8 +97,7 @@ import tv.danmaku.ijk.media.example.util.NativeFFmpegDiagnostics;
 import tv.danmaku.ijk.media.example.util.RemoteAsrClient;
 import tv.danmaku.ijk.media.example.util.WhisperAsrEngine;
 import tv.danmaku.ijk.media.example.widget.media.AndroidMediaController;
-import tv.danmaku.ijk.media.example.util.VideoFilterState;
-import tv.danmaku.ijk.media.example.util.GestureState;
+
 import tv.danmaku.ijk.media.example.widget.media.IjkVideoView;
 import tv.danmaku.ijk.media.example.widget.media.IRenderView;
 import tv.danmaku.ijk.media.example.widget.media.MeasureHelper;
@@ -158,9 +157,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     private boolean mLoopEnabled = false;
 
     // --- Video filter ---
-    /** Tracks current render-layer filter type and active FFmpeg vf0 string */
-    private final VideoFilterState mFilterState = new VideoFilterState();
-    /** Convenience accessors — delegate to mFilterState for backward compat */
+    /** Currently selected render-layer filter type (see {@link IjkVideoView}.RENDER_FILTER_*) */
     private int mCurrentFilterType = IjkVideoView.RENDER_FILTER_NONE;
     /** Current FFmpeg vf0 filter string; null = no FFmpeg filter active */
     private String mCurrentVf0Filter = null;
@@ -177,12 +174,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     /** Volume level at the start of a gesture */
     private int mGestureStartVolume;
     private int mGestureMaxVolume;
-    /**
-     * Gesture state container — see {@link GestureState} for field documentation.
-     * Fields below mirror the GestureState fields for direct access performance.
-     */
-    @SuppressWarnings("unused")
-    private final GestureState mGestureStateDoc = new GestureState(); // documentation reference only
 
     // --- Gesture: horizontal seek ---
     /** true while a horizontal seek gesture is in progress */
@@ -1072,6 +1063,12 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
      */
     private void applyFfmpegFilter(String vf0, int menuId, String label) {
         if (mVideoView == null) return;
+        // FFmpeg vf0 filters only work with the Ijk (FFmpeg) backend.
+        // If currently using ExoPlayer / AndroidMediaPlayer, inform the user and bail out.
+        if (!mVideoView.isActivePlayerIjk()) {
+            Toast.makeText(this, getString(R.string.ffmpeg_filter_ijk_only), Toast.LENGTH_SHORT).show();
+            return;
+        }
         // Toggle off if already active
         if (vf0 != null && vf0.equals(mCurrentVf0Filter)) {
             mCurrentVf0Filter = null;
@@ -2928,25 +2925,31 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 }
             }
         }
-        // Sync FFmpeg vf0 filter check state
+        // Sync FFmpeg vf0 filter check state; disable items when not using Ijk backend
         int[] vf0MenuIds = {
                 R.id.action_filter_ffmpeg_hflip, R.id.action_filter_ffmpeg_vflip,
                 R.id.action_filter_ffmpeg_gblur,
                 R.id.action_filter_ffmpeg_eq_bright, R.id.action_filter_ffmpeg_eq_dark,
-                R.id.action_filter_ffmpeg_sharpen
+                R.id.action_filter_ffmpeg_sharpen,
+                R.id.action_filter_ffmpeg_custom
         };
         String[] vf0Values = {
                 "hflip", "vflip",
                 "gblur=sigma=5",
                 PlayerFactory.buildCurvesVf0("lighter"),
                 PlayerFactory.buildCurvesVf0("darker"),
-                "unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=1.5"
+                "unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=1.5",
+                null  // custom — no fixed value to match
         };
+        boolean isIjkActive = mVideoView != null && mVideoView.isActivePlayerIjk();
         if (menu != null) {
             for (int i = 0; i < vf0MenuIds.length; i++) {
                 MenuItem fi = menu.findItem(vf0MenuIds[i]);
                 if (fi != null) {
-                    fi.setChecked(vf0Values[i].equals(mCurrentVf0Filter));
+                    fi.setEnabled(isIjkActive);
+                    if (vf0Values[i] != null) {
+                        fi.setChecked(isIjkActive && vf0Values[i].equals(mCurrentVf0Filter));
+                    }
                 }
             }
         }

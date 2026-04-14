@@ -1518,14 +1518,15 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     }
 
     /**
-     * Apply a vf0 filter string immediately to the currently playing IjkMediaPlayer.
+     * Apply a vf0 filter immediately to the running IjkMediaPlayer.
      * Unlike {@link #setVideoFilterVf0} which only takes effect on the next prepareAsync(),
-     * this method calls setOption at runtime and seeks to refresh the filter graph.
-     * Falls back to storing in mVf0Override (for next rebuild) if not currently playing.
+     * this method calls setVideoFilter() at runtime, triggering an in-place filter graph rebuild.
      *
-     * @param vf0 FFmpeg filter string, e.g. "hflip" or "eq=brightness=0.2" or null/empty to clear.
+     * @param vf0 FFmpeg filter string, e.g. "hflip" or "gblur=sigma=5" or null/empty to clear.
+     * @return true if the filter was applied to an active IjkMediaPlayer;
+     *         false if the current player is not IjkMediaPlayer (filter not applied).
      */
-    public void applyVf0FilterNow(String vf0) {
+    public boolean applyVf0FilterNow(String vf0) {
         mVf0Override = vf0;
         DebugEventLog.add("applyVf0FilterNow: " + (TextUtils.isEmpty(vf0) ? "null" : vf0));
         // If currently playing an IjkMediaPlayer, call setVideoFilter() at runtime.
@@ -1540,7 +1541,20 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
             } catch (Throwable e) {
                 DebugEventLog.add("applyVf0FilterNow: setVideoFilter failed: " + e.getMessage());
             }
+            return true;
         }
+        DebugEventLog.add("applyVf0FilterNow: skip — not IjkMediaPlayer");
+        return false;
+    }
+
+    /** Returns true if the current active player is an IjkMediaPlayer (FFmpeg backend). */
+    public boolean isActivePlayerIjk() {
+        if (mMediaPlayer instanceof IjkMediaPlayer) return true;
+        if (mMediaPlayer instanceof MediaPlayerProxy) {
+            IMediaPlayer inner = ((MediaPlayerProxy) mMediaPlayer).getInternalMediaPlayer();
+            return inner instanceof IjkMediaPlayer;
+        }
+        return false;
     }
 
     public void forcePlayerTypeOnce(int playerType) {

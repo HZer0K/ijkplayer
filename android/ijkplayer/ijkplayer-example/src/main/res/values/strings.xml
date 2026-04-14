@@ -27,6 +27,7 @@
     <string name="unsupported">不支持</string>
     <string name="vulkan_demo_enabled_detail">Vulkan demo：已强制 Ijk + Texture（设备Vulkan：%1$s）</string>
     <string name="vulkan_only_effect_unavailable">此效果仅支持 Vulkan 设备，当前设备不支持，已跳过</string>
+    <string name="ffmpeg_filter_ijk_only">FFmpeg 滤镜仅在 Ijk 内核下生效，请先切换内核</string>
     <string name="vulkan_demo_downloading">Vulkan demo：正在下载样例到本地…</string>
     <string name="vulkan_demo_downloaded">Vulkan demo：样例已下载，开始播放</string>
     <string name="vulkan_demo_download_failed">Vulkan demo：样例下载失败</string>
