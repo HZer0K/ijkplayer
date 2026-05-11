@@ -4,9 +4,13 @@
 
 set -e
 
-IJKPLAYER_ROOT=$(cd "$(dirname "$0")/.."; pwd)
+IJKPLAYER_ROOT=$(cd "$(dirname "$0")/../.."; pwd)
 LLAMA_ROOT="$IJKPLAYER_ROOT/extra/llama.cpp"
 BUILD_ROOT="$IJKPLAYER_ROOT/android/contrib/build"
+
+# Debug output
+echo "IJKPLAYER_ROOT: $IJKPLAYER_ROOT"
+echo "LLAMA_ROOT: $LLAMA_ROOT"
 
 # Check if llama.cpp exists
 if [ ! -d "$LLAMA_ROOT" ]; then
@@ -51,6 +55,8 @@ for i in "${!ARCHS[@]}"; do
         -DLLAMA_BUILD_TESTS=OFF \
         -DLLAMA_BUILD_EXAMPLES=OFF \
         -DLLAMA_ARM_NEON=ON \
+        -DCMAKE_C_FLAGS="-D__USE_POSIX199309" \
+        -DCMAKE_CXX_FLAGS="-D__USE_POSIX199309" \
         -DCMAKE_INSTALL_PREFIX="$OUTPUT_DIR"
     
     # Build
