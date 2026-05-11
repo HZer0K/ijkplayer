@@ -118,22 +118,32 @@
   {
     "category": "滤镜/Vulkan",
     "tags": ["vulkan", "blur"],
-    "name": "Vulkan 均値模糊（avgblur_vulkan）",
+    "name": "Vulkan 均值模糊（avgblur_vulkan）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "hwupload,avgblur_vulkan=sizeX=16:sizeY=16,hwdownload,format=yuv420p",
     "expected": "设备支持 Vulkan 时画面明显变模糊；不支持时自动回落软件 avgblur",
     "logKeywords": ["apply vf0=", "Vulkan fallback to software"],
-    "hint": "验证 Vulkan 均値模糊；不支持 Vulkan 时回落至软件 avgblur=sizeX=16:sizeY=16"
+    "hint": "验证 Vulkan 均值模糊；不支持 Vulkan 时回落至软件 avgblur=sizeX=16:sizeY=16"
   },
   {
     "category": "滤镜/软件",
     "tags": ["filter", "blur", "software"],
-    "name": "均値模糊（软件 avgblur）",
+    "name": "均值模糊（软件 avgblur）",
     "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     "vf0": "avgblur=sizeX=16:sizeY=16",
     "expected": "画面明显变模糊（软件 avgblur，模糊半径 16）",
     "logKeywords": ["avfilter_graph_config OK"],
     "hint": "软件均值模糊，sizeX=sizeY=16 效果明显；可增大到 32 效果更强"
+  },
+  {
+    "category": "滤镜/软件",
+    "tags": ["filter", "sharpen", "software"],
+    "name": "锐化（软件 unsharp）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=1.5",
+    "expected": "画面轮廓明显增强（软件 unsharp，luma_amount=1.5 锐化强度）",
+    "logKeywords": ["avfilter_graph_config OK"],
+    "hint": "验证 FFmpeg unsharp 软件锐化；luma_amount 可调节强度（负值=模糊，正值=锐化）"
   },
   {
     "category": "滤镜/Vulkan",

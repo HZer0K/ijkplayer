@@ -121,6 +121,30 @@
                 android:checkable="true"
                 android:title="@string/filter_ffmpeg_eq_dark"
                 app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_ffmpeg_sharpen"
+                android:checkable="true"
+                android:title="@string/filter_ffmpeg_sharpen"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_ffmpeg_custom"
+                android:title="@string/filter_ffmpeg_custom"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_warm"
+                android:checkable="true"
+                android:title="@string/filter_warm"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_cool"
+                android:checkable="true"
+                android:title="@string/filter_cool"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_filter_sharpen"
+                android:checkable="true"
+                android:title="@string/filter_sharpen"
+                app:showAsAction="never" />
         </menu>
     </item>
 

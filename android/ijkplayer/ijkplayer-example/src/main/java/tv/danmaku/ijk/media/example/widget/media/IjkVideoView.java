@@ -354,6 +354,9 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     public static final int RENDER_FILTER_ROTATE90  = 4;
     public static final int RENDER_FILTER_BRIGHT    = 5;
     public static final int RENDER_FILTER_DARK      = 6;
+    public static final int RENDER_FILTER_WARM      = 7;  // Warm tone (R+30, B-30)
+    public static final int RENDER_FILTER_COOL      = 8;  // Cool tone (R-30, B+30)
+    public static final int RENDER_FILTER_SHARPEN   = 9;  // Sharpen via saturation+contrast boost
 
     private int mCurrentRenderFilterType = RENDER_FILTER_NONE;
 
@@ -450,6 +453,51 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
                 });
                 Paint p = new Paint();
                 p.setColorFilter(new ColorMatrixColorFilter(cm));
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, p);
+                break;
+            }
+            case RENDER_FILTER_WARM: {
+                // Warm tone: boost red channel, reduce blue channel
+                ColorMatrix cm = new ColorMatrix(new float[]{
+                        1,    0,    0,    0, 30,
+                        0,    1,    0,    0,  0,
+                        0,    0,    1,    0, -30,
+                        0,    0,    0,    1,  0
+                });
+                Paint p = new Paint();
+                p.setColorFilter(new ColorMatrixColorFilter(cm));
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, p);
+                break;
+            }
+            case RENDER_FILTER_COOL: {
+                // Cool tone: reduce red channel, boost blue channel
+                ColorMatrix cm = new ColorMatrix(new float[]{
+                        1,    0,    0,    0, -30,
+                        0,    1,    0,    0,   0,
+                        0,    0,    1,    0,  30,
+                        0,    0,    0,    1,   0
+                });
+                Paint p = new Paint();
+                p.setColorFilter(new ColorMatrixColorFilter(cm));
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, p);
+                break;
+            }
+            case RENDER_FILTER_SHARPEN: {
+                // Approximate sharpening: boost saturation to 1.8 + increase contrast slightly
+                ColorMatrix sat = new ColorMatrix();
+                sat.setSaturation(1.8f);
+                // Contrast boost matrix (scale RGB around midpoint 128)
+                float s = 1.3f;
+                float t = (1 - s) * 128;
+                ColorMatrix contrast = new ColorMatrix(new float[]{
+                        s, 0, 0, 0, t,
+                        0, s, 0, 0, t,
+                        0, 0, s, 0, t,
+                        0, 0, 0, 1, 0
+                });
+                sat.postConcat(contrast);
+                Paint p = new Paint();
+                p.setColorFilter(new ColorMatrixColorFilter(sat));
                 view.setLayerType(View.LAYER_TYPE_HARDWARE, p);
                 break;
             }
@@ -1470,14 +1518,15 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
     }
 
     /**
-     * Apply a vf0 filter string immediately to the currently playing IjkMediaPlayer.
+     * Apply a vf0 filter immediately to the running IjkMediaPlayer.
      * Unlike {@link #setVideoFilterVf0} which only takes effect on the next prepareAsync(),
-     * this method calls setOption at runtime and seeks to refresh the filter graph.
-     * Falls back to storing in mVf0Override (for next rebuild) if not currently playing.
+     * this method calls setVideoFilter() at runtime, triggering an in-place filter graph rebuild.
      *
-     * @param vf0 FFmpeg filter string, e.g. "hflip" or "eq=brightness=0.2" or null/empty to clear.
+     * @param vf0 FFmpeg filter string, e.g. "hflip" or "gblur=sigma=5" or null/empty to clear.
+     * @return true if the filter was applied to an active IjkMediaPlayer;
+     *         false if the current player is not IjkMediaPlayer (filter not applied).
      */
-    public void applyVf0FilterNow(String vf0) {
+    public boolean applyVf0FilterNow(String vf0) {
         mVf0Override = vf0;
         DebugEventLog.add("applyVf0FilterNow: " + (TextUtils.isEmpty(vf0) ? "null" : vf0));
         // If currently playing an IjkMediaPlayer, call setVideoFilter() at runtime.
@@ -1492,7 +1541,20 @@ public class IjkVideoView extends FrameLayout implements MediaController.MediaPl
             } catch (Throwable e) {
                 DebugEventLog.add("applyVf0FilterNow: setVideoFilter failed: " + e.getMessage());
             }
+            return true;
         }
+        DebugEventLog.add("applyVf0FilterNow: skip — not IjkMediaPlayer");
+        return false;
+    }
+
+    /** Returns true if the current active player is an IjkMediaPlayer (FFmpeg backend). */
+    public boolean isActivePlayerIjk() {
+        if (mMediaPlayer instanceof IjkMediaPlayer) return true;
+        if (mMediaPlayer instanceof MediaPlayerProxy) {
+            IMediaPlayer inner = ((MediaPlayerProxy) mMediaPlayer).getInternalMediaPlayer();
+            return inner instanceof IjkMediaPlayer;
+        }
+        return false;
     }
 
     public void forcePlayerTypeOnce(int playerType) {

@@ -97,6 +97,7 @@ import tv.danmaku.ijk.media.example.util.NativeFFmpegDiagnostics;
 import tv.danmaku.ijk.media.example.util.RemoteAsrClient;
 import tv.danmaku.ijk.media.example.util.WhisperAsrEngine;
 import tv.danmaku.ijk.media.example.widget.media.AndroidMediaController;
+
 import tv.danmaku.ijk.media.example.widget.media.IjkVideoView;
 import tv.danmaku.ijk.media.example.widget.media.IRenderView;
 import tv.danmaku.ijk.media.example.widget.media.MeasureHelper;
@@ -156,7 +157,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     private boolean mLoopEnabled = false;
 
     // --- Video filter ---
-    /** Current render-layer filter type; 0 = no filter */
+    /** Currently selected render-layer filter type (see {@link IjkVideoView}.RENDER_FILTER_*) */
     private int mCurrentFilterType = IjkVideoView.RENDER_FILTER_NONE;
     /** Current FFmpeg vf0 filter string; null = no FFmpeg filter active */
     private String mCurrentVf0Filter = null;
@@ -173,6 +174,21 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     /** Volume level at the start of a gesture */
     private int mGestureStartVolume;
     private int mGestureMaxVolume;
+
+    // --- Gesture: horizontal seek ---
+    /** true while a horizontal seek gesture is in progress */
+    private boolean mSeekGestureActive = false;
+    /** Player position in ms at the start of a seek gesture */
+    private long mSeekGestureStartMs = 0;
+    /** Seek target in ms (updated live during gesture, applied on ACTION_UP) */
+    private long mSeekGestureTargetMs = 0;
+
+    // --- Gesture: double-tap to toggle pause ---
+    private long mLastTapTime = 0;
+    private float mLastTapX = -1;
+    private float mLastTapY = -1;
+    /** Max interval between two taps to be considered a double-tap, ms */
+    private static final long DOUBLE_TAP_TIMEOUT_MS = 350;
 
     // --- Playback position memory (URL -> position ms) ---
     private static final String PREFS_PLAYBACK_POS = "playback_positions";
@@ -506,6 +522,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 }
                 // Initialize gesture control state
                 mGestureActive = false;
+                mSeekGestureActive = false;
                 mGestureDownX = ev.getX();
                 mGestureDownY = ev.getY();
             } else if (action == MotionEvent.ACTION_MOVE) {
@@ -524,13 +541,42 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                         }
                     }
                 }
-                // Brightness/Volume vertical gesture (only when not in edge-back zone)
                 if (!mEdgeBackActive) {
                     float dx = ev.getX() - mGestureDownX;
                     float dy = ev.getY() - mGestureDownY;
                     int width = getWindow() != null && getWindow().getDecorView() != null ? getWindow().getDecorView().getWidth() : 0;
                     int height = getWindow() != null && getWindow().getDecorView() != null ? getWindow().getDecorView().getHeight() : 0;
-                    if (!mGestureActive && height > 0 && Math.abs(dy) > mEdgeBackTouchSlop && Math.abs(dy) > Math.abs(dx) * 1.5f) {
+
+                    // --- Horizontal seek gesture (left/right swipe) ---
+                    if (!mGestureActive && !mSeekGestureActive && width > 0
+                            && Math.abs(dx) > mEdgeBackTouchSlop * 2
+                            && Math.abs(dx) > Math.abs(dy) * 1.5f) {
+                        mSeekGestureActive = true;
+                        mSeekGestureStartMs = mVideoView != null ? mVideoView.getCurrentPosition() : 0;
+                        mSeekGestureTargetMs = mSeekGestureStartMs;
+                    }
+                    if (mSeekGestureActive && mVideoView != null && width > 0) {
+                        // Full screen width corresponds to ±90 seconds
+                        long duration = mVideoView.getDuration();
+                        long maxSeekRange = Math.min(90_000L, duration > 0 ? duration : 90_000L);
+                        long delta = (long) (dx / (float) width * maxSeekRange * 2);
+                        mSeekGestureTargetMs = Math.max(0,
+                                Math.min(duration > 0 ? duration : Long.MAX_VALUE,
+                                        mSeekGestureStartMs + delta));
+                        long diffSec = (mSeekGestureTargetMs - mSeekGestureStartMs) / 1000;
+                        if (diffSec >= 0) {
+                            mToastTextView.setText(getString(R.string.seek_forward_hint, diffSec));
+                        } else {
+                            mToastTextView.setText(getString(R.string.seek_backward_hint, -diffSec));
+                        }
+                        mMediaController.showOnce(mToastTextView);
+                        return true;
+                    }
+
+                    // --- Brightness/Volume vertical gesture ---
+                    if (!mGestureActive && !mSeekGestureActive && height > 0
+                            && Math.abs(dy) > mEdgeBackTouchSlop
+                            && Math.abs(dy) > Math.abs(dx) * 1.5f) {
                         mGestureActive = true;
                         mGestureBrightnessSide = (width > 0 && mGestureDownX < width / 2f);
                         // Capture initial brightness/volume
@@ -567,8 +613,50 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                     }
                 }
             } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                boolean wasSeekGesture = mSeekGestureActive;
+                boolean wasVerticalGesture = mGestureActive;
                 mEdgeBackActive = false;
                 mGestureActive = false;
+                mSeekGestureActive = false;
+
+                if (action == MotionEvent.ACTION_UP) {
+                    if (wasSeekGesture) {
+                        // Commit the seek
+                        if (mVideoView != null) {
+                            mVideoView.seekTo((int) mSeekGestureTargetMs);
+                        }
+                    } else if (!wasVerticalGesture) {
+                        // Potential tap / double-tap
+                        float dx = Math.abs(ev.getX() - mGestureDownX);
+                        float dy = Math.abs(ev.getY() - mGestureDownY);
+                        if (dx < mEdgeBackTouchSlop && dy < mEdgeBackTouchSlop) {
+                            long now = System.currentTimeMillis();
+                            float lastX = mLastTapX;
+                            float lastY = mLastTapY;
+                            if (now - mLastTapTime <= DOUBLE_TAP_TIMEOUT_MS
+                                    && Math.abs(ev.getX() - lastX) < mEdgeBackTouchSlop * 4
+                                    && Math.abs(ev.getY() - lastY) < mEdgeBackTouchSlop * 4) {
+                                // Double-tap: toggle pause/resume
+                                mLastTapTime = 0;  // reset to avoid triple-tap issues
+                                if (mVideoView != null) {
+                                    if (mVideoView.isPlaying()) {
+                                        mVideoView.pause();
+                                        mToastTextView.setText(getString(R.string.playback_paused));
+                                    } else {
+                                        mVideoView.start();
+                                        mToastTextView.setText(getString(R.string.playback_resumed_play));
+                                    }
+                                    mMediaController.showOnce(mToastTextView);
+                                }
+                            } else {
+                                // Single tap: record for potential double-tap
+                                mLastTapTime = now;
+                                mLastTapX = ev.getX();
+                                mLastTapY = ev.getY();
+                            }
+                        }
+                    }
+                }
             }
         }
         return super.dispatchTouchEvent(ev);
@@ -975,6 +1063,12 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
      */
     private void applyFfmpegFilter(String vf0, int menuId, String label) {
         if (mVideoView == null) return;
+        // FFmpeg vf0 filters only work with the Ijk (FFmpeg) backend.
+        // If currently using ExoPlayer / AndroidMediaPlayer, inform the user and bail out.
+        if (!mVideoView.isActivePlayerIjk()) {
+            Toast.makeText(this, getString(R.string.ffmpeg_filter_ijk_only), Toast.LENGTH_SHORT).show();
+            return;
+        }
         // Toggle off if already active
         if (vf0 != null && vf0.equals(mCurrentVf0Filter)) {
             mCurrentVf0Filter = null;
@@ -994,6 +1088,38 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mToastTextView.setText(getString(R.string.filter_applied, label));
         mMediaController.showOnce(mToastTextView);
         invalidateOptionsMenu();
+    }
+
+    /**
+     * Show a dialog for the user to enter a custom FFmpeg vf0 filter string.
+     * Pre-fills with the current active vf0 filter (if any).
+     */
+    private void showCustomVf0Dialog() {
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint(getString(R.string.filter_ffmpeg_custom_hint));
+        input.setSingleLine(false);
+        input.setMaxLines(3);
+        if (!TextUtils.isEmpty(mCurrentVf0Filter)) {
+            input.setText(mCurrentVf0Filter);
+            input.setSelection(mCurrentVf0Filter.length());
+        }
+        int pad = (int) (12 * getResources().getDisplayMetrics().density);
+        input.setPadding(pad, pad, pad, pad);
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.filter_ffmpeg_custom_dialog_title))
+                .setView(input)
+                .setPositiveButton(android.R.string.ok, (d, which) -> {
+                    String vf0 = input.getText().toString().trim();
+                    if (TextUtils.isEmpty(vf0)) {
+                        // Clear filter
+                        applyFfmpegFilter(null, R.id.action_filter_ffmpeg_custom, getString(R.string.filter_none));
+                    } else {
+                        applyFfmpegFilter(vf0, R.id.action_filter_ffmpeg_custom,
+                                getString(R.string.filter_ffmpeg_custom).replace("…", "") + ": " + vf0);
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     private void rebuildAndPlayCurrent() {
@@ -1292,6 +1418,15 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         } else if (id == R.id.action_filter_rotate90) {
             applyVideoFilter(IjkVideoView.RENDER_FILTER_ROTATE90, getString(R.string.filter_rotate90));
             return true;
+        } else if (id == R.id.action_filter_warm) {
+            applyVideoFilter(IjkVideoView.RENDER_FILTER_WARM, getString(R.string.filter_warm));
+            return true;
+        } else if (id == R.id.action_filter_cool) {
+            applyVideoFilter(IjkVideoView.RENDER_FILTER_COOL, getString(R.string.filter_cool));
+            return true;
+        } else if (id == R.id.action_filter_sharpen) {
+            applyVideoFilter(IjkVideoView.RENDER_FILTER_SHARPEN, getString(R.string.filter_sharpen));
+            return true;
         } else if (id == R.id.action_filter_ffmpeg_hflip) {
             applyFfmpegFilter("hflip", id, getString(R.string.filter_ffmpeg_hflip));
             return true;
@@ -1306,6 +1441,12 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             return true;
         } else if (id == R.id.action_filter_ffmpeg_eq_dark) {
             applyFfmpegFilter(PlayerFactory.buildCurvesVf0("darker"), id, getString(R.string.filter_ffmpeg_eq_dark));
+            return true;
+        } else if (id == R.id.action_filter_ffmpeg_sharpen) {
+            applyFfmpegFilter("unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=1.5", id, getString(R.string.filter_ffmpeg_sharpen));
+            return true;
+        } else if (id == R.id.action_filter_ffmpeg_custom) {
+            showCustomVf0Dialog();
             return true;
         } else if (id == R.id.action_toggle_mirror) {
             boolean next = !mSettings.getVideoMirrorHorizontal();
@@ -2767,12 +2908,14 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         int[] filterIds = {
                 R.id.action_filter_none, R.id.action_filter_grayscale,
                 R.id.action_filter_hflip, R.id.action_filter_vflip,
-                R.id.action_filter_blur, R.id.action_filter_dark, R.id.action_filter_rotate90
+                R.id.action_filter_blur, R.id.action_filter_dark, R.id.action_filter_rotate90,
+                R.id.action_filter_warm, R.id.action_filter_cool, R.id.action_filter_sharpen
         };
         int[] filterTypes = {
                 IjkVideoView.RENDER_FILTER_NONE, IjkVideoView.RENDER_FILTER_GRAYSCALE,
                 IjkVideoView.RENDER_FILTER_HFLIP, IjkVideoView.RENDER_FILTER_VFLIP,
-                IjkVideoView.RENDER_FILTER_BRIGHT, IjkVideoView.RENDER_FILTER_DARK, IjkVideoView.RENDER_FILTER_ROTATE90
+                IjkVideoView.RENDER_FILTER_BRIGHT, IjkVideoView.RENDER_FILTER_DARK, IjkVideoView.RENDER_FILTER_ROTATE90,
+                IjkVideoView.RENDER_FILTER_WARM, IjkVideoView.RENDER_FILTER_COOL, IjkVideoView.RENDER_FILTER_SHARPEN
         };
         if (menu != null) {
             for (int i = 0; i < filterIds.length; i++) {
@@ -2782,23 +2925,31 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 }
             }
         }
-        // Sync FFmpeg vf0 filter check state
+        // Sync FFmpeg vf0 filter check state; disable items when not using Ijk backend
         int[] vf0MenuIds = {
                 R.id.action_filter_ffmpeg_hflip, R.id.action_filter_ffmpeg_vflip,
                 R.id.action_filter_ffmpeg_gblur,
-                R.id.action_filter_ffmpeg_eq_bright, R.id.action_filter_ffmpeg_eq_dark
+                R.id.action_filter_ffmpeg_eq_bright, R.id.action_filter_ffmpeg_eq_dark,
+                R.id.action_filter_ffmpeg_sharpen,
+                R.id.action_filter_ffmpeg_custom
         };
         String[] vf0Values = {
                 "hflip", "vflip",
                 "gblur=sigma=5",
                 PlayerFactory.buildCurvesVf0("lighter"),
-                PlayerFactory.buildCurvesVf0("darker")
+                PlayerFactory.buildCurvesVf0("darker"),
+                "unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=1.5",
+                null  // custom — no fixed value to match
         };
+        boolean isIjkActive = mVideoView != null && mVideoView.isActivePlayerIjk();
         if (menu != null) {
             for (int i = 0; i < vf0MenuIds.length; i++) {
                 MenuItem fi = menu.findItem(vf0MenuIds[i]);
                 if (fi != null) {
-                    fi.setChecked(vf0Values[i].equals(mCurrentVf0Filter));
+                    fi.setEnabled(isIjkActive);
+                    if (vf0Values[i] != null) {
+                        fi.setChecked(isIjkActive && vf0Values[i].equals(mCurrentVf0Filter));
+                    }
                 }
             }
         }
