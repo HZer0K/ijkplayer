@@ -108,6 +108,11 @@ int ijkai_llm_get_token_count_impl(ijkai_llm_context *ctx) {
     return ctx->token_count;
 }
 
+int64_t ijkai_llm_get_eval_time_impl(ijkai_llm_context *ctx) {
+    if (!ctx) return 0;
+    return ctx->eval_time_ms;
+}
+
 void *ijkai_llm_worker_thread(void *arg) {
     llm_task_data *task = (llm_task_data *)arg;
     if (!task || !task->ctx || !task->prompt || !task->callback) {
@@ -123,10 +128,9 @@ void *ijkai_llm_worker_thread(void *arg) {
     printf("[IJKAI] LLM worker: prompt=%s\n", task->prompt);
     
     // 1. Tokenize prompt
-    const int n_prompt = task->max_tokens > 0 ? task->max_tokens : 512;
-    (void)n_prompt; // 使用llama_tokenize接口
+    const int n_prompt_max = task->max_tokens > 0 ? task->max_tokens : 512;
     
-    int n_tokens = (int)strlen(task->prompt) + 4; // 估算最大token数
+    int n_tokens = (int)strlen(task->prompt) + n_prompt_max; // 估算最大token数
     std::vector<llama_token> tokens(n_tokens);
     
     n_tokens = llama_tokenize(
@@ -151,14 +155,14 @@ void *ijkai_llm_worker_thread(void *arg) {
     
     printf("[IJKAI] Tokenized %d tokens\n", n_tokens);
     
-    // 2. 评估prompt
-    int64_t start_time = (int64_t)time(NULL) * 1000;
+    // 2. 评估prompt(批量解码,比逐token高效)
+    struct timespec ts_start;
+    clock_gettime(CLOCK_MONOTONIC, &ts_start);
     
-    // 发送prompt到上下文
-    for (int i = 0; i < n_tokens; i++) {
-        llama_batch batch = llama_batch_get_one(&tokens[i], 1, i, 0);
+    {
+        llama_batch batch = llama_batch_get_one(tokens.data(), n_tokens, 0, 0);
         if (llama_decode(ctx, batch)) {
-            fprintf(stderr, "[IJKAI] llama_decode failed\n");
+            fprintf(stderr, "[IJKAI] llama_decode(prompt) failed\n");
             task->callback("", true, task->user_data);
             free(task->prompt);
             free(task);
@@ -166,33 +170,37 @@ void *ijkai_llm_worker_thread(void *arg) {
         }
     }
     
-    // 3. 生成token
+    // 3. 生成token(采样器在循环外创建一次，避免重复分配)
     int n_generated = 0;
     const int n_max_gen = task->max_tokens > 0 ? task->max_tokens : 256;
     
     std::vector<char> result_buf;
     result_buf.reserve(8192);
     
+    // 创建采样链(greedy)
+    auto *smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
+    
+    const struct llama_model *llm_model = llama_get_model(ctx);
+    
     while (n_generated < n_max_gen) {
-        // 采样
-        auto *smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
-        // Greedy温度采样（最简单的方式）
-        llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
-        
         const llama_token new_token_id = llama_sampler_sample(smpl, ctx, -1);
-        llama_sampler_free(smpl);
         
-        const struct llama_model *model = llama_get_model(ctx);
-        if (new_token_id == llama_token_eos(model) || new_token_id == LLAMA_TOKEN_NULL) {
+        if (new_token_id == llama_token_eos(llm_model) || new_token_id == LLAMA_TOKEN_NULL) {
             break;
         }
         
         // 转换token为文本
         char piece[256] = {0};
-        const struct llama_model *model_p = llama_get_model(ctx);
-        int n_piece = llama_token_to_piece(model_p, new_token_id, piece, (int32_t)sizeof(piece), 0, false);
+        int n_piece = llama_token_to_piece(
+            llm_model, new_token_id, piece,
+            (int32_t)sizeof(piece) - 1, // 留1字节给\0
+            0, false);
         if (n_piece < 0) {
             continue;
+        }
+        if (n_piece >= (int)sizeof(piece)) {
+            n_piece = (int)sizeof(piece) - 1;
         }
         piece[n_piece] = '\0';
         
@@ -214,13 +222,19 @@ void *ijkai_llm_worker_thread(void *arg) {
         n_generated++;
     }
     
-    int64_t end_time = (int64_t)time(NULL) * 1000;
+    // 释放采样器
+    llama_sampler_free(smpl);
+    
+    struct timespec ts_end;
+    clock_gettime(CLOCK_MONOTONIC, &ts_end);
+    int64_t elapsed_ms = (ts_end.tv_sec - ts_start.tv_sec) * 1000 +
+        (ts_end.tv_nsec - ts_start.tv_nsec) / 1000000;
     
     // 统计更新
-    lctx->eval_time_ms += (end_time - start_time);
+    lctx->eval_time_ms += elapsed_ms;
     lctx->token_count += n_generated;
     
-    printf("[IJKAI] Generated %d tokens in %ld ms\n", n_generated, (end_time - start_time));
+    printf("[IJKAI] Generated %d tokens in %ld ms\n", n_generated, elapsed_ms);
     
     // 完成信号
     task->callback("", true, task->user_data);

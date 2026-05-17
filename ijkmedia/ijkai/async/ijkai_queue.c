@@ -23,6 +23,7 @@ struct ijkai_task_queue {
     int head;                 /**< 队头 */
     int tail;                 /**< 队尾 */
     int count;                /**< 当前任务数 */
+    int shutdown;             /**< 关闭标志 */
     
     pthread_mutex_t mutex;    /**< 互斥锁 */
     pthread_cond_t not_empty; /**< 非空条件变量 */
@@ -48,6 +49,7 @@ ijkai_task_queue *ijkai_queue_create(int max_size) {
     queue->head = 0;
     queue->tail = 0;
     queue->count = 0;
+    queue->shutdown = 0;
     
     pthread_mutex_init(&queue->mutex, NULL);
     pthread_cond_init(&queue->not_empty, NULL);
@@ -101,13 +103,18 @@ int ijkai_queue_pop(ijkai_task_queue *queue, ijkai_task *task, int timeout_ms) {
         ts.tv_nsec -= 1000000000;
     }
     
-    while (queue->count == 0) {
+    while (queue->count == 0 && !queue->shutdown) {
         int ret = pthread_cond_timedwait(&queue->not_empty, &queue->mutex, &ts);
         if (ret != 0) {
             // 超时
             pthread_mutex_unlock(&queue->mutex);
             return -1;
         }
+    }
+    
+    if (queue->shutdown) {
+        pthread_mutex_unlock(&queue->mutex);
+        return -1;
     }
     
     // 出队
@@ -141,6 +148,15 @@ bool ijkai_queue_is_full(ijkai_task_queue *queue) {
     pthread_mutex_unlock(&queue->mutex);
     
     return full;
+}
+
+void ijkai_queue_shutdown(ijkai_task_queue *queue) {
+    if (!queue) return;
+    
+    pthread_mutex_lock(&queue->mutex);
+    queue->shutdown = 1;
+    pthread_cond_broadcast(&queue->not_empty);
+    pthread_mutex_unlock(&queue->mutex);
 }
 
 void ijkai_queue_release(ijkai_task_queue *queue) {

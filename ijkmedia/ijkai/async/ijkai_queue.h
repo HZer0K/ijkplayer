@@ -74,6 +74,12 @@ int ijkai_queue_size(ijkai_task_queue *queue);
  */
 bool ijkai_queue_is_full(ijkai_task_queue *queue);
 
+/**
+ * 关闭队列(唤醒所有等待线程,后续pop立即返回-1)
+ * @param queue 队列
+ */
+void ijkai_queue_shutdown(ijkai_task_queue *queue);
+
 #ifdef __cplusplus
 }
 #endif

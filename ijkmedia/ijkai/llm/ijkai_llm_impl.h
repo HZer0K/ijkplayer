@@ -52,6 +52,11 @@ void ijkai_llm_release_impl(ijkai_llm_context *ctx);
 int ijkai_llm_get_token_count_impl(ijkai_llm_context *ctx);
 
 /**
+ * 获取LLM累计推理时间(毫秒)
+ */
+int64_t ijkai_llm_get_eval_time_impl(ijkai_llm_context *ctx);
+
+/**
  * LLM推理工作线程
  * @param arg 任务数据
  * @return NULL

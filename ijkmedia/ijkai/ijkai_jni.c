@@ -17,17 +17,13 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
-// 全局JVM引用
+// 全局JVM引用(由IJKAI_RegisterNatives初始化)
 static JavaVM *g_jvm = NULL;
-static jclass g_callback_class = NULL;
-static jmethodID g_on_text_method = NULL;
-static jmethodID g_on_error_method = NULL;
 
 /**
  * 回调数据结构(用于JNI回调)
  */
 typedef struct {
-    JNIEnv *env;
     jobject callback_obj;
     jmethodID on_text;
     jmethodID on_error;
@@ -35,24 +31,30 @@ typedef struct {
 
 /**
  * JNI LLM回调
+ *
+ * 注意: 此回调在工作线程执行，必须通过AttachCurrentThread获取线程本地JNIEnv。
  */
 static void jni_llm_callback(const char *text, bool is_complete, void *user_data) {
     jni_callback_data *cb = (jni_callback_data *)user_data;
-    if (!cb || !cb->env || !cb->callback_obj) {
+    if (!cb || !cb->callback_obj || !g_jvm) {
         return;
     }
     
-    JNIEnv *env = cb->env;
-    jobject callback_ref = cb->callback_obj;
+    JNIEnv *env;
+    jint attach_ret = (*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL);
+    if (attach_ret != JNI_OK || !env) {
+        return;
+    }
     
     jstring jtext = (*env)->NewStringUTF(env, text ? text : "");
-    (*env)->CallVoidMethod(env, callback_ref, cb->on_text, jtext, is_complete);
+    (*env)->CallVoidMethod(env, cb->callback_obj, cb->on_text, jtext, is_complete);
     (*env)->DeleteLocalRef(env, jtext);
     
     if (is_complete) {
-        // 完成后释放全局引用
-        (*env)->DeleteGlobalRef(env, callback_ref);
+        // 完成后释放全局引用并归还线程
+        (*env)->DeleteGlobalRef(env, cb->callback_obj);
         free(cb);
+        (*g_jvm)->DetachCurrentThread(g_jvm);
     }
 }
 
@@ -114,14 +116,13 @@ static jint JNICALL native_llm_prompt(JNIEnv *env, jclass clazz,
         return -1;
     }
     
-    // 创建回调数据
+    // 创建回调数据(不含env，env由回调函数通过g_jvm获取)
     jni_callback_data *cb = (jni_callback_data *)malloc(sizeof(jni_callback_data));
     if (!cb) {
         (*env)->ReleaseStringUTFChars(env, prompt, c_prompt);
         return -1;
     }
     
-    cb->env = env;
     cb->callback_obj = (*env)->NewGlobalRef(env, callback);
     
     jclass callback_cls = (*env)->GetObjectClass(env, callback);
@@ -176,7 +177,10 @@ static JNINativeMethod g_methods[] = {
     {"nativeGetProcessedFrames","(J)I",                    (void *)native_get_processed_frames},
 };
 
-jint IJKAI_RegisterNatives(JNIEnv *env) {
+jint IJKAI_RegisterNatives(JNIEnv *env, JavaVM *vm) {
+    // 保存JavaVM全局引用(供工作线程回调使用)
+    g_jvm = vm;
+    
     jclass clazz = (*env)->FindClass(env, "tv/danmaku/ijk/media/player/IjkAIEngine");
     if (!clazz) {
         LOGE("IJKAI_RegisterNatives: Failed to find IjkAIEngine class");
@@ -185,13 +189,14 @@ jint IJKAI_RegisterNatives(JNIEnv *env) {
     
     jint ret = (*env)->RegisterNatives(env, clazz, g_methods,
         sizeof(g_methods) / sizeof(g_methods[0]));
+    (*env)->DeleteLocalRef(env, clazz);
     if (ret != JNI_OK) {
         LOGE("IJKAI_RegisterNatives: Failed to register natives");
         return -1;
     }
     
-    LOGI("IJKAI_RegisterNatives: registered %zu methods",
-        sizeof(g_methods) / sizeof(g_methods[0]));
+    LOGI("IJKAI_RegisterNatives: registered %zu methods, jvm=%p",
+        sizeof(g_methods) / sizeof(g_methods[0]), (void*)vm);
     
     return JNI_VERSION_1_6;
 }

@@ -109,7 +109,7 @@ ijkai_context *ijkai_init(ijkai_type type, const char *model_path, int n_threads
     
     // 启动工作线程
     pthread_create(&ctx->worker_thread, NULL, ijkai_worker_loop, ctx);
-    pthread_detach(ctx->worker_thread); // 分离线程,自动回收
+    // 不分离线程，在release时通过shutdown+join安全终止
     
     printf("[IJKAI] AI context initialized (type=%d)\n", type);
     
@@ -185,6 +185,9 @@ int ijkai_multimodal(
 
 int64_t ijkai_get_eval_time(ijkai_context *ctx) {
     if (!ctx) return 0;
+    if (ctx->llm_ctx) {
+        return ijkai_llm_get_eval_time_impl(ctx->llm_ctx);
+    }
     return ctx->eval_time_ms;
 }
 
@@ -208,8 +211,14 @@ void ijkai_release(ijkai_context **ctx) {
     
     ijkai_context *c = *ctx;
     
-    // 停止工作线程
+    printf("[IJKAI] AI context releasing...\n");
+    
+    // 停止工作线程(先shutdown队列唤醒worker，再join等待)
     c->running = 0;
+    if (c->queue) {
+        ijkai_queue_shutdown(c->queue);
+    }
+    pthread_join(c->worker_thread, NULL);
     
     // 释放对应模块
     if (c->type == IJKAI_TYPE_LLM || c->type == IJKAI_TYPE_MULTIMODAL) {

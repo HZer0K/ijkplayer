@@ -1232,7 +1232,7 @@ static JNINativeMethod g_methods[] = {
 };
 
 // AI推理框架JNI注册(前向声明)
-jint IJKAI_RegisterNatives(JNIEnv *env);
+jint IJKAI_RegisterNatives(JNIEnv *env, JavaVM *vm);
 
 JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)
 {
@@ -1255,7 +1255,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)
 
     FFmpegApi_global_init(env);
 
-    IJKAI_RegisterNatives(env);
+    IJKAI_RegisterNatives(env, vm);
 
     return JNI_VERSION_1_4;
 }
