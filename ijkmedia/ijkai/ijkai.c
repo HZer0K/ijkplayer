@@ -6,35 +6,73 @@
  * This file is part of ijkPlayer AI Framework.
  */
 
+#define _POSIX_C_SOURCE 200809L
+
 #include "ijkai.h"
 #include "async/ijkai_queue.h"
 #include "llm/ijkai_llm_impl.h"
+
 #include <stdlib.h>
 #include <string.h>
-
-// TODO: 包含llama.cpp头文件(需要先初始化llama.cpp)
-// #include "llama.h"
+#include <pthread.h>
+#include <stdio.h>
 
 /**
  * AI上下文结构(内部实现)
  */
 struct ijkai_context {
-    ijkai_type type;              /**< AI类型 */
+    ijkai_type type;
     
     // 内部模块
     union {
         ijkai_llm_context *llm_ctx;
-        void *cv_ctx;  // TODO: CV模块
+        void *cv_ctx;
     };
     
     // 异步队列
     ijkai_task_queue *queue;
+    
+    // 工作线程
+    pthread_t worker_thread;
+    volatile int running;
     
     // 统计
     int64_t eval_time_ms;
     int token_count;
     int processed_frames;
 };
+
+/**
+ * 工作线程: 从队列取出任务并分发
+ */
+static void *ijkai_worker_loop(void *arg) {
+    ijkai_context *ctx = (ijkai_context *)arg;
+    if (!ctx) {
+        return NULL;
+    }
+    
+    printf("[IJKAI] Worker thread started\n");
+    
+    while (ctx->running) {
+        ijkai_task task;
+        int ret = ijkai_queue_pop(ctx->queue, &task, 500); // 500ms超时
+        if (ret != 0) {
+            continue; // 超时,继续检查running状态
+        }
+        
+        // 处理任务
+        if (task.type == IJKAI_TASK_LLM && task.task_data) {
+            // LLM推理在工作线程中直接执行
+            ijkai_llm_worker_thread(task.task_data);
+            // 更新统计
+            ctx->processed_frames++;
+        }
+        // TODO: CV任务处理
+    }
+    
+    printf("[IJKAI] Worker thread stopped\n");
+    return NULL;
+}
 
 ijkai_context *ijkai_init(ijkai_type type, const char *model_path, int n_threads) {
     if (!model_path) {
@@ -50,6 +88,7 @@ ijkai_context *ijkai_init(ijkai_type type, const char *model_path, int n_threads
     ctx->eval_time_ms = 0;
     ctx->token_count = 0;
     ctx->processed_frames = 0;
+    ctx->running = 1;
     
     // 创建异步队列(最多5个任务)
     ctx->queue = ijkai_queue_create(5);
@@ -66,10 +105,13 @@ ijkai_context *ijkai_init(ijkai_type type, const char *model_path, int n_threads
             free(ctx);
             return NULL;
         }
-    } else if (type == IJKAI_TYPE_CV_SR || type == IJKAI_TYPE_CV_DETECT) {
-        // TODO: 初始化CV模块
-        ctx->cv_ctx = NULL;
     }
+    
+    // 启动工作线程
+    pthread_create(&ctx->worker_thread, NULL, ijkai_worker_loop, ctx);
+    pthread_detach(ctx->worker_thread); // 分离线程,自动回收
+    
+    printf("[IJKAI] AI context initialized (type=%d)\n", type);
     
     return ctx;
 }
@@ -85,12 +127,10 @@ int ijkai_llm_prompt(
         return -1;
     }
     
-    // 封装为异步任务
     ijkai_task task;
     task.type = IJKAI_TASK_LLM;
-    task.timestamp = 0;  // TODO: 使用av_gettime_relative()
+    task.timestamp = 0;
     
-    // 内部任务数据
     llm_task_data *data = (llm_task_data *)malloc(sizeof(llm_task_data));
     if (!data) {
         return -1;
@@ -104,7 +144,7 @@ int ijkai_llm_prompt(
     
     task.task_data = data;
     
-    // 推入队列(不阻塞)
+    // 推入队列(不阻塞主线程)
     return ijkai_queue_push(ctx->queue, &task);
 }
 
@@ -115,7 +155,6 @@ int ijkai_cv_process(
     ijkai_cv_callback callback,
     void *user_data
 ) {
-    // TODO: 实现CV处理
     (void)ctx;
     (void)input_data;
     (void)in_width;
@@ -124,8 +163,7 @@ int ijkai_cv_process(
     (void)out_height;
     (void)callback;
     (void)user_data;
-    
-    return -1;  // 暂未实现
+    return -1;
 }
 
 int ijkai_multimodal(
@@ -135,7 +173,6 @@ int ijkai_multimodal(
     ijkai_llm_callback callback,
     void *user_data
 ) {
-    // TODO: 实现多模态推理
     (void)ctx;
     (void)image_data;
     (void)width;
@@ -143,28 +180,24 @@ int ijkai_multimodal(
     (void)question;
     (void)callback;
     (void)user_data;
-    
-    return -1;  // 暂未实现
+    return -1;
 }
 
 int64_t ijkai_get_eval_time(ijkai_context *ctx) {
-    if (!ctx) {
-        return 0;
-    }
+    if (!ctx) return 0;
     return ctx->eval_time_ms;
 }
 
 int ijkai_get_token_count(ijkai_context *ctx) {
-    if (!ctx) {
-        return 0;
+    if (!ctx) return 0;
+    if (ctx->llm_ctx) {
+        return ijkai_llm_get_token_count_impl(ctx->llm_ctx);
     }
-    return ctx->token_count;
+    return 0;
 }
 
 int ijkai_get_processed_frames(ijkai_context *ctx) {
-    if (!ctx) {
-        return 0;
-    }
+    if (!ctx) return 0;
     return ctx->processed_frames;
 }
 
@@ -175,13 +208,14 @@ void ijkai_release(ijkai_context **ctx) {
     
     ijkai_context *c = *ctx;
     
+    // 停止工作线程
+    c->running = 0;
+    
     // 释放对应模块
     if (c->type == IJKAI_TYPE_LLM || c->type == IJKAI_TYPE_MULTIMODAL) {
         if (c->llm_ctx) {
             ijkai_llm_release_impl(c->llm_ctx);
         }
-    } else if (c->type == IJKAI_TYPE_CV_SR || c->type == IJKAI_TYPE_CV_DETECT) {
-        // TODO: 释放CV模块
     }
     
     // 释放队列
@@ -191,4 +225,6 @@ void ijkai_release(ijkai_context **ctx) {
     
     free(c);
     *ctx = NULL;
+    
+    printf("[IJKAI] AI context released\n");
 }

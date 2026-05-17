@@ -127,6 +127,7 @@ do_cmake_build () {
         rm -rf "$BUILD_DIR"
         # Also remove compiled .so files so stale binaries don't end up in the APK
         rm -f "$OUT_LIB_DIR/libijkplayer.so" "$OUT_LIB_DIR/libijksdl.so" "$OUT_LIB_DIR/libc++_shared.so"
+        rm -f "$OUT_LIB_DIR/libllama.so" "$OUT_LIB_DIR/libggml.so"
         echo "[*] cleaned: $BUILD_DIR and $OUT_LIB_DIR/*.so"
         return 0
     fi
@@ -210,6 +211,22 @@ do_cmake_build () {
     else
         echo "[!] WARNING: libc++_shared.so not found at $LIBCXX_SHARED"
         echo "[!]          APK may crash at runtime with UnsatisfiedLinkError"
+    fi
+
+    # Copy libllama.so if available
+    local LLAMA_LIB="$ANDROID_ROOT/contrib/build/llama-arm64/output/lib/libllama.so"
+    if [ -f "$LLAMA_LIB" ]; then
+        cp -f "$LLAMA_LIB" "$OUT_LIB_DIR/"
+        echo "[*] copied libllama.so -> $OUT_LIB_DIR/"
+    else
+        echo "[*] libllama.so not found (LLM support disabled)"
+    fi
+    
+    # Copy libggml.so if available
+    local GGML_LIB="$ANDROID_ROOT/contrib/build/llama-arm64/output/lib/libggml.so"
+    if [ -f "$GGML_LIB" ]; then
+        cp -f "$GGML_LIB" "$OUT_LIB_DIR/"
+        echo "[*] copied libggml.so -> $OUT_LIB_DIR/"
     fi
 }
 

@@ -47,6 +47,11 @@ ijkai_llm_context *ijkai_llm_init_impl(const char *model_path, int n_threads);
 void ijkai_llm_release_impl(ijkai_llm_context *ctx);
 
 /**
+ * 获取LLM上下文中的token计数
+ */
+int ijkai_llm_get_token_count_impl(ijkai_llm_context *ctx);
+
+/**
  * LLM推理工作线程
  * @param arg 任务数据
  * @return NULL

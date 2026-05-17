@@ -146,6 +146,40 @@ target_link_libraries(ijksdl PRIVATE
         ${egl_lib}
         ${glesv2_lib})
 
+# ============ AI 推理框架 ============
+option(IJKAI_ENABLE_LLM "Enable LLM (llama.cpp)" ON)
+
+set(IJKAI_ROOT "${IJK_MEDIA_ROOT}/ijkai")
+set(IJK_LLAMA_OUTPUT_DIR "${IJK_REPO_ROOT}/android/contrib/build/llama-arm64/output" CACHE PATH "llama.cpp build output directory")
+
+if(IJKAI_ENABLE_LLM)
+    message(STATUS "IJKAI: LLM support enabled, using llama.cpp from ${IJK_LLAMA_OUTPUT_DIR}")
+    
+    # 导入预编译的 libllama.so
+    add_library(llama SHARED IMPORTED)
+    set_target_properties(llama PROPERTIES
+        IMPORTED_LOCATION "${IJK_LLAMA_OUTPUT_DIR}/lib/libllama.so"
+    )
+    
+    list(APPEND IJKAI_SOURCES
+        "${IJKAI_ROOT}/ijkai.c"
+        "${IJKAI_ROOT}/ijkai_jni.c"
+        "${IJKAI_ROOT}/async/ijkai_queue.c"
+        "${IJKAI_ROOT}/llm/ijkai_llm.cpp")
+    
+    list(APPEND IJKAI_INCLUDES
+        "${IJKAI_ROOT}"
+        "${IJK_LLAMA_OUTPUT_DIR}/include"
+        "${IJK_REPO_ROOT}/extra/llama.cpp/ggml/include")
+    
+    list(APPEND IJKAI_LIBS llama)
+else()
+    message(STATUS "IJKAI: LLM support disabled, using placeholder")
+    list(APPEND IJKAI_SOURCES
+        "${IJKAI_ROOT}/ijkai.c"
+        "${IJKAI_ROOT}/async/ijkai_queue.c")
+endif()
+
 add_library(ijkplayer SHARED
         "${IJK_MEDIA_ROOT}/ijkplayer/ff_cmdutils.c"
         "${IJK_MEDIA_ROOT}/ijkplayer/ff_ffplay.c"
@@ -168,13 +202,17 @@ add_library(ijkplayer SHARED
         "${IJK_MEDIA_ROOT}/ijkplayer/ijkavutil/ijkthreadpool.c"
         "${IJK_MEDIA_ROOT}/ijkplayer/ijkavutil/ijktree.c"
         "${IJK_MEDIA_ROOT}/ijkplayer/ijkavutil/ijkfifo.c"
-        "${IJK_MEDIA_ROOT}/ijkplayer/ijkavutil/ijkstl.cpp")
+        "${IJK_MEDIA_ROOT}/ijkplayer/ijkavutil/ijkstl.cpp"
+        ${IJKAI_SOURCES})
 target_include_directories(ijkplayer PRIVATE
         "${IJK_MEDIA_ROOT}"
         "${IJK_MEDIA_ROOT}/ijkplayer"
         "${IJK_MEDIA_ROOT}/ijkj4a"
         "${IJK_MEDIA_ROOT}/compat"
-        "${IJK_FFMPEG_INCLUDE_DIR}")
+        "${IJK_FFMPEG_INCLUDE_DIR}"
+        ${IJKAI_INCLUDES})
+
+message(STATUS "IJKAI_INCLUDES: ${IJKAI_INCLUDES}")
 target_include_directories(ijkplayer SYSTEM PRIVATE "${IJK_FFMPEG_SOURCE_DIR}")
 target_compile_options(ijkplayer PRIVATE -Wall -Wextra)
 target_link_libraries(ijkplayer PRIVATE
@@ -183,5 +221,6 @@ target_link_libraries(ijkplayer PRIVATE
         ijksoundtouch
         ${log_lib}
         ${android_lib}
-        c++_shared)
+        c++_shared
+        ${IJKAI_LIBS})
 

@@ -1231,6 +1231,9 @@ static JNINativeMethod g_methods[] = {
     { "_setFrameAtTime",        "(Ljava/lang/String;JJII)V", (void *) IjkMediaPlayer_setFrameAtTime },
 };
 
+// AI推理框架JNI注册(前向声明)
+jint IJKAI_RegisterNatives(JNIEnv *env);
+
 JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)
 {
     JNIEnv* env = NULL;
@@ -1251,6 +1254,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)
     ijkmp_global_set_inject_callback(inject_callback);
 
     FFmpegApi_global_init(env);
+
+    IJKAI_RegisterNatives(env);
 
     return JNI_VERSION_1_4;
 }
