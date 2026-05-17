@@ -164,6 +164,7 @@ if(IJKAI_ENABLE_LLM)
     list(APPEND IJKAI_SOURCES
         "${IJKAI_ROOT}/ijkai.c"
         "${IJKAI_ROOT}/ijkai_jni.c"
+        "${IJKAI_ROOT}/ijkai_pipenode.c"
         "${IJKAI_ROOT}/async/ijkai_queue.c"
         "${IJKAI_ROOT}/llm/ijkai_llm.cpp")
     

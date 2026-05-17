@@ -30,6 +30,11 @@ typedef struct {
     ijkai_llm_callback callback;
     void *user_data;
     int max_tokens;
+    
+    // 多模态数据(当有图像时使用)
+    uint8_t *image_data;
+    int image_width;
+    int image_height;
 } llm_task_data;
 
 /**

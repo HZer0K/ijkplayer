@@ -66,6 +66,10 @@ static void *ijkai_worker_loop(void *arg) {
             ijkai_llm_worker_thread(task.task_data);
             // 更新统计
             ctx->processed_frames++;
+        } else if (task.type == IJKAI_TASK_MULTIMODAL && task.task_data) {
+            // 多模态推理(复用LLM worker)
+            ijkai_llm_worker_thread(task.task_data);
+            ctx->processed_frames++;
         }
         // TODO: CV任务处理
     }
@@ -129,7 +133,8 @@ int ijkai_llm_prompt(
     
     ijkai_task task;
     task.type = IJKAI_TASK_LLM;
-    task.timestamp = 0;
+    task.priority = IJKAI_PRIORITY_NORMAL;
+    task.timestamp = 0; // 由队列自动设置
     
     llm_task_data *data = (llm_task_data *)malloc(sizeof(llm_task_data));
     if (!data) {
@@ -173,14 +178,42 @@ int ijkai_multimodal(
     ijkai_llm_callback callback,
     void *user_data
 ) {
-    (void)ctx;
-    (void)image_data;
-    (void)width;
-    (void)height;
-    (void)question;
-    (void)callback;
-    (void)user_data;
-    return -1;
+    if (!ctx || (ctx->type != IJKAI_TYPE_MULTIMODAL && ctx->type != IJKAI_TYPE_LLM) ||
+        !image_data || !question || !callback) {
+        return -1;
+    }
+    
+    ijkai_task task;
+    task.type = IJKAI_TASK_MULTIMODAL;
+    task.priority = IJKAI_PRIORITY_NORMAL;
+    task.timestamp = 0; // 由队列自动设置
+    
+    llm_task_data *data = (llm_task_data *)malloc(sizeof(llm_task_data));
+    if (!data) {
+        return -1;
+    }
+    
+    data->ctx = ctx->llm_ctx;
+    data->prompt = strdup(question);
+    data->callback = callback;
+    data->user_data = user_data;
+    data->max_tokens = 256;
+    
+    // 复制图像数据
+    data->image_data = (uint8_t *)malloc((size_t)(width * height * 4));
+    if (data->image_data) {
+        memcpy(data->image_data, image_data, (size_t)(width * height * 4));
+        data->image_width = width;
+        data->image_height = height;
+    } else {
+        data->image_width = 0;
+        data->image_height = 0;
+    }
+    
+    task.task_data = data;
+    
+    // 推入队列(不阻塞主线程)
+    return ijkai_queue_push(ctx->queue, &task);
 }
 
 int64_t ijkai_get_eval_time(ijkai_context *ctx) {

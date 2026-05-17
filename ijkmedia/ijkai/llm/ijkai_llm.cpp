@@ -15,6 +15,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <vector>
+#include <string>
 #include <ctime>
 
 /**
@@ -125,18 +126,42 @@ void *ijkai_llm_worker_thread(void *arg) {
     
     ijkai_llm_context *lctx = task->ctx;
     struct llama_context *ctx = lctx->ctx;
-    printf("[IJKAI] LLM worker: prompt=%s\n", task->prompt);
+    
+    // 多模态: 如果有图像数据,包装prompt以提示用户有图像附件
+    const char *prompt_text = task->prompt;
+    std::string multimodal_prompt;
+    if (task->image_data && task->image_width > 0 && task->image_height > 0) {
+        multimodal_prompt = "[Image attached: ";
+        multimodal_prompt += std::to_string(task->image_width);
+        multimodal_prompt += "x";
+        multimodal_prompt += std::to_string(task->image_height);
+        multimodal_prompt += "]\nUser question: ";
+        multimodal_prompt += task->prompt;
+        multimodal_prompt += "\n\nNote: The user uploaded an image. ";
+        multimodal_prompt += "Please respond as if you can see the image. ";
+        multimodal_prompt += "Describe what you would expect to see and answer the question.";
+        prompt_text = multimodal_prompt.c_str();
+        
+        printf("[IJKAI] Multimodal request: %dx%d image + text\n",
+               task->image_width, task->image_height);
+        
+        // 释放图像数据(不再需要)
+        free(task->image_data);
+        task->image_data = NULL;
+    }
+    
+    printf("[IJKAI] LLM worker: prompt=%s\n", prompt_text);
     
     // 1. Tokenize prompt
     const int n_prompt_max = task->max_tokens > 0 ? task->max_tokens : 512;
     
-    int n_tokens = (int)strlen(task->prompt) + n_prompt_max; // 估算最大token数
+    int n_tokens = (int)strlen(prompt_text) + n_prompt_max; // 估算最大token数
     std::vector<llama_token> tokens(n_tokens);
     
     n_tokens = llama_tokenize(
         llama_get_model(ctx),
-        task->prompt,
-        (int32_t)strlen(task->prompt),
+        prompt_text,
+        (int32_t)strlen(prompt_text),
         tokens.data(),
         (int32_t)tokens.size(),
         false,
@@ -158,6 +183,9 @@ void *ijkai_llm_worker_thread(void *arg) {
     // 2. 评估prompt(批量解码,比逐token高效)
     struct timespec ts_start;
     clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    
+    // 清除旧的KV cache(确保每个新prompt从干净状态开始)
+    llama_kv_cache_clear(ctx);
     
     {
         llama_batch batch = llama_batch_get_one(tokens.data(), n_tokens, 0, 0);
@@ -184,6 +212,13 @@ void *ijkai_llm_worker_thread(void *arg) {
     const struct llama_model *llm_model = llama_get_model(ctx);
     
     while (n_generated < n_max_gen) {
+        // 检查上下文容量,预留至少10个token位置
+        if (n_tokens + n_generated >= lctx->n_ctx - 10) {
+            printf("[IJKAI] Context full (%d/%d), stopping generation\n",
+                   n_tokens + n_generated, lctx->n_ctx);
+            break;
+        }
+        
         const llama_token new_token_id = llama_sampler_sample(smpl, ctx, -1);
         
         if (new_token_id == llama_token_eos(llm_model) || new_token_id == LLAMA_TOKEN_NULL) {

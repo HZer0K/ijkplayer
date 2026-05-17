@@ -26,6 +26,7 @@
 
 #include <stdbool.h>
 #include <jni.h>
+#include "../../ijkai/ijkai_pipenode.h"
 #include "../ijkplayer_android_def.h"
 #include "../../ff_ffpipeline.h"
 #include "ijksdl/ijksdl_vout.h"
@@ -51,5 +52,16 @@ void    ffpipeline_set_mediacodec_select_callback(IJKFF_Pipeline* pipeline, bool
 bool    ffpipeline_select_mediacodec_l(IJKFF_Pipeline* pipeline, ijkmp_mediacodecinfo_context *mcc);
 
 void    ffpipeline_set_volume(IJKFF_Pipeline* pipeline, float left, float right);
+
+/**
+ * 为AI推理创建Pipenode
+ * @param pipeline Pipeline
+ * @param type AI类型
+ * @param model_path 模型路径
+ * @param n_threads 线程数
+ * @return AI Pipenode,失败返回NULL
+ */
+IJKFF_Pipenode *ffpipeline_create_ai_pipenode(IJKFF_Pipeline *pipeline,
+    ijkai_type type, const char *model_path, int n_threads);
 
 #endif

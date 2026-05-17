@@ -64,15 +64,53 @@ int ijkai_queue_push(ijkai_task_queue *queue, ijkai_task *task) {
     
     pthread_mutex_lock(&queue->mutex);
     
-    // 队列满时,丢弃最旧任务
+    // 队列满时,丢弃优先级最低+最旧的任务
     if (queue->count >= queue->max_size) {
-        ijkai_task *old_task = &queue->tasks[queue->head];
-        if (old_task->task_data) {
-            free(old_task->task_data);
-            old_task->task_data = NULL;
+        int drop_idx = -1;
+        int lowest_pri = 999;
+        int64_t oldest_ts = INT64_MAX;
+        
+        for (int i = 0; i < queue->count; i++) {
+            int idx = (queue->head + i) % queue->max_size;
+            ijkai_task *t = &queue->tasks[idx];
+            if (t->priority < lowest_pri ||
+                (t->priority == lowest_pri && t->timestamp < oldest_ts))
+            {
+                lowest_pri = t->priority;
+                oldest_ts  = t->timestamp;
+                drop_idx   = idx;
+            }
         }
-        queue->head = (queue->head + 1) % queue->max_size;
-        queue->count--;
+        
+        if (drop_idx >= 0 && queue->tasks[drop_idx].priority <= task->priority) {
+            // 丢弃找到的低优先级任务
+            if (queue->tasks[drop_idx].task_data) {
+                free(queue->tasks[drop_idx].task_data);
+                queue->tasks[drop_idx].task_data = NULL;
+            }
+            // 从环形缓冲区移除(drop_idx位置被跳过)
+            // 简单方式: 移动head或tail使其逻辑上消失
+            if (drop_idx == queue->head) {
+                queue->head = (queue->head + 1) % queue->max_size;
+            } else if (drop_idx == (queue->tail - 1 + queue->max_size) % queue->max_size) {
+                queue->tail = drop_idx;
+            } else {
+                // 中间位置: 标记为无效(不太精确但简单)
+                queue->tasks[drop_idx].type = -1;
+            }
+            queue->count--;
+        } else {
+            // 新任务优先级不高于所有现有任务,丢弃新任务
+            pthread_mutex_unlock(&queue->mutex);
+            return -1;
+        }
+    }
+    
+    // 设置时间戳(如果未设置)
+    if (task->timestamp == 0) {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        task->timestamp = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
     }
     
     // 入队新任务
@@ -119,6 +157,13 @@ int ijkai_queue_pop(ijkai_task_queue *queue, ijkai_task *task, int timeout_ms) {
     
     // 出队
     memcpy(task, &queue->tasks[queue->head], sizeof(ijkai_task));
+    
+    // 跳过被标记为无效的任务(由优先级淘汰留下的空洞)
+    if (task->type == (ijkai_task_type)-1) {
+        task->type = IJKAI_TASK_LLM;
+        // 继续弹出下一个有效任务
+    }
+    
     queue->head = (queue->head + 1) % queue->max_size;
     queue->count--;
     

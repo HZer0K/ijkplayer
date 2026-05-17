@@ -17,12 +17,23 @@ extern "C" {
 #endif
 
 /**
+ * 任务优先级
+ */
+typedef enum {
+    IJKAI_PRIORITY_LOW    = 0,  /**< 低优先级(如后台批处理) */
+    IJKAI_PRIORITY_NORMAL = 1,  /**< 普通优先级(默认) */
+    IJKAI_PRIORITY_HIGH   = 2,  /**< 高优先级(如实时字幕) */
+    IJKAI_PRIORITY_CRITICAL = 3 /**< 关键优先级(立即处理) */
+} ijkai_priority;
+
+/**
  * 任务数据结构
  */
 typedef struct {
     ijkai_task_type type;     /**< 任务类型 */
     void *task_data;          /**< 任务数据 */
     int64_t timestamp;        /**< 时间戳(用于丢弃过期帧) */
+    ijkai_priority priority;  /**< 任务优先级 */
 } ijkai_task;
 
 /**

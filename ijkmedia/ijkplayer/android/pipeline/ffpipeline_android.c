@@ -26,6 +26,7 @@
 #include "ffpipenode_android_mediacodec_vdec.h"
 #include "../../pipeline/ffpipenode_ffplay_vdec.h"
 #include "../../ff_ffplay.h"
+#include "../../ijkai/ijkai_pipenode.h"
 #include "ijksdl/android/ijksdl_android_jni.h"
 #include "ijksdl/android/ijksdl_android.h"
 
@@ -293,4 +294,15 @@ void ffpipeline_set_volume(IJKFF_Pipeline* pipeline, float left, float right)
     if (opaque->ffp && opaque->ffp->aout) {
         SDL_AoutSetStereoVolume(opaque->ffp->aout, left, right);
     }
+}
+
+IJKFF_Pipenode *ffpipeline_create_ai_pipenode(IJKFF_Pipeline *pipeline,
+    ijkai_type type, const char *model_path, int n_threads)
+{
+    ALOGD("ffpipeline_create_ai_pipenode()\n");
+    if (!pipeline || !pipeline->opaque)
+        return NULL;
+
+    IJKFF_Pipeline_Opaque *opaque = pipeline->opaque;
+    return ijkai_pipenode_create(opaque->ffp, type, model_path, n_threads);
 }
