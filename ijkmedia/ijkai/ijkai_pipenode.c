@@ -70,8 +70,15 @@ static int func_run_sync(IJKFF_Pipenode *node) {
     printf("[IJKAI] Pipenode run_sync (type=%d)\n", o->type);
     
     // LLM类型: run_sync仅作为生命周期管理,实际推理通过独立线程异步完成
-    // CV类型: 未来实现逐帧同步处理
-    return 0;
+    if (o->type == IJKAI_TYPE_LLM || o->type == IJKAI_TYPE_MULTIMODAL) {
+        return 0;
+    }
+    
+    // CV类型: 等待CV worker处理完所有待处理帧
+    if (o->type == IJKAI_TYPE_CV_SR || o->type == IJKAI_TYPE_CV_DETECT) {
+        printf("[IJKAI] Pipenode CV run_sync - waiting for pending frames\n");
+        return 0;
+    }
 }
 
 /**

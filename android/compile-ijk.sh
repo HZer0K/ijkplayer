@@ -128,6 +128,7 @@ do_cmake_build () {
         # Also remove compiled .so files so stale binaries don't end up in the APK
         rm -f "$OUT_LIB_DIR/libijkplayer.so" "$OUT_LIB_DIR/libijksdl.so" "$OUT_LIB_DIR/libc++_shared.so"
         rm -f "$OUT_LIB_DIR/libllama.so" "$OUT_LIB_DIR/libggml.so"
+        rm -f "$OUT_LIB_DIR/libMNN.so"
         echo "[*] cleaned: $BUILD_DIR and $OUT_LIB_DIR/*.so"
         return 0
     fi
@@ -227,6 +228,15 @@ do_cmake_build () {
     if [ -f "$GGML_LIB" ]; then
         cp -f "$GGML_LIB" "$OUT_LIB_DIR/"
         echo "[*] copied libggml.so -> $OUT_LIB_DIR/"
+    fi
+    
+    # Copy libMNN.so if available
+    local MNN_LIB="$ANDROID_ROOT/contrib/build/mnn-arm64/output/lib/libMNN.so"
+    if [ -f "$MNN_LIB" ]; then
+        cp -f "$MNN_LIB" "$OUT_LIB_DIR/"
+        echo "[*] copied libMNN.so -> $OUT_LIB_DIR/"
+    else
+        echo "[*] libMNN.so not found (CV support disabled)"
     fi
 }
 

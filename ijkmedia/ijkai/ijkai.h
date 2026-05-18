@@ -43,6 +43,16 @@ typedef enum {
 } ijkai_type;
 
 /**
+ * CV推理后端
+ */
+typedef enum {
+    IJKAI_CV_BACKEND_CPU     = 0,  /**< CPU推理(默认) */
+    IJKAI_CV_BACKEND_OPENCL  = 1,  /**< OpenCL GPU加速 */
+    IJKAI_CV_BACKEND_VULKAN  = 2,  /**< Vulkan GPU加速 */
+    IJKAI_CV_BACKEND_AUTO    = 3   /**< 自动选择最优后端 */
+} ijkai_cv_backend;
+
+/**
  * 任务类型枚举(内部使用)
  */
 typedef enum {
@@ -137,6 +147,14 @@ int ijkai_cv_process(
     ijkai_cv_callback callback,
     void *user_data
 );
+
+/**
+ * 设置CV推理后端
+ * @param ctx AI上下文
+ * @param backend 后端类型(ijkai_cv_backend)
+ * @return 0成功, -1失败
+ */
+int ijkai_cv_set_backend(ijkai_context *ctx, int backend);
 
 /**
  * 多模态推理(异步)

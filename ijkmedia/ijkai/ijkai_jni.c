@@ -7,6 +7,7 @@
  */
 
 #include "ijkai.h"
+#include "cv/ijkai_cv.h"
 #include <jni.h>
 #include <android/log.h>
 #include <stdlib.h>
@@ -167,6 +168,120 @@ static jint JNICALL native_get_processed_frames(JNIEnv *env, jclass clazz, jlong
     return ijkai_get_processed_frames(ctx);
 }
 
+// ============ CV JNI 方法 ============
+
+/**
+ * CV回调数据结构
+ */
+typedef struct {
+    jobject callback_obj;
+    jmethodID on_result;
+    jmethodID on_error;
+} jni_cv_callback_data;
+
+/**
+ * JNI CV回调(在工作线程执行)
+ */
+static void jni_cv_callback(uint8_t *output_data, int width, int height,
+                             bool success, void *user_data) {
+    jni_cv_callback_data *cb = (jni_cv_callback_data *)user_data;
+    if (!cb || !cb->callback_obj || !g_jvm) {
+        free(cb);
+        return;
+    }
+    
+    JNIEnv *env;
+    jint attach_ret = (*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL);
+    if (attach_ret != JNI_OK || !env) {
+        free(cb);
+        return;
+    }
+    
+    if (success && output_data && width > 0 && height > 0) {
+        jsize data_size = width * height * 4;
+        jbyteArray jdata = (*env)->NewByteArray(env, data_size);
+        if (jdata) {
+            (*env)->SetByteArrayRegion(env, jdata, 0, data_size,
+                (const jbyte *)output_data);
+            (*env)->CallVoidMethod(env, cb->callback_obj, cb->on_result,
+                jdata, width, height);
+            (*env)->DeleteLocalRef(env, jdata);
+        }
+    } else {
+        const char *err_msg = success ? "empty result" : "CV processing failed";
+        jstring jerr = (*env)->NewStringUTF(env, err_msg);
+        (*env)->CallVoidMethod(env, cb->callback_obj, cb->on_error, jerr);
+        (*env)->DeleteLocalRef(env, jerr);
+    }
+    
+    (*env)->DeleteGlobalRef(env, cb->callback_obj);
+    free(cb);
+    (*g_jvm)->DetachCurrentThread(g_jvm);
+}
+
+/**
+ * CV处理(超分辨率)
+ * int nativeCVProcess(long nativePtr, byte[] input, int inW, int inH,
+ *                     int outW, int outH, Object callback)
+ */
+static jint JNICALL native_cv_process(JNIEnv *env, jclass clazz,
+    jlong native_ptr, jbyteArray input, jint in_w, jint in_h,
+    jint out_w, jint out_h, jobject callback)
+{
+    (void)clazz;
+    
+    ijkai_context *ctx = (ijkai_context *)(intptr_t)native_ptr;
+    if (!ctx || !input || !callback) {
+        return -1;
+    }
+    
+    jbyte *input_data = (*env)->GetByteArrayElements(env, input, NULL);
+    if (!input_data) {
+        return -1;
+    }
+    
+    jni_cv_callback_data *cb = (jni_cv_callback_data *)malloc(
+        sizeof(jni_cv_callback_data));
+    if (!cb) {
+        (*env)->ReleaseByteArrayElements(env, input, input_data, JNI_ABORT);
+        return -1;
+    }
+    
+    cb->callback_obj = (*env)->NewGlobalRef(env, callback);
+    
+    jclass callback_cls = (*env)->GetObjectClass(env, callback);
+    cb->on_result = (*env)->GetMethodID(env, callback_cls, "onResult",
+        "([BII)V");
+    cb->on_error = (*env)->GetMethodID(env, callback_cls, "onError",
+        "(Ljava/lang/String;)V");
+    (*env)->DeleteLocalRef(env, callback_cls);
+    
+    int ret = ijkai_cv_process(ctx,
+        (uint8_t *)input_data, (int)in_w, (int)in_h,
+        (int)out_w, (int)out_h,
+        jni_cv_callback, cb);
+    
+    (*env)->ReleaseByteArrayElements(env, input, input_data, JNI_ABORT);
+    
+    return ret;
+}
+
+/**
+ * 设置CV推理后端
+ * void nativeSetCVBackend(long nativePtr, int backend)
+ */
+static void JNICALL native_set_cv_backend(JNIEnv *env, jclass clazz,
+    jlong native_ptr, jint backend)
+{
+    (void)env;
+    (void)clazz;
+    
+    ijkai_context *ctx = (ijkai_context *)(intptr_t)native_ptr;
+    if (ctx) {
+        ijkai_cv_set_backend(ctx, (int)backend);
+    }
+}
+
 // ============ JNI 注册(由ijkplayer_jni.c的JNI_OnLoad调用) ============
 
 static JNINativeMethod g_methods[] = {
@@ -175,6 +290,8 @@ static JNINativeMethod g_methods[] = {
     {"nativeLLMPrompt",       "(JLjava/lang/String;Ljava/lang/Object;I)I", (void *)native_llm_prompt},
     {"nativeGetTokenCount",   "(J)I",                     (void *)native_get_token_count},
     {"nativeGetProcessedFrames","(J)I",                    (void *)native_get_processed_frames},
+    {"nativeCVProcess",       "(J[BIIIILjava/lang/Object;)I", (void *)native_cv_process},
+    {"nativeSetCVBackend",    "(JI)V",                    (void *)native_set_cv_backend},
 };
 
 jint IJKAI_RegisterNatives(JNIEnv *env, JavaVM *vm) {

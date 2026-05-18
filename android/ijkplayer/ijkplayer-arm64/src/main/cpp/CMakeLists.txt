@@ -148,14 +148,20 @@ target_link_libraries(ijksdl PRIVATE
 
 # ============ AI 推理框架 ============
 option(IJKAI_ENABLE_LLM "Enable LLM (llama.cpp)" ON)
+option(IJKAI_ENABLE_CV "Enable CV (MNN)" ON)
 
 set(IJKAI_ROOT "${IJK_MEDIA_ROOT}/ijkai")
 set(IJK_LLAMA_OUTPUT_DIR "${IJK_REPO_ROOT}/android/contrib/build/llama-arm64/output" CACHE PATH "llama.cpp build output directory")
+set(IJK_MNN_OUTPUT_DIR "${IJK_REPO_ROOT}/android/contrib/build/mnn-arm64/output" CACHE PATH "MNN build output directory")
+
+# Initialize lists
+set(IJKAI_SOURCES)
+set(IJKAI_INCLUDES)
+set(IJKAI_LIBS)
 
 if(IJKAI_ENABLE_LLM)
     message(STATUS "IJKAI: LLM support enabled, using llama.cpp from ${IJK_LLAMA_OUTPUT_DIR}")
     
-    # 导入预编译的 libllama.so
     add_library(llama SHARED IMPORTED)
     set_target_properties(llama PROPERTIES
         IMPORTED_LOCATION "${IJK_LLAMA_OUTPUT_DIR}/lib/libllama.so"
@@ -175,10 +181,42 @@ if(IJKAI_ENABLE_LLM)
     
     list(APPEND IJKAI_LIBS llama)
 else()
-    message(STATUS "IJKAI: LLM support disabled, using placeholder")
+    message(STATUS "IJKAI: LLM support disabled")
     list(APPEND IJKAI_SOURCES
         "${IJKAI_ROOT}/ijkai.c"
         "${IJKAI_ROOT}/async/ijkai_queue.c")
+endif()
+
+if(IJKAI_ENABLE_CV)
+    message(STATUS "IJKAI: CV support enabled, using MNN from ${IJK_MNN_OUTPUT_DIR}")
+    
+    add_library(MNN SHARED IMPORTED)
+    set_target_properties(MNN PROPERTIES
+        IMPORTED_LOCATION "${IJK_MNN_OUTPUT_DIR}/lib/libMNN.so"
+    )
+    
+    list(APPEND IJKAI_SOURCES
+        "${IJKAI_ROOT}/cv/ijkai_cv.c"
+        "${IJKAI_ROOT}/cv/ijkai_cv_sr.c"
+        "${IJKAI_ROOT}/cv/ijkai_cv_detect.c"
+        "${IJKAI_ROOT}/cv/ijkai_cv_mnn_wrap.cpp")
+    
+    list(APPEND IJKAI_INCLUDES
+        "${IJKAI_ROOT}"
+        "${IJK_MNN_OUTPUT_DIR}/include")
+    
+    list(APPEND IJKAI_LIBS MNN)
+    
+    if(NOT IJKAI_ENABLE_LLM)
+        # 如果LLM未启用，仍然需要核心ijkai源文件
+        list(APPEND IJKAI_SOURCES
+            "${IJKAI_ROOT}/ijkai.c"
+            "${IJKAI_ROOT}/ijkai_jni.c"
+            "${IJKAI_ROOT}/ijkai_pipenode.c"
+            "${IJKAI_ROOT}/async/ijkai_queue.c")
+    endif()
+else()
+    message(STATUS "IJKAI: CV support disabled")
 endif()
 
 add_library(ijkplayer SHARED
