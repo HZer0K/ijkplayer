@@ -64,6 +64,8 @@ int ijkai_queue_push(ijkai_task_queue *queue, ijkai_task *task) {
     
     pthread_mutex_lock(&queue->mutex);
     
+    int reuse_slot = -1;  // 中间位置drop时,复用该槽位
+    
     // 队列满时,丢弃优先级最低+最旧的任务
     if (queue->count >= queue->max_size) {
         int drop_idx = -1;
@@ -88,15 +90,14 @@ int ijkai_queue_push(ijkai_task_queue *queue, ijkai_task *task) {
                 free(queue->tasks[drop_idx].task_data);
                 queue->tasks[drop_idx].task_data = NULL;
             }
-            // 从环形缓冲区移除(drop_idx位置被跳过)
-            // 简单方式: 移动head或tail使其逻辑上消失
+            // 从环形缓冲区移除
             if (drop_idx == queue->head) {
                 queue->head = (queue->head + 1) % queue->max_size;
             } else if (drop_idx == (queue->tail - 1 + queue->max_size) % queue->max_size) {
                 queue->tail = drop_idx;
             } else {
-                // 中间位置: 标记为无效(不太精确但简单)
-                queue->tasks[drop_idx].type = -1;
+                // 中间位置: 记住这个槽位,新任务直接写入这里
+                reuse_slot = drop_idx;
             }
             queue->count--;
         } else {
@@ -114,8 +115,13 @@ int ijkai_queue_push(ijkai_task_queue *queue, ijkai_task *task) {
     }
     
     // 入队新任务
-    memcpy(&queue->tasks[queue->tail], task, sizeof(ijkai_task));
-    queue->tail = (queue->tail + 1) % queue->max_size;
+    if (reuse_slot >= 0) {
+        // 写入到被drop释放的中间槽位,不改变tail
+        memcpy(&queue->tasks[reuse_slot], task, sizeof(ijkai_task));
+    } else {
+        memcpy(&queue->tasks[queue->tail], task, sizeof(ijkai_task));
+        queue->tail = (queue->tail + 1) % queue->max_size;
+    }
     queue->count++;
     
     pthread_cond_signal(&queue->not_empty);

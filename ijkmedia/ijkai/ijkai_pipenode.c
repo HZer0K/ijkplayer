@@ -79,6 +79,8 @@ static int func_run_sync(IJKFF_Pipenode *node) {
         printf("[IJKAI] Pipenode CV run_sync - waiting for pending frames\n");
         return 0;
     }
+    
+    return 0;
 }
 
 /**
