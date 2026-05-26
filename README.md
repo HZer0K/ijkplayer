@@ -27,7 +27,7 @@ ijkplayer
 │   ├── ijksdl/        # SDL 抽象层（渲染、音频输出）
 │   ├── ijkyuv/        # libyuv 封装
 │   ├── ijksoundtouch/ # SoundTouch 封装
-│   └── ijkai/         # AI 推理框架 👉 [文档](ijkmedia/ijkai/README.md)
+│   └── ijkai/         # AI 推理框架 👉 [文档](doc/ai.md)
 ├── extra/             # 第三方库源码（FFmpeg、llama.cpp、MNN 等）
 ├── android/
 │   ├── contrib/       # 第三方库构建脚本
@@ -61,7 +61,7 @@ cd ../android/ijkplayer
 ./gradlew :ijkplayer-example:assembleDebug -x lint
 ```
 
-> 详细构建步骤、环境配置、Whisper 编译、Prefab 集成请见 [BUILD.md](BUILD.md)
+> 详细构建步骤、环境配置、Whisper 编译、Prefab 集成请见 [doc/build.md](doc/build.md)
 
 ---
 
@@ -74,8 +74,7 @@ cd ../android/ijkplayer
 | llama.cpp | LLM 对话、多模态理解 | ⏸️ 待集成 |
 | MNN | 超分辨率、目标检测 | ✅ 已完成 |
 
-- [AI 框架架构与测试文档](ijkmedia/ijkai/README.md)
-- [构建 AI 框架](BUILD.md#whisper-离线-asr-字幕可选)
+- [AI 框架架构与测试文档](doc/ai.md)
 
 ---
 
@@ -93,7 +92,7 @@ Demo App（`android/ijkplayer/ijkplayer-example`）提供以下功能：
 
 ## 常见问题
 
-遇到问题请查阅 [FAQ.md](FAQ.md)，涵盖：
+遇到问题请查阅 [doc/faq.md](doc/faq.md)，涵盖：
 - 滤镜相关（avgblur 未找到、Vulkan 编译报错）
 - 运行时崩溃（libc++_shared.so 找不到）
 - AI 推理相关问题

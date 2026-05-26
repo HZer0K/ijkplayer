@@ -36,7 +36,7 @@ A: 不会。AI 框架采用完全异步架构，推理任务在有界队列中�
 
 **Q: 如何启用 LLM 功能？**
 
-A: 需要先初始化并编译 llama.cpp，然后在 CMakeLists.txt 中设置 `IJKAI_ENABLE_LLM=ON`，重新编译 ijkplayer。详细步骤见 [ijkai/README.md](ijkmedia/ijkai/README.md)。
+A: 需要先初始化并编译 llama.cpp，然后在 CMakeLists.txt 中设置 `IJKAI_ENABLE_LLM=ON`，重新编译 ijkplayer。详细步骤见 [AI 框架文档](ai.md)。
 
 **Q: 支持哪些 LLM 模型？**
 
