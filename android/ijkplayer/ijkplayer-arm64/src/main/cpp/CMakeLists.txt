@@ -228,6 +228,8 @@ add_library(ijkplayer SHARED
         "${IJK_MEDIA_ROOT}/ijkplayer/ijkplayer.c"
         "${IJK_MEDIA_ROOT}/ijkplayer/pipeline/ffpipeline_ffplay.c"
         "${IJK_MEDIA_ROOT}/ijkplayer/pipeline/ffpipenode_ffplay_vdec.c"
+        "${IJK_MEDIA_ROOT}/ijkplayer/pipeline/ffpipeline_ai.c"
+        "${IJK_MEDIA_ROOT}/ijkplayer/pipeline/ffpipenode_ai_video.c"
         "${IJK_MEDIA_ROOT}/ijkplayer/android/ffmpeg_api_jni.c"
         "${IJK_MEDIA_ROOT}/ijkplayer/android/ijkplayer_android.c"
         "${IJK_MEDIA_ROOT}/ijkplayer/android/ijkplayer_jni.c"
