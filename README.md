@@ -21,22 +21,58 @@
 ## 架构概览
 
 ```
-ijkplayer
-├── ijkmedia/          # Native 核心（C/C++）
-│   ├── ijkplayer/     # 播放器主逻辑
-│   ├── ijksdl/        # SDL 抽象层（渲染、音频输出）
-│   ├── ijkyuv/        # libyuv 封装
-│   ├── ijksoundtouch/ # SoundTouch 封装
-│   └── ijkai/         # AI 推理框架 👉 [文档](doc/ai.md)
-├── extra/             # 第三方库源码（FFmpeg、llama.cpp、MNN 等）
+ijkplayer/
+├── README.md                    # 项目概览
+├── doc/                         # 文档
+│   ├── build.md                 #   构建指南
+│   ├── faq.md                   #   常见问题
+│   └── ai.md                    #   AI 框架文档
+├── ijkmedia/                    # Native 核心（C/C++）
+│   ├── ijkplayer/               #   播放器主逻辑
+│   ├── ijksdl/                  #   SDL 抽象层（渲染、音频输出）
+│   │   ├── audio/               #     音频输出后端
+│   │   ├── video/               #     视频渲染后端（Vulkan/OpenGL）
+│   │   └── gles2/               #     GLES2 辅助
+│   ├── ijkyuv/                  #   libyuv 色彩空间转换
+│   │   ├── convert/             #     色彩空间转换
+│   │   └── rotate/              #     旋转/缩放
+│   ├── ijksoundtouch/           #   SoundTouch 变速变调
+│   ├── ijkai/                   #   AI 推理框架 👉 [doc/ai.md](doc/ai.md)
+│   │   ├── async/               #     异步任务队列
+│   │   ├── llm/                 #     LLM 后端（llama.cpp）
+│   │   ├── cv/                  #     CV 后端（MNN）
+│   │   ├── ijkai.c              #     调度层
+│   │   └── ijkai_pipenode.c     #     Pipenode 封装
+│   └── compat/                  #   兼容层
+├── extra/                       # 第三方库源码
+│   ├── ffmpeg/                  #   FFmpeg 8（含 Vulkan 支持）
+│   ├── libyuv/                  #   libyuv
+│   ├── soundtouch/              #   SoundTouch
+│   ├── llama.cpp/               #   LLM 推理引擎（可选）
+│   └── MNN/                     #   CV 推理引擎（可选）
 ├── android/
-│   ├── contrib/       # 第三方库构建脚本
-│   └── ijkplayer/     # Android 工程
-│       ├── ijkplayer-java/    # Java 接口层
-│       ├── ijkplayer-arm64/   # arm64 预编译 so + AAR
-│       ├── ijkplayer-exo/     # ExoPlayer 适配层
-│       └── ijkplayer-example/ # Demo App
-└── config/            # FFmpeg 模块配置
+│   ├── contrib/                 #   第三方库构建脚本
+│   │   ├── compile-ffmpeg.sh    #     FFmpeg 交叉编译
+│   │   ├── compile-llama.sh     #     llama.cpp 编译（可选）
+│   │   ├── compile-openssl.sh   #     OpenSSL 编译
+│   │   └── compile-glslang.sh   #     glslang 编译（Vulkan 滤镜）
+│   └── ijkplayer/               #   Android 工程
+│       ├── ijkplayer-java/      #     Java 接口层
+│       ├── ijkplayer-arm64/     #     arm64 预编译 so + AAR
+│       │   └── src/main/cpp/    #       CMake 构建入口
+│       ├── ijkplayer-exo/       #     ExoPlayer 适配层
+│       └── ijkplayer-example/   #     Demo App
+├── config/                      # FFmpeg 模块选择
+│   ├── module-default.sh        #   完整解码器集合
+│   ├── module-lite.sh           #   精简集合（默认）
+│   └── module-lite-hevc.sh      #   精简 + HEVC
+└── 脚本文件
+    ├── init-android.sh          #   子模块初始化
+    ├── init-android-openssl.sh  #   OpenSSL 初始化
+    ├── init-android-llama.sh    #   llama.cpp 初始化（可选）
+    ├── init-android-mnn.sh      #   MNN 初始化（可选）
+    ├── init-android-soundtouch.sh
+    └── init-android-libsoxr.sh
 ```
 
 ---
