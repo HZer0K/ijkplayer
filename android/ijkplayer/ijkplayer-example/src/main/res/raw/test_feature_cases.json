@@ -154,5 +154,105 @@
     "expected": "边缘出现明显 RGB 分离（chromaber_vulkan）",
     "logKeywords": ["apply vf0="],
     "hint": "增大 dist 让色差更明显（chromaber_vulkan）"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "rotate", "transpose"],
+    "name": "Vulkan 旋转270°（transpose_vulkan=cclock）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,transpose_vulkan=dir=cclock,hwdownload,format=yuv420p",
+    "expected": "画面逆时针旋转 90°（即顺时针 270°）",
+    "logKeywords": ["apply vf0="],
+    "hint": "验证 Vulkan 逆时针旋转（transpose_vulkan cclock）"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "rotate", "transpose"],
+    "name": "Vulkan 旋转180°（transpose_vulkan=clock,transpose_vulkan=clock）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,transpose_vulkan=dir=clock,transpose_vulkan=dir=clock,hwdownload,format=yuv420p",
+    "expected": "画面旋转 180°（两次顺时针 90°）",
+    "logKeywords": ["apply vf0="],
+    "hint": "连环两个 Vulkan 旋转=180°；验证多 Vulkan 滤镜串联"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "blend"],
+    "name": "Vulkan 混合（blend_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "split[a][b],[a]hwupload,blend_vulkan=all_mode=screen:c0_mode=addition:c1_mode=addition:c2_mode=screen:c3_mode=screen,hwdownload,format=yuv420p[b],[b]overlay",
+    "expected": "设备支持 Vulkan 时画面变亮（blend_vulkan screen 混合）",
+    "logKeywords": ["apply vf0="],
+    "hint": "split 后通过 blend_vulkan 做 screen 模式混合；整体画面提亮"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "overlay"],
+    "name": "Vulkan 叠加（overlay_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "drawbox=x=0:y=0:w=80:h=80:color=red@0.9:t=fill,format=rgba,hwupload[ov],[in]hwupload[bg],[bg][ov]overlay_vulkan=x=10:y=10,hwdownload,format=yuv420p",
+    "expected": "左上角出现一个红色半透明方块（overlay_vulkan）",
+    "logKeywords": ["apply vf0="],
+    "hint": "在画面上用 overlay_vulkan 叠加一个红色方块"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "deinterlace"],
+    "name": "Vulkan 去隔行（bwdif_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,bwdif_vulkan=mode=send_frame:parity=auto:deint=all,hwdownload,format=yuv420p",
+    "expected": "正常逐帧显示（去隔行对所有帧生效，对逐行源无明显变化）",
+    "logKeywords": ["apply vf0="],
+    "hint": "验证 bwdif_vulkan 去隔行滤镜可正确配置；对逐行源画面基本不变"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "denoise"],
+    "name": "Vulkan 降噪（nlmeans_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,nlmeans_vulkan=8:5:21:9,hwdownload,format=yuv420p",
+    "expected": "画面出现平滑/降噪效果（nlmeans_vulkan）；不支持时回落软件 nlmeans",
+    "logKeywords": ["apply vf0=", "Vulkan fallback to software"],
+    "hint": "nlmeans_vulkan 非局部均值降噪；降噪强度 8，搜索范围 5，相似块 21"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "flip", "combo"],
+    "name": "Vulkan 综合翻转（flip_vulkan 水平+垂直）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "drawbox=x=0:y=0:w=iw/10:h=ih/10:color=red@0.9:t=fill,hwupload,flip_vulkan,hwdownload,format=yuv420p",
+    "expected": "左上角红色方块翻到右下角（flip_vulkan 同时水平+垂直翻转）",
+    "logKeywords": ["apply vf0="],
+    "hint": "flip_vulkan 是 hflip_vulkan+vflip_vulkan 的二合一；方块翻到对角"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "chain", "combo"],
+    "name": "Vulkan 滤镜链（缩放+模糊+翻转）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,scale_vulkan=w=iw/2:h=ih/2,gblur_vulkan=sigma=4:size=15,hflip_vulkan,hwdownload,format=yuv420p,pad=w=iw*2:h=ih*2:x=(ow-iw)/2:y=(oh-ih)/2:color=black",
+    "expected": "画面缩小+模糊+水平翻转+居中黑边；验证多 Vulkan 滤镜链",
+    "logKeywords": ["apply vf0="],
+    "hint": "三个 Vulkan 滤镜串联：缩放→模糊→翻转；展示无需回退到 CPU 的完整 GPU pipeline"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "interlace"],
+    "name": "Vulkan 隔行扫描（interlace_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,interlace_vulkan=scan=tff,hwdownload,format=yuv420p",
+    "expected": "画面出现类似隔行扫描的横纹效果（interlace_vulkan top-field-first）",
+    "logKeywords": ["apply vf0="],
+    "hint": "interlace_vulkan 将逐行画面转为隔行效果；top-field-first 扫描模式"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "chromatic", "intense"],
+    "name": "Vulkan 强色差（chromaber_vulkan 大幅偏移）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,chromaber_vulkan=dist_x=20:dist_y=12,hwdownload,format=yuv420p",
+    "expected": "边缘 RGB 分离非常明显（chromaber_vulkan dist 翻倍）",
+    "logKeywords": ["apply vf0="],
+    "hint": "dist_x=20 dist_y=12 产生较强的毛玻璃 RGB 分离效果"
   }
 ]

@@ -153,6 +153,13 @@ FFmpegApi_getCapabilitiesJson(JNIEnv *env, jclass clazz)
             "gblur_vulkan",
             "avgblur_vulkan",
             "chromaber_vulkan",
+            "flip_vulkan",
+            "blend_vulkan",
+            "overlay_vulkan",
+            "bwdif_vulkan",
+            "nlmeans_vulkan",
+            "blackdetect_vulkan",
+            "interlace_vulkan",
             NULL
     };
 

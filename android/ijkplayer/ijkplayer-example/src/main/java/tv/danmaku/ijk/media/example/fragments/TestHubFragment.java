@@ -208,7 +208,10 @@ public class TestHubFragment extends Fragment {
                         "hflip", "vflip", "gblur", "eq", "scale", "format",
                         "hwupload", "hwdownload",
                         "scale_vulkan", "hflip_vulkan", "vflip_vulkan",
-                        "gblur_vulkan", "avgblur_vulkan", "chromaber_vulkan"
+                        "gblur_vulkan", "avgblur_vulkan", "chromaber_vulkan",
+                        "flip_vulkan", "blend_vulkan", "overlay_vulkan",
+                        "bwdif_vulkan", "nlmeans_vulkan",
+                        "blackdetect_vulkan", "interlace_vulkan"
                     };
                     for (String f : checkFilters) {
                         if (fp.has(f)) {
