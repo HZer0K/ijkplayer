@@ -161,11 +161,6 @@
                 android:title="@string/subtitle_add"
                 app:showAsAction="never" />
             <item
-                android:id="@+id/action_subtitle_asr_toggle"
-                android:checkable="true"
-                android:title="@string/subtitle_asr_toggle"
-                app:showAsAction="never" />
-            <item
                 android:id="@+id/action_subtitle_clear"
                 android:title="@string/subtitle_clear"
                 app:showAsAction="never" />

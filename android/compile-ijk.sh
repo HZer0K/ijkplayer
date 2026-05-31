@@ -187,6 +187,7 @@ do_cmake_build () {
         -DANDROID_STL=c++_shared \
         -DIJK_FFMPEG_SOURCE_DIR="$FFMPEG_SOURCE_DIR" \
         -DIJK_FFMPEG_OUTPUT_DIR="$FFMPEG_OUTPUT_DIR" \
+        -DIJKAI_ENABLE_CV=OFF \
         -DCMAKE_BUILD_TYPE=Release
 
     "$CMAKE_BIN" --build "$BUILD_DIR" --target ijksdl ijkplayer

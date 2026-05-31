@@ -9,7 +9,6 @@
 - **播放内核**：IjkMediaPlayer（FFmpeg 8）与 ExoPlayer 双内核，运行时无缝切换
 - **Vulkan 支持**：FFmpeg 编译时开启 `--enable-vulkan`，保留 Vulkan 设备渲染能力
 - **HTTPS/TLS**：集成 OpenSSL 3.3.x，支持 HTTPS 直播与点播
-- **离线 ASR 字幕**：集成 Whisper.cpp，支持实时语音识别生成字幕（可选编译）
 - **音频处理**：集成 SoundTouch 变速、libsoxr 高质量重采样
 - **图像处理**：集成 libyuv 色彩空间转换
 - **AI 推理框架**：集成 llama.cpp（LLM 多模态对话）+ MNN（CV 任务），完全异步化不阻塞播放
@@ -97,7 +96,7 @@ cd ../android/ijkplayer
 ./gradlew :ijkplayer-example:assembleDebug -x lint
 ```
 
-> 详细构建步骤、环境配置、Whisper 编译、Prefab 集成请见 [doc/build.md](doc/build.md)
+> 详细构建步骤、环境配置、Prefab 集成请见 [doc/build.md](doc/build.md)
 
 ---
 
@@ -120,7 +119,6 @@ Demo App（`android/ijkplayer/ijkplayer-example`）提供以下功能：
 
 - **播放器**：IjkMediaPlayer / ExoPlayer 双内核切换
 - **视频滤镜**：渲染层滤镜 + FFmpeg 软件滤镜，运行时实时切换
-- **离线 ASR 字幕**：Whisper 语音识别实时生成字幕
 - **功能测试**：Vulkan 能力检测、滤镜链路自检
 - **调试诊断**：错误弹窗、日志复制、Track 切换
 

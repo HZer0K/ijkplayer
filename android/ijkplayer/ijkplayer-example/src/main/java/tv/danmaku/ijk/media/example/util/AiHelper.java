@@ -48,6 +48,10 @@ public class AiHelper {
     private static final String AI_MODEL_DEFAULT_URL =
             "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf";
 
+    /** Chinese mirror URL for the same model (hf-mirror.com syncs from Hugging Face) */
+    private static final String AI_MODEL_MIRROR_URL =
+            "https://hf-mirror.com/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf";
+
     public interface Callback {
         /** Called when AI partial text should be displayed in subtitle overlay. */
         void onAiPartialText(@Nullable String text);
@@ -252,13 +256,17 @@ public class AiHelper {
     };
 
     private void startAiModelDownload(final AppCompatActivity activity) {
+        startAiModelDownload(AI_MODEL_DEFAULT_URL, activity);
+    }
+
+    private void startAiModelDownload(final String url, final AppCompatActivity activity) {
         if (mAiModelDownloader != null) {
             return;
         }
         File modelDir = new File(mContext.getExternalFilesDir(null), "models");
         String name = "llm_" + sha1(AI_MODEL_DEFAULT_URL) + ".gguf";
         mAiModelDownloadedFile = new File(modelDir, name);
-        mAiModelDownloadUrl = AI_MODEL_DEFAULT_URL;
+        mAiModelDownloadUrl = url;
 
         if (mAiModelDownloadedFile.exists() && mAiModelDownloadedFile.length() > 0) {
             initAiEngine(activity, mAiModelDownloadedFile.getAbsolutePath());
@@ -273,7 +281,7 @@ public class AiHelper {
 
         HttpFileDownloader downloader = new HttpFileDownloader();
         mAiModelDownloader = downloader;
-        Thread t = new Thread(() -> downloader.download(AI_MODEL_DEFAULT_URL,
+        Thread t = new Thread(() -> downloader.download(url,
                 mAiModelDownloadedFile,
                 new HttpFileDownloader.Listener() {
                     @Override
@@ -304,13 +312,26 @@ public class AiHelper {
 
                     @Override
                     public void onError(Throwable err) {
+                        final boolean retryWithMirror =
+                                AI_MODEL_DEFAULT_URL.equals(url)
+                                && !TextUtils.isEmpty(AI_MODEL_MIRROR_URL);
                         mMainHandler.post(() -> {
-                            mAiModelDownloader = null;
-                            mAiModelDownloadThread = null;
-                            mAiPartialText = activity.getString(R.string.ai_llm_download_failed);
-                            mCallback.onAiPartialText(mAiPartialText);
-                            mAiEnabled = false;
-                            mCallback.invalidateOptionsMenu();
+                            if (retryWithMirror) {
+                                // Primary source failed, retry with Chinese mirror
+                                mAiModelDownloader = null;
+                                mAiModelDownloadThread = null;
+                                mAiPartialText = activity.getString(
+                                        R.string.ai_llm_download_retry_mirror);
+                                mCallback.onAiPartialText(mAiPartialText);
+                                startAiModelDownload(AI_MODEL_MIRROR_URL, activity);
+                            } else {
+                                mAiModelDownloader = null;
+                                mAiModelDownloadThread = null;
+                                mAiPartialText = activity.getString(R.string.ai_llm_download_failed);
+                                mCallback.onAiPartialText(mAiPartialText);
+                                mAiEnabled = false;
+                                mCallback.invalidateOptionsMenu();
+                            }
                         });
                     }
                 }), "ai-model-download");

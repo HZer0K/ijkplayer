@@ -91,7 +91,9 @@ tasks.register("cleanPrebuiltNativeLibs", Delete) {
     }
 }
 
-preBuild.dependsOn(tasks.named("cleanPrebuiltNativeLibs"))
+if (enableNativeBuild) {
+    preBuild.dependsOn(tasks.named("cleanPrebuiltNativeLibs"))
+}
 preBuild.dependsOn(tasks.named("syncContribFfmpegSo"))
 
 dependencies {

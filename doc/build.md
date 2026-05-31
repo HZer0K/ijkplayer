@@ -95,22 +95,6 @@ cd android/ijkplayer
 
 ---
 
-## Whisper 离线 ASR 字幕（可选）
-
-默认**关闭**，开启后构建时需联网下载 whisper.cpp（~100 MB）。
-
-```bash
-# 方式一：修改 gradle.properties
-echo 'enableWhisper=true' >> android/ijkplayer/gradle.properties
-
-# 方式二：命令行传参
-./gradlew -PenableWhisper=true :ijkplayer-example:assembleWhisper64
-```
-
-开启后，Demo 设置页可下载 Whisper 模型并实时生成字幕。推理线程数自动适配设备 CPU 核心数（最多 8 线程）。
-
----
-
 ## Prefab 集成（面向接入方）
 
 `ijkplayer-arm64` AAR 已开启 Prefab publishing，下游 CMake 项目可直接链接：

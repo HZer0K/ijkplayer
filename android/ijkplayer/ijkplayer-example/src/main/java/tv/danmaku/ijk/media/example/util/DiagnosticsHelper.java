@@ -98,7 +98,6 @@ public final class DiagnosticsHelper {
         }
         appendApkNativeLibInfo(context, sb);
         appendNativeCapabilities(sb);
-        appendAsrCapabilities(context, sb, settings);
         return sb.toString();
     }
 
@@ -190,36 +189,6 @@ public final class DiagnosticsHelper {
             return sb.toString();
         } catch (Throwable ignored) {
             return null;
-        }
-    }
-
-    private static void appendAsrCapabilities(Context context, StringBuilder sb, Settings settings) {
-        try {
-            boolean availableFlag = android.speech.SpeechRecognizer.isRecognitionAvailable(context);
-            int services = queryAsrServiceCount(context);
-            String service = android.provider.Settings.Secure.getString(
-                    context.getContentResolver(), "voice_recognition_service");
-            sb.append("asr.availableFlag=").append(availableFlag)
-                    .append(" services=").append(services).append('\n');
-            sb.append("asr.voiceService=").append(TextUtils.isEmpty(service) ? "null" : service).append('\n');
-            String mode = settings != null ? settings.getAsrMode() : "system";
-            String endpoint = settings != null ? settings.getAsrRemoteEndpoint() : "";
-            sb.append("asr.mode=").append(TextUtils.isEmpty(mode) ? "system" : mode).append('\n');
-            sb.append("asr.remote.endpointConfigured=")
-                    .append(!TextUtils.isEmpty(endpoint)).append('\n');
-        } catch (Throwable ignored) {
-            Log.w(TAG, "appendAsrCapabilities failed", ignored);
-        }
-    }
-
-    private static int queryAsrServiceCount(Context context) {
-        try {
-            java.util.List<android.content.pm.ResolveInfo> infos =
-                    context.getPackageManager().queryIntentServices(
-                            new android.content.Intent("android.speech.RecognitionService"), 0);
-            return infos != null ? infos.size() : 0;
-        } catch (Throwable ignored) {
-            return 0;
         }
     }
 

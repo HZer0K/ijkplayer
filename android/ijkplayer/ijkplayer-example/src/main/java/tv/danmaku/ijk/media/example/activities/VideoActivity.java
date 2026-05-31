@@ -84,7 +84,6 @@ import tv.danmaku.ijk.media.example.player.PlayerFactory;
 import tv.danmaku.ijk.media.example.player.PlayerToggle;
 import tv.danmaku.ijk.media.example.util.DebugEventLog;
 import tv.danmaku.ijk.media.example.util.AiHelper;
-import tv.danmaku.ijk.media.example.util.AsrHelper;
 import tv.danmaku.ijk.media.example.util.DiagnosticsHelper;
 import tv.danmaku.ijk.media.example.util.NativeFFmpegDiagnostics;
 import tv.danmaku.ijk.media.example.widget.media.AndroidMediaController;
@@ -180,76 +179,7 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     /** Set to true before a manual rebuild/restart to skip position restore for that cycle. */
     private boolean mSkipNextPositionRestore = false;
 
-    private static final int REQ_RECORD_AUDIO = 2201;
-
-    // --- Helpers ---
-    private AsrHelper mAsrHelper;
     private AiHelper mAiHelper;
-
-    private final AsrHelper.Callback mAsrCallback = new AsrHelper.Callback() {
-        @Override
-        public void onAsrPartialText(String text) {
-            updateSubtitleOverlay();
-        }
-
-        @Override
-        public void addSubtitleCue(int startMs, String text) {
-            VideoActivity.this.addSubtitleCue(startMs, text);
-        }
-
-        @Override
-        public void addSubtitleCueExplicit(int startMs, int endMs, String text) {
-            VideoActivity.this.addSubtitleCueExplicit(startMs, endMs, text);
-        }
-
-        @Override
-        public void showToastText(String text) {
-            if (mToastTextView != null && mMediaController != null) {
-                mToastTextView.setText(text);
-                mMediaController.showOnce(mToastTextView);
-            }
-        }
-
-        @Override
-        public void invalidateOptionsMenu() {
-            VideoActivity.this.invalidateOptionsMenu();
-        }
-
-        @Override
-        public int getCurrentPosition() {
-            return mVideoView != null ? mVideoView.getCurrentPosition() : 0;
-        }
-
-        @Override
-        public int getDuration() {
-            return mVideoView != null ? mVideoView.getDuration() : 0;
-        }
-
-        @Override
-        public String getDataSource() {
-            return mVideoView != null ? mVideoView.getDataSource() : null;
-        }
-
-        @Override
-        public String getVideoPath() {
-            return mVideoPath;
-        }
-
-        @Override
-        public Uri getVideoUri() {
-            return mVideoUri;
-        }
-
-        @Override
-        public File getExternalFilesDir(String type) {
-            return VideoActivity.this.getExternalFilesDir(type);
-        }
-
-        @Override
-        public File getFilesDir() {
-            return VideoActivity.this.getFilesDir();
-        }
-    };
 
     private final AiHelper.Callback mAiCallback = new AiHelper.Callback() {
         @Override
@@ -312,7 +242,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         setContentView(R.layout.activity_player);
 
         mSettings = new Settings(this);
-        mAsrHelper = new AsrHelper(this, mSettings, mAsrCallback);
         mAiHelper = new AiHelper(this, mSettings, mAiCallback);
         applyPlayerOrientation(mSettings.getPlayerOrientation());
 
@@ -534,9 +463,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (mAsrHelper != null) {
-            mAsrHelper.onDestroy();
-        }
         if (mAiHelper != null) {
             mAiHelper.stop();
         }
@@ -1180,18 +1106,12 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         super.onStart();
         mSubtitleHandler.removeCallbacks(mSubtitleTick);
         mSubtitleHandler.post(mSubtitleTick);
-        if (mAsrHelper != null) {
-            mAsrHelper.onStart();
-        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         mSubtitleHandler.removeCallbacks(mSubtitleTick);
-        if (mAsrHelper != null) {
-            mAsrHelper.onPause();
-        }
         // Release screen keep-on whenever the activity is no longer in foreground
         setScreenKeepOn(false);
     }
@@ -1330,13 +1250,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         } else if (id == R.id.action_subtitle_add) {
             showSubtitleAddDialog();
             return true;
-        } else if (id == R.id.action_subtitle_asr_toggle) {
-            boolean enabled = mAsrHelper != null && mAsrHelper.toggle();
-            item.setChecked(enabled);
-            if (!enabled) {
-                updateSubtitleOverlay();
-            }
-            return true;
         } else if (id == R.id.action_subtitle_clear) {
             mSubtitleCues.clear();
             updateSubtitleOverlay();
@@ -1419,15 +1332,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
             mSubtitleOverlay.setText(aiText);
             mSubtitleOverlay.setVisibility(View.VISIBLE);
             return;
-        }
-        // Check ASR partial text
-        if (mAsrHelper != null && mAsrHelper.isEnabled()) {
-            String asrText = mAsrHelper.getPartialText();
-            if (!TextUtils.isEmpty(asrText)) {
-                mSubtitleOverlay.setText(asrText);
-                mSubtitleOverlay.setVisibility(View.VISIBLE);
-                return;
-            }
         }
         // Fall back to manual subtitle cues
         int pos = mVideoView.getCurrentPosition();
@@ -1562,10 +1466,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         if (mirror != null) {
             mirror.setChecked(mSettings.getVideoMirrorHorizontal());
         }
-        MenuItem asr = menu != null ? menu.findItem(R.id.action_subtitle_asr_toggle) : null;
-        if (asr != null) {
-            asr.setChecked(mAsrHelper != null && mAsrHelper.isEnabled());
-        }
         MenuItem aiLlm = menu != null ? menu.findItem(R.id.action_ai_llm_toggle) : null;
         if (aiLlm != null) {
             aiLlm.setChecked(mAiHelper != null && mAiHelper.isEnabled());
@@ -1629,16 +1529,6 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_RECORD_AUDIO) {
-            boolean granted = grantResults != null && grantResults.length > 0
-                    && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
-            if (mAsrHelper != null) {
-                mAsrHelper.onRequestPermissionsResult(granted);
-            }
-            if (!granted) {
-                updateSubtitleOverlay();
-            }
-        }
     }
 
 
