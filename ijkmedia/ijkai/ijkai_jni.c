@@ -7,7 +7,6 @@
  */
 
 #include "ijkai.h"
-#include "cv/ijkai_cv.h"
 #include <jni.h>
 #include <android/log.h>
 #include <stdlib.h>
@@ -20,6 +19,76 @@
 
 // 全局JVM引用(由IJKAI_RegisterNatives初始化)
 static JavaVM *g_jvm = NULL;
+
+/**
+ * 安全地将UTF-8字符串转为jstring，处理不完整的UTF-8序列。
+ *
+ * LLM推理可能输出截断的多字节字符(如0xE6 无后续字节)，
+ * ART运行时遇到非法Modified UTF-8直接致命错误(不抛异常)，
+ * 因此不能尝试NewStringUTF再回退，必须始终先清理再转换。
+ */
+static jstring safe_new_string_utf8(JNIEnv *env, const char *text) {
+    if (!text || !*text) {
+        return (*env)->NewStringUTF(env, "");
+    }
+    
+    // 逐个字节验证UTF-8合法性，用'?'替换非法字节
+    size_t len = strlen(text);
+    char *clean = (char *)malloc(len + 1);
+    if (!clean) {
+        return (*env)->NewStringUTF(env, "");
+    }
+    
+    size_t out = 0;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)text[i];
+        if (c < 0x80) {
+            // ASCII - 直接保留
+            clean[out++] = c;
+        } else if (c < 0xC0) {
+            // 意外的续跳字节 - 替换为'?'
+            clean[out++] = '?';
+        } else if (c < 0xE0) {
+            // 2字节序列
+            if (i + 1 < len && ((unsigned char)text[i+1] & 0xC0) == 0x80) {
+                clean[out++] = c;
+                clean[out++] = text[++i];
+            } else {
+                clean[out++] = '?';
+            }
+        } else if (c < 0xF0) {
+            // 3字节序列
+            if (i + 2 < len && ((unsigned char)text[i+1] & 0xC0) == 0x80 &&
+                ((unsigned char)text[i+2] & 0xC0) == 0x80) {
+                clean[out++] = c;
+                clean[out++] = text[++i];
+                clean[out++] = text[++i];
+            } else {
+                clean[out++] = '?';
+            }
+        } else if (c < 0xF8) {
+            // 4字节序列
+            if (i + 3 < len && ((unsigned char)text[i+1] & 0xC0) == 0x80 &&
+                ((unsigned char)text[i+2] & 0xC0) == 0x80 &&
+                ((unsigned char)text[i+3] & 0xC0) == 0x80) {
+                clean[out++] = c;
+                clean[out++] = text[++i];
+                clean[out++] = text[++i];
+                clean[out++] = text[++i];
+            } else {
+                clean[out++] = '?';
+            }
+        } else {
+            // 无效的首字节(0xF8-0xFF)
+            clean[out++] = '?';
+        }
+    }
+    clean[out] = '\0';
+    
+    jstring result = (*env)->NewStringUTF(env, clean);
+    free(clean);
+    return result;
+}
 
 /**
  * 回调数据结构(用于JNI回调)
@@ -47,7 +116,7 @@ static void jni_llm_callback(const char *text, bool is_complete, void *user_data
         return;
     }
     
-    jstring jtext = (*env)->NewStringUTF(env, text ? text : "");
+    jstring jtext = safe_new_string_utf8(env, text);
     (*env)->CallVoidMethod(env, cb->callback_obj, cb->on_text, jtext, is_complete);
     (*env)->DeleteLocalRef(env, jtext);
     
@@ -168,120 +237,6 @@ static jint JNICALL native_get_processed_frames(JNIEnv *env, jclass clazz, jlong
     return ijkai_get_processed_frames(ctx);
 }
 
-// ============ CV JNI 方法 ============
-
-/**
- * CV回调数据结构
- */
-typedef struct {
-    jobject callback_obj;
-    jmethodID on_result;
-    jmethodID on_error;
-} jni_cv_callback_data;
-
-/**
- * JNI CV回调(在工作线程执行)
- */
-static void jni_cv_callback(uint8_t *output_data, int width, int height,
-                             bool success, void *user_data) {
-    jni_cv_callback_data *cb = (jni_cv_callback_data *)user_data;
-    if (!cb || !cb->callback_obj || !g_jvm) {
-        free(cb);
-        return;
-    }
-    
-    JNIEnv *env;
-    jint attach_ret = (*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL);
-    if (attach_ret != JNI_OK || !env) {
-        free(cb);
-        return;
-    }
-    
-    if (success && output_data && width > 0 && height > 0) {
-        jsize data_size = width * height * 4;
-        jbyteArray jdata = (*env)->NewByteArray(env, data_size);
-        if (jdata) {
-            (*env)->SetByteArrayRegion(env, jdata, 0, data_size,
-                (const jbyte *)output_data);
-            (*env)->CallVoidMethod(env, cb->callback_obj, cb->on_result,
-                jdata, width, height);
-            (*env)->DeleteLocalRef(env, jdata);
-        }
-    } else {
-        const char *err_msg = success ? "empty result" : "CV processing failed";
-        jstring jerr = (*env)->NewStringUTF(env, err_msg);
-        (*env)->CallVoidMethod(env, cb->callback_obj, cb->on_error, jerr);
-        (*env)->DeleteLocalRef(env, jerr);
-    }
-    
-    (*env)->DeleteGlobalRef(env, cb->callback_obj);
-    free(cb);
-    (*g_jvm)->DetachCurrentThread(g_jvm);
-}
-
-/**
- * CV处理(超分辨率)
- * int nativeCVProcess(long nativePtr, byte[] input, int inW, int inH,
- *                     int outW, int outH, Object callback)
- */
-static jint JNICALL native_cv_process(JNIEnv *env, jclass clazz,
-    jlong native_ptr, jbyteArray input, jint in_w, jint in_h,
-    jint out_w, jint out_h, jobject callback)
-{
-    (void)clazz;
-    
-    ijkai_context *ctx = (ijkai_context *)(intptr_t)native_ptr;
-    if (!ctx || !input || !callback) {
-        return -1;
-    }
-    
-    jbyte *input_data = (*env)->GetByteArrayElements(env, input, NULL);
-    if (!input_data) {
-        return -1;
-    }
-    
-    jni_cv_callback_data *cb = (jni_cv_callback_data *)malloc(
-        sizeof(jni_cv_callback_data));
-    if (!cb) {
-        (*env)->ReleaseByteArrayElements(env, input, input_data, JNI_ABORT);
-        return -1;
-    }
-    
-    cb->callback_obj = (*env)->NewGlobalRef(env, callback);
-    
-    jclass callback_cls = (*env)->GetObjectClass(env, callback);
-    cb->on_result = (*env)->GetMethodID(env, callback_cls, "onResult",
-        "([BII)V");
-    cb->on_error = (*env)->GetMethodID(env, callback_cls, "onError",
-        "(Ljava/lang/String;)V");
-    (*env)->DeleteLocalRef(env, callback_cls);
-    
-    int ret = ijkai_cv_process(ctx,
-        (uint8_t *)input_data, (int)in_w, (int)in_h,
-        (int)out_w, (int)out_h,
-        jni_cv_callback, cb);
-    
-    (*env)->ReleaseByteArrayElements(env, input, input_data, JNI_ABORT);
-    
-    return ret;
-}
-
-/**
- * 设置CV推理后端
- * void nativeSetCVBackend(long nativePtr, int backend)
- */
-static void JNICALL native_set_cv_backend(JNIEnv *env, jclass clazz,
-    jlong native_ptr, jint backend)
-{
-    (void)env;
-    (void)clazz;
-    
-    ijkai_context *ctx = (ijkai_context *)(intptr_t)native_ptr;
-    if (ctx) {
-        ijkai_cv_set_backend(ctx, (int)backend);
-    }
-}
-
 // ============ JNI 注册(由ijkplayer_jni.c的JNI_OnLoad调用) ============
 
 static JNINativeMethod g_methods[] = {
@@ -290,8 +245,6 @@ static JNINativeMethod g_methods[] = {
     {"nativeLLMPrompt",       "(JLjava/lang/String;Ljava/lang/Object;I)I", (void *)native_llm_prompt},
     {"nativeGetTokenCount",   "(J)I",                     (void *)native_get_token_count},
     {"nativeGetProcessedFrames","(J)I",                    (void *)native_get_processed_frames},
-    {"nativeCVProcess",       "(J[BIIIILjava/lang/Object;)I", (void *)native_cv_process},
-    {"nativeSetCVBackend",    "(JI)V",                    (void *)native_set_cv_backend},
 };
 
 jint IJKAI_RegisterNatives(JNIEnv *env, JavaVM *vm) {

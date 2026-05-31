@@ -11,7 +11,13 @@
 #include "ijkai.h"
 #include "async/ijkai_queue.h"
 #include "llm/ijkai_llm_impl.h"
+#if IJKAI_ENABLE_CV
 #include "cv/ijkai_cv.h"
+#endif
+
+#ifndef IJKAI_ENABLE_CV
+#define IJKAI_ENABLE_CV 0
+#endif
 
 #include <stdlib.h>
 #include <string.h>
@@ -31,7 +37,9 @@ struct ijkai_context {
     };
     
     // CV专用上下文(独立存储，避免union覆盖)
+#if IJKAI_ENABLE_CV
     ijkai_cv_context *cv_specific_ctx;
+#endif
     
     // 异步队列
     ijkai_task_queue *queue;
@@ -120,6 +128,7 @@ ijkai_context *ijkai_init(ijkai_type type, const char *model_path, int n_threads
             return NULL;
         }
     } else if (type == IJKAI_TYPE_CV_SR || type == IJKAI_TYPE_CV_DETECT) {
+#if IJKAI_ENABLE_CV
         // 初始化CV模块(使用CPU后端作为默认)
         ctx->cv_specific_ctx = ijkai_cv_init(type, model_path, n_threads, IJKAI_CV_BACKEND_CPU);
         if (!ctx->cv_specific_ctx) {
@@ -127,6 +136,13 @@ ijkai_context *ijkai_init(ijkai_type type, const char *model_path, int n_threads
             free(ctx);
             return NULL;
         }
+#else
+        (void)model_path;
+        (void)n_threads;
+        ijkai_queue_release(ctx->queue);
+        free(ctx);
+        return NULL;
+#endif
     }
     
     // 启动工作线程
@@ -178,6 +194,7 @@ int ijkai_cv_process(
     ijkai_cv_callback callback,
     void *user_data
 ) {
+#if IJKAI_ENABLE_CV
     if (!ctx || !input_data || !callback) {
         return -1;
     }
@@ -199,9 +216,21 @@ int ijkai_cv_process(
     }
     
     return -1;
+#else
+    (void)ctx;
+    (void)input_data;
+    (void)in_width;
+    (void)in_height;
+    (void)out_width;
+    (void)out_height;
+    (void)callback;
+    (void)user_data;
+    return -1;
+#endif
 }
 
 int ijkai_cv_set_backend(ijkai_context *ctx, int backend) {
+#if IJKAI_ENABLE_CV
     if (!ctx) return -1;
     if (ctx->type != IJKAI_TYPE_CV_SR && ctx->type != IJKAI_TYPE_CV_DETECT) {
         return -1;
@@ -210,6 +239,11 @@ int ijkai_cv_set_backend(ijkai_context *ctx, int backend) {
         return -1;
     }
     return ijkai_cv_ctx_set_backend(ctx->cv_specific_ctx, (ijkai_cv_backend)backend);
+#else
+    (void)ctx;
+    (void)backend;
+    return -1;
+#endif
 }
 
 int ijkai_multimodal(
@@ -300,10 +334,12 @@ void ijkai_release(ijkai_context **ctx) {
             ijkai_llm_release_impl(c->llm_ctx);
         }
     } else if (c->type == IJKAI_TYPE_CV_SR || c->type == IJKAI_TYPE_CV_DETECT) {
+#if IJKAI_ENABLE_CV
         if (c->cv_specific_ctx) {
             ijkai_cv_release(c->cv_specific_ctx);
             c->cv_specific_ctx = NULL;
         }
+#endif
     }
     
     // 释放队列

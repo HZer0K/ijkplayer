@@ -37,9 +37,6 @@ android {
             ijkplayer {
                 headers "src/main/prefab/ijkplayer/include"
             }
-            ijkffmpeg {
-                headers "src/main/prefab/ijkffmpeg/include"
-            }
             ijksdl {
                 headers "src/main/prefab/ijksdl/include"
             }
@@ -61,14 +58,17 @@ android {
             externalNativeBuild {
                 cmake {
                     abiFilters "arm64-v8a"
-                    arguments "-DANDROID_STL=c++_shared"
+                    arguments "-DANDROID_STL=c++_shared", "-DIJKAI_ENABLE_CV=OFF"
                 }
             }
         }
         packagingOptions {
-            excludes += [
+            pickFirsts += [
                     "**/libijkplayer.so",
                     "**/libijksdl.so"
+            ]
+            excludes += [
+                    "**/libc++_shared.so"
             ]
         }
     }
@@ -84,6 +84,14 @@ tasks.register("syncContribFfmpegSo", Copy) {
     rename { "libijkffmpeg.so" }
 }
 
+// Remove prebuilt versions of libraries that are now built via CMake
+tasks.register("cleanPrebuiltNativeLibs", Delete) {
+    delete fileTree(ffmpegSoDstDir).matching {
+        include "libijkplayer.so", "libijksdl.so"
+    }
+}
+
+preBuild.dependsOn(tasks.named("cleanPrebuiltNativeLibs"))
 preBuild.dependsOn(tasks.named("syncContribFfmpegSo"))
 
 dependencies {

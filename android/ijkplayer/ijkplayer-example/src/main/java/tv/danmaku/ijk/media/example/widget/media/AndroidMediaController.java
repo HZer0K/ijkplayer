@@ -17,6 +17,7 @@
 
 package tv.danmaku.ijk.media.example.widget.media;
 
+import android.app.Activity;
 import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -31,6 +32,7 @@ public class AndroidMediaController extends MediaController implements IMediaCon
     private static final int DEFAULT_TIMEOUT_MS = 8000;
     private ActionBar mActionBar;
     private int mDefaultTimeoutMs = DEFAULT_TIMEOUT_MS;
+    private boolean mImmersiveEnabled = true;
 
     public AndroidMediaController(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -65,6 +67,7 @@ public class AndroidMediaController extends MediaController implements IMediaCon
         super.show(mDefaultTimeoutMs);
         if (mActionBar != null)
             mActionBar.show();
+        updateSystemUiVisibility(true);
     }
 
     @Override
@@ -72,6 +75,7 @@ public class AndroidMediaController extends MediaController implements IMediaCon
         super.show(timeout);
         if (mActionBar != null)
             mActionBar.show();
+        updateSystemUiVisibility(true);
     }
 
     @Override
@@ -82,6 +86,51 @@ public class AndroidMediaController extends MediaController implements IMediaCon
         for (View view : mShowOnceArray)
             view.setVisibility(View.GONE);
         mShowOnceArray.clear();
+        updateSystemUiVisibility(false);
+    }
+
+    //----------
+    // Immersive mode
+    //----------
+    /**
+     * Toggle system UI (status bar / navigation bar) visibility.
+     * When the media controller is visible, system bars are shown;
+     * when hidden, system bars are hidden (immersive sticky mode).
+     */
+    private void updateSystemUiVisibility(boolean controllerVisible) {
+        if (!mImmersiveEnabled) return;
+        Context ctx = getContext();
+        if (!(ctx instanceof Activity)) return;
+        View decorView = ((Activity) ctx).getWindow().getDecorView();
+        if (controllerVisible) {
+            decorView.setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        } else {
+            decorView.setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        }
+    }
+
+    /**
+     * Enable or disable immersive mode.
+     * When disabled, system UI is restored to its normal visible state.
+     */
+    public void setImmersiveEnabled(boolean enabled) {
+        mImmersiveEnabled = enabled;
+        if (!enabled) {
+            Context ctx = getContext();
+            if (ctx instanceof Activity) {
+                ((Activity) ctx).getWindow().getDecorView()
+                        .setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            }
+        }
     }
 
     //----------

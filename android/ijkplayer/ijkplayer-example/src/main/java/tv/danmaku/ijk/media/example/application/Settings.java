@@ -214,6 +214,28 @@ public class Settings {
         mSharedPreferences.edit().putString(key, path != null ? path : "").apply();
     }
 
+    // ============ AI / LLM ============
+
+    public String getAiModelPath() {
+        String key = mAppContext.getString(R.string.pref_key_ai_model_path);
+        String v = mSharedPreferences.getString(key, "");
+        return v != null ? v : "";
+    }
+
+    public void setAiModelPath(String path) {
+        String key = mAppContext.getString(R.string.pref_key_ai_model_path);
+        mSharedPreferences.edit().putString(key, path != null ? path : "").apply();
+    }
+
+    public int getAiThreadCount() {
+        String key = mAppContext.getString(R.string.pref_key_ai_threads);
+        try {
+            return Integer.parseInt(mSharedPreferences.getString(key, "4"));
+        } catch (NumberFormatException e) {
+            return 4;
+        }
+    }
+
     public String getAsrWhisperModelPresetUrl() {
         String key = mAppContext.getString(R.string.pref_key_asr_whisper_model_preset);
         String v = mSharedPreferences.getString(key, "");

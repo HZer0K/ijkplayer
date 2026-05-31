@@ -37,8 +37,9 @@ if (NOT EXISTS "${IJK_FFMPEG_LIB}")
     message(FATAL_ERROR "libijkffmpeg.so not found (checked output and module libs)")
 endif()
 
-add_library(ijkffmpeg SHARED IMPORTED)
-set_target_properties(ijkffmpeg PROPERTIES IMPORTED_LOCATION "${IJK_FFMPEG_LIB}")
+# Define ijkffmpeg as an INTERFACE library so AGP knows this target exists.
+# The actual library is linked via target_link_options using the file path.
+add_library(ijkffmpeg INTERFACE)
 
 add_library(cpufeatures STATIC
         "${CMAKE_ANDROID_NDK}/sources/android/cpufeatures/cpu-features.c")
@@ -136,8 +137,9 @@ target_include_directories(ijksdl PRIVATE
         "${IJK_FFMPEG_INCLUDE_DIR}")
 target_include_directories(ijksdl SYSTEM PRIVATE "${IJK_FFMPEG_SOURCE_DIR}")
 target_compile_options(ijksdl PRIVATE -Wall -Wextra)
+target_link_options(ijksdl PRIVATE LINKER:--allow-shlib-undefined
+        "${IJK_FFMPEG_LIB}")
 target_link_libraries(ijksdl PRIVATE
-        ijkffmpeg
         ijkj4a
         cpufeatures
         ${log_lib}
@@ -256,12 +258,24 @@ target_include_directories(ijkplayer PRIVATE
 message(STATUS "IJKAI_INCLUDES: ${IJKAI_INCLUDES}")
 target_include_directories(ijkplayer SYSTEM PRIVATE "${IJK_FFMPEG_SOURCE_DIR}")
 target_compile_options(ijkplayer PRIVATE -Wall -Wextra)
+target_link_options(ijkplayer PRIVATE LINKER:--allow-shlib-undefined
+        "${IJK_FFMPEG_LIB}")
 target_link_libraries(ijkplayer PRIVATE
-        ijkffmpeg
         ijksdl
         ijksoundtouch
         ${log_lib}
         ${android_lib}
         c++_shared
         ${IJKAI_LIBS})
+
+if(IJKAI_ENABLE_CV)
+    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_CV=1)
+else()
+    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_CV=0)
+endif()
+if(IJKAI_ENABLE_LLM)
+    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_LLM=1)
+else()
+    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_LLM=0)
+endif()
 

@@ -189,6 +189,10 @@
     <string name="pref_key_skip_loop_filter">pref_key_skip_loop_filter</string>
     <string name="pref_key_playback_speed">pref_key_playback_speed</string>
 
+    <!-- AI preference keys -->
+    <string name="pref_key_ai_model_path">pref_key_ai_model_path</string>
+    <string name="pref_key_ai_threads">pref_key_ai_threads</string>
+
     <!-- Video filter -->
     <string name="menu_filter">视频滤镜</string>
     <string name="filter_none">无滤镜</string>
@@ -227,5 +231,23 @@
     <string name="vulkan_check_no">✗ 否</string>
     <string name="vulkan_check_unknown">未知（native 未加载）</string>
     <string name="vulkan_check_copied">已复制报告到剪贴板</string>
+
+    <!-- AI / LLM -->
+    <string name="ai_llm_toggle">AI 对话</string>
+    <string name="ai_llm_prompt_hint">输入对话内容…</string>
+    <string name="ai_llm_send">发送</string>
+    <string name="ai_llm_waiting">AI 思考中…</string>
+    <string name="ai_llm_native_missing">AI 引擎不可用（编译时未启用 IJKAI）</string>
+    <string name="ai_llm_model_missing">请先下载 LLM 模型</string>
+    <string name="ai_llm_download_title">下载 LLM 模型</string>
+    <string name="ai_llm_init_ok">AI 引擎已就绪</string>
+    <string name="ai_llm_init_failed">AI 引擎初始化失败</string>
+    <string name="ai_llm_error_prefix">AI 错误: </string>
+    <string name="ai_llm_dialog_title">AI 对话</string>
+    <string name="ai_llm_downloading">LLM 模型下载中…</string>
+    <string name="ai_llm_downloading_progress">LLM 模型下载中…%1$d%% (%2$s/%3$s)</string>
+    <string name="ai_llm_downloaded_ready">LLM 模型已下载，正在启动引擎</string>
+    <string name="ai_llm_download_failed">LLM 模型下载失败</string>
+    <string name="ai_cv_toggle">AI 超分</string>
 
 </resources>
