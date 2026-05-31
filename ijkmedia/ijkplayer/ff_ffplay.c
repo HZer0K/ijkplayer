@@ -1976,7 +1976,8 @@ static int get_video_frame(FFPlayer *ffp, AVFrame *frame)
 
 #if CONFIG_AVFILTER
 static int configure_filtergraph(AVFilterGraph *graph, const char *filtergraph,
-                                 AVFilterContext *source_ctx, AVFilterContext *sink_ctx)
+                                 AVFilterContext *source_ctx, AVFilterContext *sink_ctx,
+                                 AVBufferRef *hw_device_ctx)
 {
     int ret, i;
     int nb_filters = graph->nb_filters;
@@ -2002,6 +2003,25 @@ static int configure_filtergraph(AVFilterGraph *graph, const char *filtergraph,
 
         if ((ret = avfilter_graph_parse_ptr(graph, filtergraph, &inputs, &outputs, NULL)) < 0)
             goto fail;
+
+        /* Set hardware device context on filters that need it before avfilter_graph_config
+         * initializes them. This is essential for hwupload to know which Vulkan device to
+         * use when creating hardware frames. Without this, hwupload will fail when used
+         * with Vulkan filters like scale_vulkan / bwdif_vulkan etc. */
+        if (hw_device_ctx) {
+            for (i = 0; i < graph->nb_filters; i++) {
+                AVFilterContext *fc = graph->filters[i];
+                if (fc && fc->filter && (fc->filter->flags & AVFILTER_FLAG_HWDEVICE)) {
+                    if (!fc->hw_device_ctx) {
+                        fc->hw_device_ctx = av_buffer_ref(hw_device_ctx);
+                        if (fc->hw_device_ctx) {
+                            av_log(NULL, AV_LOG_INFO, "[vfilter] set hw_device_ctx on filter '%s'\n",
+                                   fc->filter->name);
+                        }
+                    }
+                }
+            }
+        }
     } else {
         if ((ret = avfilter_link(source_ctx, 0, sink_ctx, 0)) < 0)
             goto fail;
@@ -2062,9 +2082,31 @@ static int configure_video_filters(FFPlayer *ffp, AVFilterGraph *graph, VideoSta
 
     graph->scale_sws_opts = av_strdup(sws_flags_str);
 
-    /* Note: AVFilterGraph.hw_device_ctx was removed in FFmpeg 5+.
-     * Vulkan hw device ctx is set per-filter via avfilter_graph_set_auto_convert or
-     * individual filter options. Skip the graph-level hw_device_ctx assignment. */
+    /* Create Vulkan HW device context if vfilters require GPU processing.
+     * The hwupload filter needs AVFilterContext.hw_device_ctx to know which
+     * Vulkan device to use for creating hardware frames. The created context
+     * is passed to configure_filtergraph(), which sets it on any filter with
+     * the AVFILTER_FLAG_HWDEVICE flag (such as hwupload) before initialization.
+     * Vulkan filters (scale_vulkan, bwdif_vulkan, nlmeans_vulkan, etc.) will
+     * then receive Vulkan frames from hwupload and process them on the GPU.
+     * If device creation fails, vfilters fall back to software CPU path. */
+    AVBufferRef *vk_hw_device_ctx = NULL;
+    if (vfilters && (strstr(vfilters, "vulkan") || strstr(vfilters, "hwupload"))) {
+        av_log(NULL, AV_LOG_INFO, "[vfilter] Vulkan/hwupload detected, creating Vulkan device...\n");
+        int vk_ret = av_hwdevice_ctx_create(&vk_hw_device_ctx, AV_HWDEVICE_TYPE_VULKAN,
+                                            NULL, NULL, 0);
+        if (vk_ret < 0) {
+            char vk_errbuf[128];
+            av_strerror(vk_ret, vk_errbuf, sizeof(vk_errbuf));
+            av_log(NULL, AV_LOG_WARNING,
+                   "[vfilter] Vulkan device creation FAILED (ret=%d: %s) — "
+                   "Vulkan GPU filters will not work; software fallback will be attempted.\n",
+                   vk_ret, vk_errbuf);
+            vk_hw_device_ctx = NULL;
+        } else {
+            av_log(NULL, AV_LOG_INFO, "[vfilter] Vulkan HW device created successfully.\n");
+        }
+    }
 
     snprintf(buffersrc_args, sizeof(buffersrc_args),
              "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
@@ -2146,15 +2188,18 @@ static int configure_video_filters(FFPlayer *ffp, AVFilterGraph *graph, VideoSta
     }
 #endif
 
-    if ((ret = configure_filtergraph(graph, vfilters, filt_src, last_filter)) < 0) {
+    if ((ret = configure_filtergraph(graph, vfilters, filt_src, last_filter, vk_hw_device_ctx)) < 0) {
         char errbuf[128];
         av_strerror(ret, errbuf, sizeof(errbuf));
         av_log(NULL, AV_LOG_ERROR, "[vfilter] configure_filtergraph FAILED: vfilters='%s' err=%d(%s)\n",
                vfilters ? vfilters : "(null)", ret, errbuf);
+        av_buffer_unref(&vk_hw_device_ctx);
         goto fail;
     }
     av_log(NULL, AV_LOG_INFO, "[vfilter] configure_filtergraph OK: vfilters='%s' nb_filters=%d\n",
            vfilters ? vfilters : "(null)", graph->nb_filters);
+
+    av_buffer_unref(&vk_hw_device_ctx);
 
     is->in_video_filter  = filt_src;
     is->out_video_filter = filt_out;
@@ -2261,7 +2306,7 @@ static int configure_audio_filters(FFPlayer *ffp, const char *afilters, int forc
     }
 #endif
 
-    if ((ret = configure_filtergraph(is->agraph, afilters_args[0] ? afilters_args : NULL, filt_asrc, filt_asink)) < 0)
+    if ((ret = configure_filtergraph(is->agraph, afilters_args[0] ? afilters_args : NULL, filt_asrc, filt_asink, NULL)) < 0)
         goto end;
 
     is->in_audio_filter  = filt_asrc;
@@ -2634,6 +2679,13 @@ static int ffplay_video_thread(void *arg)
                     str_remove_filter_node(&sw_vfilters, "chromaber_vulkan");
                     str_remove_filter_node(&sw_vfilters, "blend_vulkan");
                     str_remove_filter_node(&sw_vfilters, "overlay_vulkan");
+                    /* Newly added Vulkan filter fallbacks */
+                    str_replace_inplace(&sw_vfilters, "bwdif_vulkan", "bwdif");
+                    str_replace_inplace(&sw_vfilters, "nlmeans_vulkan", "nlmeans");
+                    str_replace_inplace(&sw_vfilters, "flip_vulkan", "hflip");
+                    /* These have no direct CPU equivalent: remove the entire node */
+                    str_remove_filter_node(&sw_vfilters, "blackdetect_vulkan");
+                    str_remove_filter_node(&sw_vfilters, "interlace_vulkan");
                     /* Normalise: empty string is not the same as NULL in configure_filtergraph
                      * (empty string triggers avfilter_graph_parse_ptr with "" which returns EINVAL).
                      * Treat empty result as passthrough. */

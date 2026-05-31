@@ -130,6 +130,13 @@ public final class PlayerFactory {
         out = out.replace("transpose_vulkan", "transpose");
         out = out.replace("gblur_vulkan", "gblur");
         out = out.replace("avgblur_vulkan", "avgblur");
+        // Newly added Vulkan filter fallbacks
+        out = out.replace("bwdif_vulkan", "bwdif");
+        out = out.replace("nlmeans_vulkan", "nlmeans");
+        out = out.replace("flip_vulkan", "hflip");
+        // blackdetect_vulkan / interlace_vulkan have no CPU equivalent, remove node
+        out = out.replaceAll("(?:^|,)blackdetect_vulkan(?:=[^,]*)?", "");
+        out = out.replaceAll("(?:^|,)interlace_vulkan(?:=[^,]*)?", "");
         // gblur_vulkan uses "size" (kernel half-width) which is not a valid param
         // for the software gblur filter (it uses "steps").  Strip it.
         out = out.replaceAll("(gblur=[^,]*):size=\\d+", "$1");

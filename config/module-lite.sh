@@ -190,6 +190,16 @@ if [ "${IJK_ENABLE_VULKAN_FILTERS:-0}" = "1" ]; then
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=chromaber_vulkan"
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=blend_vulkan"
     export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=overlay_vulkan"
+    # Deinterlacing (GPU accelerated)
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=bwdif_vulkan"
+    # Denoising (GPU accelerated non-local means)
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=nlmeans_vulkan"
+    # General flip (hflip+vflip combined)
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=flip_vulkan"
+    # Black/scene detection
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=blackdetect_vulkan"
+    # Interlacing
+    export COMMON_FF_CFG_FLAGS="$COMMON_FF_CFG_FLAGS --enable-filter=interlace_vulkan"
 fi
 
 # External library support:
