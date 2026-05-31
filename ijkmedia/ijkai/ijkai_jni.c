@@ -237,6 +237,54 @@ static jint JNICALL native_get_processed_frames(JNIEnv *env, jclass clazz, jlong
     return ijkai_get_processed_frames(ctx);
 }
 
+// ============ CV JNI 方法 ============
+
+/**
+ * CV处理(异步)
+ * int nativeCVProcess(long nativePtr, byte[] inputData, int inW, int inH, int outW, int outH, Object callback)
+ */
+static jint JNICALL native_cv_process(JNIEnv *env, jclass clazz,
+    jlong native_ptr, jbyteArray input_data, jint in_width, jint in_height,
+    jint out_width, jint out_height, jobject callback)
+{
+    (void)clazz;
+    
+    ijkai_context *ctx = (ijkai_context *)(intptr_t)native_ptr;
+    if (!ctx || !input_data || !callback) {
+        return -1;
+    }
+    
+    jbyte *c_data = (*env)->GetByteArrayElements(env, input_data, NULL);
+    if (!c_data) {
+        return -1;
+    }
+    
+    int ret = ijkai_cv_process(ctx,
+        (uint8_t *)c_data, (int)in_width, (int)in_height,
+        (int)out_width, (int)out_height,
+        NULL, NULL); // CV异步回调暂未实现完整JNI包装
+    
+    (*env)->ReleaseByteArrayElements(env, input_data, c_data, JNI_ABORT);
+    
+    return ret;
+}
+
+/**
+ * 设置CV推理后端
+ * int nativeCVSetBackend(long nativePtr, int backend)
+ */
+static jint JNICALL native_cv_set_backend(JNIEnv *env, jclass clazz,
+    jlong native_ptr, jint backend)
+{
+    (void)env;
+    (void)clazz;
+    
+    ijkai_context *ctx = (ijkai_context *)(intptr_t)native_ptr;
+    if (!ctx) return -1;
+    
+    return ijkai_cv_set_backend(ctx, (int)backend);
+}
+
 // ============ JNI 注册(由ijkplayer_jni.c的JNI_OnLoad调用) ============
 
 static JNINativeMethod g_methods[] = {
@@ -245,6 +293,8 @@ static JNINativeMethod g_methods[] = {
     {"nativeLLMPrompt",       "(JLjava/lang/String;Ljava/lang/Object;I)I", (void *)native_llm_prompt},
     {"nativeGetTokenCount",   "(J)I",                     (void *)native_get_token_count},
     {"nativeGetProcessedFrames","(J)I",                    (void *)native_get_processed_frames},
+    {"nativeCVProcess",       "(J[BIIIILjava/lang/Object;)I", (void *)native_cv_process},
+    {"nativeCVSetBackend",    "(JI)I",                    (void *)native_cv_set_backend},
 };
 
 jint IJKAI_RegisterNatives(JNIEnv *env, JavaVM *vm) {

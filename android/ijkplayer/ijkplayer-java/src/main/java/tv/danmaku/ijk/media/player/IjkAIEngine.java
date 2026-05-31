@@ -44,6 +44,17 @@ public class IjkAIEngine {
     /** 多模态 */
     public static final int TYPE_MULTIMODAL = 3;
 
+    // ============ CV后端枚举 ============
+
+    /** CPU推理(默认) */
+    public static final int CV_BACKEND_CPU = 0;
+    /** OpenCL GPU加速 */
+    public static final int CV_BACKEND_OPENCL = 1;
+    /** Vulkan GPU加速 */
+    public static final int CV_BACKEND_VULKAN = 2;
+    /** 自动选择最优后端 */
+    public static final int CV_BACKEND_AUTO = 3;
+
     // ============ 回调接口 ============
 
     /**
@@ -56,6 +67,26 @@ public class IjkAIEngine {
          * @param isComplete 是否推理完成
          */
         void onText(@NonNull String text, boolean isComplete);
+
+        /**
+         * 推理错误
+         * @param error 错误信息
+         */
+        void onError(@NonNull String error);
+    }
+
+    /**
+     * CV推理回调
+     */
+    public interface CVCallback {
+        /**
+         * CV推理结果
+         * @param outputData 输出图像数据(RGBA格式)
+         * @param width      输出宽度
+         * @param height     输出高度
+         * @param success    是否成功
+         */
+        void onResult(@NonNull byte[] outputData, int width, int height, boolean success);
 
         /**
          * 推理错误
@@ -191,6 +222,42 @@ public class IjkAIEngine {
         prompt(prompt, callback);
     }
 
+    // ============ CV推理 ============
+
+    /**
+     * CV处理(异步)
+     * 对输入图像数据进行超分辨率或目标检测处理。
+     *
+     * @param inputData  输入图像数据(RGBA格式)
+     * @param inWidth    输入宽度
+     * @param inHeight   输入高度
+     * @param outWidth   输出宽度(超分时为目标宽，目标检测时传0)
+     * @param outHeight  输出高度(超分时为目标高，目标检测时传0)
+     * @param callback   结果回调
+     * @return 0成功, -1失败
+     */
+    public int cvProcess(@NonNull byte[] inputData, int inWidth, int inHeight,
+                          int outWidth, int outHeight, @Nullable CVCallback callback) {
+        if (!mInitialized || mNativePtr == 0 || inputData == null) {
+            if (callback != null) {
+                mMainHandler.post(() -> callback.onError("Engine not initialized or null input"));
+            }
+            return -1;
+        }
+        return nativeCVProcess(mNativePtr, inputData, inWidth, inHeight,
+            outWidth, outHeight, callback);
+    }
+
+    /**
+     * 设置CV推理后端
+     * @param backend 后端类型(使用 CV_BACKEND_xxx 常量)
+     * @return 0成功, -1失败
+     */
+    public int setCVBackend(int backend) {
+        if (!mInitialized || mNativePtr == 0) return -1;
+        return nativeCVSetBackend(mNativePtr, backend);
+    }
+
     // ============ 统计信息 ============
 
     /**
@@ -255,6 +322,9 @@ public class IjkAIEngine {
         Object callback, int maxTokens);
     private static native int nativeGetTokenCount(long nativePtr);
     private static native int nativeGetProcessedFrames(long nativePtr);
+    private static native int nativeCVProcess(long nativePtr, byte[] inputData,
+        int inWidth, int inHeight, int outWidth, int outHeight, Object callback);
+    private static native int nativeCVSetBackend(long nativePtr, int backend);
 
     // ============ finalize ============
 

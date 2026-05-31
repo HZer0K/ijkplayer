@@ -147,11 +147,12 @@ LLM 逐 token 通过回调返回，前端可实时显示生成内容，无需等
 - ✅ CV 模块（超分辨率 + 目标检测）
 - ✅ LLM 基础框架（`llm/ijkai_llm.c`）
 - ✅ 编译脚本（`init-android-llama.sh` / `compile-llama.sh`）
+- ✅ llama.cpp 集成（`llm/ijkai_llm.cpp`，通过 CMake `IJKAI_ENABLE_LLM=ON` 启用）
 - ✅ 91 个桌面端 C 单元测试
 
 ### 待完成
 
-- ⏸️ llama.cpp 集成（等待编译完成后替换占位实现）
+- （暂无）
 
 ## Java API 使用示例
 

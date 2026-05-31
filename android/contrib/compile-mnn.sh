@@ -47,7 +47,7 @@ for i in "${!ARCHS[@]}"; do
     cmake "$MNN_ROOT" \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
         -DANDROID_ABI="$ABI" \
-        -DANDROID_PLATFORM="android-24" \
+        -DANDROID_PLATFORM="android-21" \
         -DCMAKE_BUILD_TYPE=Release \
         -DMNN_BUILD_TRAIN=OFF \
         -DMNN_BUILD_DEMO=OFF \

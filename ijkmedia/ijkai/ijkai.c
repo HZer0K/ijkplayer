@@ -26,6 +26,8 @@
 
 /**
  * AI上下文结构(内部实现)
+ *
+ * 注意: running标志和processed_frames通过__atomic内置函数保证线程安全
  */
 struct ijkai_context {
     ijkai_type type;
@@ -46,13 +48,29 @@ struct ijkai_context {
     
     // 工作线程
     pthread_t worker_thread;
-    volatile int running;
+    int running;  // 通过__atomic操作访问
     
-    // 统计
+    // 统计(通过__atomic操作访问)
     int64_t eval_time_ms;
     int token_count;
     int processed_frames;
 };
+
+/**
+ * 释放LLM任务数据(安全处理嵌套指针)
+ */
+static void llm_task_data_free(llm_task_data *data) {
+    if (!data) return;
+    if (data->prompt) {
+        free(data->prompt);
+        data->prompt = NULL;
+    }
+    if (data->image_data) {
+        free(data->image_data);
+        data->image_data = NULL;
+    }
+    free(data);
+}
 
 /**
  * 工作线程: 从队列取出任务并分发
@@ -65,7 +83,7 @@ static void *ijkai_worker_loop(void *arg) {
     
     printf("[IJKAI] Worker thread started\n");
     
-    while (ctx->running) {
+    while (__atomic_load_n(&ctx->running, __ATOMIC_ACQUIRE)) {
         ijkai_task task;
         int ret = ijkai_queue_pop(ctx->queue, &task, 500); // 500ms超时
         if (ret != 0) {
@@ -74,22 +92,19 @@ static void *ijkai_worker_loop(void *arg) {
         
         // 处理任务
         if (task.type == IJKAI_TASK_LLM && task.task_data) {
-            // LLM推理在工作线程中直接执行
+            // LLM推理在工作线程中直接执行，worker负责释放task_data
             ijkai_llm_worker_thread(task.task_data);
-            // 更新统计
-            ctx->processed_frames++;
+            // task_data内部已由ijkai_llm_worker_thread释放
+            __atomic_fetch_add(&ctx->processed_frames, 1, __ATOMIC_RELAXED);
         } else if (task.type == IJKAI_TASK_MULTIMODAL && task.task_data) {
             // 多模态推理(复用LLM worker)
             ijkai_llm_worker_thread(task.task_data);
-            ctx->processed_frames++;
-        } else if (task.type == IJKAI_TASK_CV) {
+            __atomic_fetch_add(&ctx->processed_frames, 1, __ATOMIC_RELAXED);
+        } else if (task.type == IJKAI_TASK_CV && task.task_data) {
             // CV任务由CV模块内部独立worker线程处理,不在主队列中
-            // 如果出现CV任务(如直接推送到主队列),释放数据避免泄漏
-            if (task.task_data) {
-                free(task.task_data);
-            }
+            // 如果出现CV任务(如直接推送到主队列),使用专用释放函数避免泄漏
+            llm_task_data_free((llm_task_data *)task.task_data);
         }
-        // TODO: CV任务处理(已通过独立CV worker实现)
     }
     
     printf("[IJKAI] Worker thread stopped\n");
@@ -309,7 +324,7 @@ int ijkai_get_token_count(ijkai_context *ctx) {
 
 int ijkai_get_processed_frames(ijkai_context *ctx) {
     if (!ctx) return 0;
-    return ctx->processed_frames;
+    return __atomic_load_n(&ctx->processed_frames, __ATOMIC_RELAXED);
 }
 
 void ijkai_release(ijkai_context **ctx) {
@@ -321,8 +336,8 @@ void ijkai_release(ijkai_context **ctx) {
     
     printf("[IJKAI] AI context releasing...\n");
     
-    // 停止工作线程(先shutdown队列唤醒worker，再join等待)
-    c->running = 0;
+    // 停止工作线程: 先设标志再shutdown队列(保证worker能看到running=0)
+    __atomic_store_n(&c->running, 0, __ATOMIC_RELEASE);
     if (c->queue) {
         ijkai_queue_shutdown(c->queue);
     }

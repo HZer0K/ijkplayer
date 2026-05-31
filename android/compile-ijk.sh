@@ -23,6 +23,14 @@ ACT_ABI_ALL=$ACT_ABI_64
 
 ANDROID_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
+# 加载AI框架配置(如果存在)
+_IJK_PLAYER_ROOT="$(cd "$ANDROID_ROOT/.." && pwd)"
+_AI_CONFIG="$_IJK_PLAYER_ROOT/config/module-ai.sh"
+if [ -f "$_AI_CONFIG" ]; then
+    source "$_AI_CONFIG"
+    echo "[config] sourced: $_AI_CONFIG"
+fi
+
 # Detect host platform for NDK prebuilt path
 UNAME_S=$(uname -s 2>/dev/null || echo "Linux")
 case "$UNAME_S" in
@@ -179,6 +187,13 @@ do_cmake_build () {
         fi
     fi
 
+    # 转换shell yes/no 为 CMake ON/OFF
+    _IJKAI_CV="${IJKAI_ENABLE_CV:-OFF}"
+    case "$_IJKAI_CV" in
+        yes|YES|1)    _IJKAI_CV="ON" ;;
+        no|NO|0|OFF)  _IJKAI_CV="OFF" ;;
+    esac
+
     "$CMAKE_BIN" -S "$CMAKE_DIR" -B "$BUILD_DIR" -G "$GENERATOR" \
         "${MAKE_PROGRAM_ARGS[@]}" \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
@@ -187,7 +202,7 @@ do_cmake_build () {
         -DANDROID_STL=c++_shared \
         -DIJK_FFMPEG_SOURCE_DIR="$FFMPEG_SOURCE_DIR" \
         -DIJK_FFMPEG_OUTPUT_DIR="$FFMPEG_OUTPUT_DIR" \
-        -DIJKAI_ENABLE_CV=OFF \
+        -DIJKAI_ENABLE_CV=${_IJKAI_CV} \
         -DCMAKE_BUILD_TYPE=Release
 
     "$CMAKE_BIN" --build "$BUILD_DIR" --target ijksdl ijkplayer

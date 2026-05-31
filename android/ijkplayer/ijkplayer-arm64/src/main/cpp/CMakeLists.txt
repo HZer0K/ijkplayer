@@ -156,71 +156,65 @@ set(IJKAI_ROOT "${IJK_MEDIA_ROOT}/ijkai")
 set(IJK_LLAMA_OUTPUT_DIR "${IJK_REPO_ROOT}/android/contrib/build/llama-arm64/output" CACHE PATH "llama.cpp build output directory")
 set(IJK_MNN_OUTPUT_DIR "${IJK_REPO_ROOT}/android/contrib/build/mnn-arm64/output" CACHE PATH "MNN build output directory")
 
-# Initialize lists
-set(IJKAI_SOURCES)
-set(IJKAI_INCLUDES)
+# 核心AI源文件（始终编译，提供调度层/JNI/Pipenode支持）
+set(IJKAI_SOURCES
+    "${IJKAI_ROOT}/ijkai.c"
+    "${IJKAI_ROOT}/ijkai_jni.c"
+    "${IJKAI_ROOT}/ijkai_pipenode.c"
+    "${IJKAI_ROOT}/async/ijkai_queue.c")
+set(IJKAI_INCLUDES "${IJKAI_ROOT}")
 set(IJKAI_LIBS)
 
 if(IJKAI_ENABLE_LLM)
-    message(STATUS "IJKAI: LLM support enabled, using llama.cpp from ${IJK_LLAMA_OUTPUT_DIR}")
-    
+    set(_LLAMA_LIB "${IJK_LLAMA_OUTPUT_DIR}/lib/libllama.so")
+    message(STATUS "IJKAI: LLM enabled, library: ${_LLAMA_LIB}")
+    if(NOT EXISTS "${_LLAMA_LIB}")
+        message(WARNING "IJKAI: libllama.so not found at ${_LLAMA_LIB}! "
+                        "LLM will be DISABLED. Run compile-llama.sh first.")
+        set(IJKAI_ENABLE_LLM OFF CACHE BOOL "Enable LLM (llama.cpp)" FORCE)
+    endif()
+endif()
+
+if(IJKAI_ENABLE_LLM)
     add_library(llama SHARED IMPORTED)
     set_target_properties(llama PROPERTIES
-        IMPORTED_LOCATION "${IJK_LLAMA_OUTPUT_DIR}/lib/libllama.so"
-    )
-    
-    list(APPEND IJKAI_SOURCES
-        "${IJKAI_ROOT}/ijkai.c"
-        "${IJKAI_ROOT}/ijkai_jni.c"
-        "${IJKAI_ROOT}/ijkai_pipenode.c"
-        "${IJKAI_ROOT}/async/ijkai_queue.c"
-        "${IJKAI_ROOT}/llm/ijkai_llm.cpp")
-    
+        IMPORTED_LOCATION "${_LLAMA_LIB}")
+    list(APPEND IJKAI_SOURCES "${IJKAI_ROOT}/llm/ijkai_llm.cpp")
     list(APPEND IJKAI_INCLUDES
-        "${IJKAI_ROOT}"
         "${IJK_LLAMA_OUTPUT_DIR}/include"
         "${IJK_REPO_ROOT}/extra/llama.cpp/ggml/include")
-    
     list(APPEND IJKAI_LIBS llama)
+    message(STATUS "IJKAI: LLM support enabled")
 else()
     message(STATUS "IJKAI: LLM support disabled")
-    list(APPEND IJKAI_SOURCES
-        "${IJKAI_ROOT}/ijkai.c"
-        "${IJKAI_ROOT}/async/ijkai_queue.c")
 endif()
 
 if(IJKAI_ENABLE_CV)
-    message(STATUS "IJKAI: CV support enabled, using MNN from ${IJK_MNN_OUTPUT_DIR}")
-    
+    set(_MNN_LIB "${IJK_MNN_OUTPUT_DIR}/lib/libMNN.so")
+    if(NOT EXISTS "${_MNN_LIB}")
+        message(WARNING "IJKAI: libMNN.so not found at ${_MNN_LIB}! "
+                        "CV will be DISABLED. Run compile-mnn.sh first.")
+        set(IJKAI_ENABLE_CV OFF CACHE BOOL "Enable CV (MNN)" FORCE)
+    endif()
+endif()
+
+if(IJKAI_ENABLE_CV)
     add_library(MNN SHARED IMPORTED)
     set_target_properties(MNN PROPERTIES
-        IMPORTED_LOCATION "${IJK_MNN_OUTPUT_DIR}/lib/libMNN.so"
-    )
-    
+        IMPORTED_LOCATION "${_MNN_LIB}")
     list(APPEND IJKAI_SOURCES
         "${IJKAI_ROOT}/cv/ijkai_cv.c"
         "${IJKAI_ROOT}/cv/ijkai_cv_sr.c"
         "${IJKAI_ROOT}/cv/ijkai_cv_detect.c"
         "${IJKAI_ROOT}/cv/ijkai_cv_mnn_wrap.cpp")
-    
-    list(APPEND IJKAI_INCLUDES
-        "${IJKAI_ROOT}"
-        "${IJK_MNN_OUTPUT_DIR}/include")
-    
+    list(APPEND IJKAI_INCLUDES "${IJK_MNN_OUTPUT_DIR}/include")
     list(APPEND IJKAI_LIBS MNN)
-    
-    if(NOT IJKAI_ENABLE_LLM)
-        # 如果LLM未启用，仍然需要核心ijkai源文件
-        list(APPEND IJKAI_SOURCES
-            "${IJKAI_ROOT}/ijkai.c"
-            "${IJKAI_ROOT}/ijkai_jni.c"
-            "${IJKAI_ROOT}/ijkai_pipenode.c"
-            "${IJKAI_ROOT}/async/ijkai_queue.c")
-    endif()
+    message(STATUS "IJKAI: CV support enabled")
 else()
     message(STATUS "IJKAI: CV support disabled")
 endif()
 
+# ============ ijkplayer 共享库 ============
 add_library(ijkplayer SHARED
         "${IJK_MEDIA_ROOT}/ijkplayer/ff_cmdutils.c"
         "${IJK_MEDIA_ROOT}/ijkplayer/ff_ffplay.c"
@@ -247,6 +241,19 @@ add_library(ijkplayer SHARED
         "${IJK_MEDIA_ROOT}/ijkplayer/ijkavutil/ijkfifo.c"
         "${IJK_MEDIA_ROOT}/ijkplayer/ijkavutil/ijkstl.cpp"
         ${IJKAI_SOURCES})
+
+# 编译定义(在target_link_libraries之前)
+if(IJKAI_ENABLE_CV)
+    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_CV=1)
+else()
+    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_CV=0)
+endif()
+if(IJKAI_ENABLE_LLM)
+    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_LLM=1)
+else()
+    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_LLM=0)
+endif()
+
 target_include_directories(ijkplayer PRIVATE
         "${IJK_MEDIA_ROOT}"
         "${IJK_MEDIA_ROOT}/ijkplayer"
@@ -268,14 +275,4 @@ target_link_libraries(ijkplayer PRIVATE
         c++_shared
         ${IJKAI_LIBS})
 
-if(IJKAI_ENABLE_CV)
-    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_CV=1)
-else()
-    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_CV=0)
-endif()
-if(IJKAI_ENABLE_LLM)
-    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_LLM=1)
-else()
-    target_compile_definitions(ijkplayer PRIVATE IJKAI_ENABLE_LLM=0)
-endif()
 

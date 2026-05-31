@@ -1,6 +1,9 @@
 #!/bin/bash
 # compile-llama.sh
 # Compile llama.cpp for Android
+#
+# 默认只编译arm64架构. 设置 IJK_LLAMA_BUILD_ALL=1 编译所有架构:
+#   IJK_LLAMA_BUILD_ALL=1 ./compile-llama.sh
 
 set -e
 
@@ -26,19 +29,26 @@ fi
 
 echo "=== Compile llama.cpp for Android ==="
 
-ARCHS=("arm64" "armv7a" "x86" "x86_64")
-ABI_MAP=(
-    "arm64-v8a"
-    "armeabi-v7a"
-    "x86"
-    "x86_64"
-)
+if [ "${IJK_LLAMA_BUILD_ALL:-0}" = "1" ]; then
+    # 全架构编译(通过环境变量IJK_LLAMA_BUILD_ALL=1启用)
+    ARCHS=("arm64" "armv7a" "x86" "x86_64")
+    ABI_MAP=(
+        "arm64-v8a"
+        "armeabi-v7a"
+        "x86"
+        "x86_64"
+    )
+else
+    # 默认只编译arm64
+    ARCHS=("arm64")
+    ABI_MAP=("arm64-v8a")
+fi
 
 for i in "${!ARCHS[@]}"; do
     ARCH="${ARCHS[$i]}"
     ABI="${ABI_MAP[$i]}"
     
-    echo "=== Compile llama.cpp for $ARCH ==="
+    echo "=== Compile llama.cpp for $ARCH ($ABI) ==="
     
     BUILD_DIR="$BUILD_ROOT/llama-$ARCH"
     OUTPUT_DIR="$BUILD_DIR/output"
