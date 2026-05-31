@@ -181,10 +181,34 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
     private AiHelper mAiHelper;
 
+    // --- AI 对话气泡面板 ---
+    private View mChatOverlay;
+    private View mChatUserRow;
+    private TextView mChatUserText;
+    private TextView mChatAiText;
+    private String mLastAiPrompt;
+
     private final AiHelper.Callback mAiCallback = new AiHelper.Callback() {
         @Override
         public void onAiPartialText(String text) {
             updateSubtitleOverlay();
+        }
+
+        @Override
+        public void onUserPromptSent(String prompt) {
+            mLastAiPrompt = prompt;
+            runOnUiThread(() -> {
+                if (mChatOverlay == null) return;
+                mSubtitleOverlay.setVisibility(View.GONE);
+                mChatUserText.setText(prompt);
+                mChatUserRow.setVisibility(View.VISIBLE);
+                mChatAiText.setText("");
+                if (mChatOverlay.getVisibility() != View.VISIBLE) {
+                    mChatOverlay.setAlpha(0f);
+                    mChatOverlay.setVisibility(View.VISIBLE);
+                    mChatOverlay.animate().alpha(1f).setDuration(300).start();
+                }
+            });
         }
 
         @Override
@@ -306,6 +330,12 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         mSubtitleOverlay = (TextView) findViewById(R.id.subtitle_overlay);
         // Subtitle overlay styling: shadow for readability
         mSubtitleOverlay.setShadowLayer(6f, 1f, 1f, android.graphics.Color.BLACK);
+
+        // AI 对话气泡面板
+        mChatOverlay = findViewById(R.id.chat_overlay);
+        mChatUserRow = findViewById(R.id.chat_user_row);
+        mChatUserText = (TextView) findViewById(R.id.chat_user_text);
+        mChatAiText = (TextView) findViewById(R.id.chat_ai_text);
         // Create floating gesture feedback overlay (center screen)
         mGestureOverlay = new TextView(this);
         mGestureOverlay.setTextSize(28);
@@ -1329,10 +1359,13 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         String aiText = mAiHelper != null && mAiHelper.isEnabled()
                 ? mAiHelper.getPartialText() : null;
         if (!TextUtils.isEmpty(aiText)) {
-            mSubtitleOverlay.setText(aiText);
-            mSubtitleOverlay.setVisibility(View.VISIBLE);
+            // Show in chat bubble
+            showChatBubble(aiText);
             return;
         }
+        // No AI text: hide chat bubble, show SRT subtitles
+        hideChatBubbleIfNeeded();
+
         // Fall back to manual subtitle cues
         int pos = mVideoView.getCurrentPosition();
         String text = null;
@@ -1348,6 +1381,27 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
         } else {
             mSubtitleOverlay.setText(text);
             mSubtitleOverlay.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void showChatBubble(String aiText) {
+        if (mChatOverlay == null) return;
+        mSubtitleOverlay.setVisibility(View.GONE);
+        mChatAiText.setText(aiText);
+        if (mChatOverlay.getVisibility() != View.VISIBLE) {
+            mChatOverlay.setAlpha(0f);
+            mChatOverlay.setVisibility(View.VISIBLE);
+            mChatOverlay.animate().alpha(1f).setDuration(300).start();
+        }
+    }
+
+    private void hideChatBubbleIfNeeded() {
+        if (mChatOverlay != null && mChatOverlay.getVisibility() == View.VISIBLE) {
+            mChatOverlay.animate().alpha(0f).setDuration(200)
+                    .withEndAction(() -> {
+                        mChatOverlay.setVisibility(View.GONE);
+                        mChatUserRow.setVisibility(View.GONE);
+                    }).start();
         }
     }
 

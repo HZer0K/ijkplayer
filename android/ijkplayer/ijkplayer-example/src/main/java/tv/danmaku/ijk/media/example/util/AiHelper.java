@@ -55,6 +55,8 @@ public class AiHelper {
     public interface Callback {
         /** Called when AI partial text should be displayed in subtitle overlay. */
         void onAiPartialText(@Nullable String text);
+        /** Called when user sends a prompt to the AI. */
+        void onUserPromptSent(String prompt);
         /** Called to show a toast-like message via the media controller. */
         void showToastText(String text);
         /** Called to invalidate the options menu. */
@@ -216,6 +218,8 @@ public class AiHelper {
                     String prompt = input.getText() != null
                             ? input.getText().toString().trim() : "";
                     if (TextUtils.isEmpty(prompt)) return;
+
+                    mCallback.onUserPromptSent(prompt);
 
                     mAiPartialText = activity.getString(R.string.ai_llm_waiting);
                     mCallback.onAiPartialText(mAiPartialText);

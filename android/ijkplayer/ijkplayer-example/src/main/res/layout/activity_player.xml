@@ -47,6 +47,75 @@
             android:textSize="16sp"
             android:visibility="gone" />
 
+        <!-- AI 对话气泡面板 -->
+        <FrameLayout
+            android:id="@+id/chat_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:paddingHorizontal="12dp"
+            android:paddingBottom="64dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_chat_bubble_ai"
+                android:padding="12dp">
+
+                <!-- 用户问句气泡 -->
+                <LinearLayout
+                    android:id="@+id/chat_user_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/chat_user_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_chat_bubble_user"
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="8dp"
+                        android:textColor="@android:color/white"
+                        android:textSize="14sp"
+                        android:maxEms="28" />
+                </LinearLayout>
+
+                <!-- AI 回答行 -->
+                <LinearLayout
+                    android:id="@+id/chat_ai_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/chat_ai_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="AI"
+                        android:textColor="#64FFDA"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:background="#332196F3"
+                        android:paddingHorizontal="8dp"
+                        android:paddingVertical="2dp"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/chat_ai_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@android:color/white"
+                        android:textSize="15sp"
+                        android:lineSpacingExtra="4dp" />
+                </LinearLayout>
+
+            </LinearLayout>
+        </FrameLayout>
+
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
