@@ -22,10 +22,22 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+/*
+ * ff_ffpipenode.c
+ *
+ * Pipenode 管线节点基类实现。
+ * 提供节点分配/释放和统一接口分发，具体解码逻辑由子类实现。
+ */
+
 #include "ff_ffpipenode.h"
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * 分配节点实例。
+ * @param opaque_size  子类私有数据大小 (calloc 分配)
+ * @return 新分配的节点实例 (含 mutex)，失败返回 NULL
+ */
 IJKFF_Pipenode *ffpipenode_alloc(size_t opaque_size)
 {
     IJKFF_Pipenode *node = (IJKFF_Pipenode*) calloc(1, sizeof(IJKFF_Pipenode));
@@ -48,6 +60,10 @@ IJKFF_Pipenode *ffpipenode_alloc(size_t opaque_size)
     return node;
 }
 
+/**
+ * 释放节点实例。
+ * 流程: func_destroy(子类析构) -> SDL_DestroyMutex -> free(opaque) -> free(node)
+ */
 void ffpipenode_free(IJKFF_Pipenode *node)
 {
     if (!node)
@@ -73,11 +89,13 @@ void ffpipenode_free_p(IJKFF_Pipenode **node)
     *node = NULL;
 }
 
+/* 同步执行节点任务 (通常是解码循环)，通过函数指针分发 */
 int ffpipenode_run_sync(IJKFF_Pipenode *node)
 {
     return node->func_run_sync(node);
 }
 
+/* 清空节点内部缓冲，用于 seek 时丢弃旧数据。func_flush 为 NULL 时安全返回 0 */
 int ffpipenode_flush(IJKFF_Pipenode *node)
 {
     if (!node || !node->func_flush)

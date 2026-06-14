@@ -22,6 +22,23 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+/*
+ * ijksdl.h
+ *
+ * IJK SDL 抽象层主头文件。
+ *
+ * 本模块提供平台无关的系统抽象层，类似于 SDL 库的角色，
+ * 但针对移动平台做了精简和定制。封装了以下平台相关功能:
+ *
+ *   - 互斥锁/条件变量 (ijksdl_mutex.h) — pthread 封装
+ *   - 线程管理 (ijksdl_thread.h) — pthread 封装
+ *   - 音频输出 (ijksdl_aout.h) — AudioTrack/OpenSL ES
+ *   - 视频输出 (ijksdl_vout.h) — ANativeWindow/EGL
+ *   - 计时器 (ijksdl_timer.h) — 高精度时钟
+ *
+ * 各平台 (Android/IOS) 提供各自的实现，上层 FFPlayer 通过统一接口调用。
+ */
+
 #ifndef IJKSDL__IJKSDL_H
 #define IJKSDL__IJKSDL_H
 

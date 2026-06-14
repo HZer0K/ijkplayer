@@ -22,11 +22,19 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+/*
+ * ijksdl_class.h
+ *
+ * 日志类标识结构。
+ * 用于 av_log 输出时标识日志来源，类似于 FFmpeg 的 AVClass。
+ * Pipeline/Pipenode/Aout/Vout 等结构均包含 SDL_Class 指针作为首字段。
+ */
+
 #ifndef IJKSDL__IJKSDL_CLASS_H
 #define IJKSDL__IJKSDL_CLASS_H
 
 typedef struct SDL_Class {
-    const char *name;
+    const char *name;  /**< 组件名称，用于日志输出前缀 */
 } SDL_Class;
 
 #endif

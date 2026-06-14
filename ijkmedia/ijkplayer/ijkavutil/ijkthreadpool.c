@@ -19,6 +19,19 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+/*
+ * ijkthreadpool.c
+ *
+ * 通用线程池实现。
+ *
+ * 工作原理:
+ *   工作线程在 cond_wait 中等待，有新任务或关闭信号时被唤醒。
+ *   任务队列采用环形缓冲区，队列满时自动扩容 (2倍增长)。
+ *   关闭模式:
+ *     - IJK_IMMEDIATE_SHUTDOWN: 线程立即退出，丢弃未处理任务
+ *     - IJK_LEISURELY_SHUTDOWN: 线程处理完队列中所有任务后退出
+ */
+
 #include "ijkthreadpool.h"
 #include "libavutil/log.h"
 
@@ -26,9 +39,9 @@
 #include <unistd.h>
 
 /**
- * @function void *threadpool_thread(void *threadpool)
- * @brief the worker thread
- * @param threadpool the pool which own the thread
+ * 工作线程入口函数。
+ * 循环等待任务：cond_wait 阻塞 -> 取出任务 -> 执行任务。
+ * 收到关闭信号时退出循环。
  */
 static void *ijk_threadpool_thread(void *pool_ctx)
 {
@@ -67,6 +80,10 @@ static void *ijk_threadpool_thread(void *pool_ctx)
     return(NULL);
 }
 
+/**
+ * 释放线程池内存。
+ * 必须在所有工作线程退出后调用 (started_count == 0)。
+ */
 int ijk_threadpool_free(IjkThreadPoolContext *ctx)
 {
     if(ctx == NULL || ctx->started_count > 0) {
@@ -89,6 +106,13 @@ int ijk_threadpool_free(IjkThreadPoolContext *ctx)
     return 0;
 }
 
+/**
+ * 创建线程池。
+ * @param thread_count  工作线程数 (1 ~ MAX_THREADS)
+ * @param queue_size    任务队列初始容量 (1 ~ MAX_QUEUE)
+ * @param flags         保留参数
+ * @return 线程池实例，失败返回 NULL
+ */
 IjkThreadPoolContext *ijk_threadpool_create(int thread_count, int queue_size, int flags)
 {
     IjkThreadPoolContext *ctx;
@@ -137,6 +161,11 @@ IjkThreadPoolContext *ijk_threadpool_create(int thread_count, int queue_size, in
     return NULL;
 }
 
+/**
+ * 添加任务到线程池。
+ * 若队列快满 (pending == queue_size-1)，自动扩容为 2倍 (上限 MAX_QUEUE)。
+ * 添加成功后通过 cond_signal 唤醒一个等待中的工作线程。
+ */
 int ijk_threadpool_add(IjkThreadPoolContext *ctx, Runable function,
                    void *in_arg, void *out_arg, int flags)
 {
@@ -156,7 +185,8 @@ int ijk_threadpool_add(IjkThreadPoolContext *ctx, Runable function,
         return IJK_THREADPOOL_QUEUE_FULL;
     }
 
-    if(ctx->pending_count == ctx->queue_size - 1) {
+    if (ctx->pending_count == ctx->queue_size - 1) {
+        /* 队列快满，自动扩容为 2倍 (上限 MAX_QUEUE) */
         int new_pueue_size = (ctx->queue_size * 2) > MAX_QUEUE ? MAX_QUEUE : (ctx->queue_size * 2);
         IjkThreadPoolTask *new_queue = (IjkThreadPoolTask *)realloc(ctx->queue, sizeof(IjkThreadPoolTask) * new_pueue_size);
         if (new_queue) {
@@ -206,6 +236,10 @@ static int ijk_threadpool_freep(IjkThreadPoolContext **ctx)
     return ret;
 }
 
+/**
+ * 关闭并销毁线程池。
+ * 流程: 设置 shutdown 标志 -> broadcast 唤醒所有线程 -> join 等待退出 -> 释放内存
+ */
 int ijk_threadpool_destroy(IjkThreadPoolContext *ctx, int flags)
 {
     int i, err = 0;

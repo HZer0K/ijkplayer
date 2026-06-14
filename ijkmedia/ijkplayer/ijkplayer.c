@@ -1,6 +1,27 @@
 /*
  * ijkplayer.c
  *
+ * IjkMediaPlayer 核心实现。
+ *
+ * 本文件实现播放器的公共 API，作为上层 (JNI/Java) 和底层 FFPlayer 之间的
+ * 桥接层。主要职责：
+ *
+ * 1. 状态机管理:
+ *    通过 MP_STATE_* 宏定义 9 种播放状态，每个 API 调用前通过
+ *    ikjmp_chkst_*_l() 检查当前状态是否允许该操作。
+ *
+ * 2. 线程安全:
+ *    所有公共 API 均通过 pthread_mutex 保护，内部函数带 _l 后缀
+ *    表示调用者已持有锁。
+ *
+ * 3. 消息循环:
+ *    ijkmp_get_msg() 在独立线程 (ff_msg_loop) 中运行，处理来自
+ *    FFPlayer 的事件消息 (FFP_MSG_*) 和控制请求 (FFP_REQ_*)。
+ *    请求类消息在消息循环内部直接处理，不返回给上层。
+ *
+ * 4. 引用计数:
+ *    通过 __sync 原子内建函数管理生命周期，dec_ref 归零时自动销毁。
+ */
  * Copyright (c) 2013 Bilibili
  * Copyright (c) 2013 Zhang Rui <bbcallen@gmail.com>
  *
@@ -28,12 +49,14 @@
 #include <string.h>
 #include <inttypes.h>
 
+/* 错误返回宏：若 ret 返回非零值，则立即返回该错误码 */
 #define MP_RET_IF_FAILED(ret) \
     do { \
         int retval = ret; \
         if (retval != 0) return (retval); \
     } while(0)
 
+/* 状态检查宏：若 real == expected，则返回 errcode (默认 EIJK_INVALID_STATE) */
 #define MPST_RET_IF_EQ_INT(real, expected, errcode) \
     do { \
         if ((real) == (expected)) return (errcode); \
@@ -42,6 +65,9 @@
 #define MPST_RET_IF_EQ(real, expected) \
     MPST_RET_IF_EQ_INT(real, expected, EIJK_INVALID_STATE)
 
+/* ==================== 内部析构 ==================== */
+
+/* 析构播放器实例：等待消息线程结束、销毁互斥锁、释放内存 */
 inline static void ijkmp_destroy(IjkMediaPlayer *mp)
 {
     if (!mp)
@@ -68,6 +94,8 @@ inline static void ijkmp_destroy_p(IjkMediaPlayer **pmp)
     ijkmp_destroy(*pmp);
     *pmp = NULL;
 }
+
+/* ==================== 全局初始化/配置 ==================== */
 
 void ijkmp_global_init()
 {
@@ -111,12 +139,20 @@ void ijkmp_io_stat_complete_register(void (*cb)(const char *url,
     ffp_io_stat_complete_register(cb);
 }
 
+/* 状态变更通知：更新内部状态并发送 FFP_MSG_PLAYBACK_STATE_CHANGED 消息 */
 void ijkmp_change_state_l(IjkMediaPlayer *mp, int new_state)
 {
     mp->mp_state = new_state;
     ffp_notify_msg1(mp->ffplayer, FFP_MSG_PLAYBACK_STATE_CHANGED);
 }
 
+/* ==================== 实例创建与配置 ==================== */
+
+/**
+ * 创建播放器实例。
+ * @param msg_loop 消息循环回调，由上层 JNI 注入，在独立线程中运行
+ * @return 新创建的播放器实例，ref_count=1；失败返回 NULL
+ */
 IjkMediaPlayer *ijkmp_create(int (*msg_loop)(void*))
 {
     IjkMediaPlayer *mp = (IjkMediaPlayer *) mallocz(sizeof(IjkMediaPlayer));
@@ -363,6 +399,12 @@ IjkMediaMeta *ijkmp_get_meta_l(IjkMediaPlayer *mp)
     return ret;
 }
 
+/* ==================== 生命周期管理 ==================== */
+
+/**
+ * 停止播放并等待内部线程结束。可安全多次调用。
+ * 注意: 此函数可能阻塞当前线程。
+ */
 void ijkmp_shutdown_l(IjkMediaPlayer *mp)
 {
     assert(mp);
@@ -380,12 +422,20 @@ void ijkmp_shutdown(IjkMediaPlayer *mp)
     return ijkmp_shutdown_l(mp);
 }
 
+/**
+ * 增加引用计数。使用 __sync_fetch_and_add 原子操作，线程安全。
+ */
 void ijkmp_inc_ref(IjkMediaPlayer *mp)
 {
     assert(mp);
     __sync_fetch_and_add(&mp->ref_count, 1);
 }
 
+/**
+ * 减少引用计数。归零时自动执行 shutdown + destroy。
+ * 使用 __sync_sub_and_fetch 原子操作，线程安全。
+ * 注意: 可能阻塞 (内部调用 ijkmp_shutdown)。
+ */
 void ijkmp_dec_ref(IjkMediaPlayer *mp)
 {
     if (!mp)
@@ -408,12 +458,19 @@ void ijkmp_dec_ref_p(IjkMediaPlayer **pmp)
     *pmp = NULL;
 }
 
+/* ==================== 播放控制 ==================== */
+
+/**
+ * 设置数据源 URL。
+ * 状态检查: 仅允许从 MP_STATE_IDLE 调用，其他状态返回 EIJK_INVALID_STATE。
+ * 成功后状态转换为 MP_STATE_INITIALIZED。
+ */
 static int ijkmp_set_data_source_l(IjkMediaPlayer *mp, const char *url)
 {
     assert(mp);
     assert(url);
 
-    // MPST_RET_IF_EQ(mp->mp_state, MP_STATE_IDLE);
+    // MPST_RET_IF_EQ(mp->mp_state, MP_STATE_IDLE);  // 仅允许 IDLE 状态
     MPST_RET_IF_EQ(mp->mp_state, MP_STATE_INITIALIZED);
     MPST_RET_IF_EQ(mp->mp_state, MP_STATE_ASYNC_PREPARING);
     MPST_RET_IF_EQ(mp->mp_state, MP_STATE_PREPARED);
@@ -445,6 +502,7 @@ int ijkmp_set_data_source(IjkMediaPlayer *mp, const char *url)
     return retval;
 }
 
+/* 消息循环线程入口函数，包装上层注入的 msg_loop 回调 */
 static int ijkmp_msg_loop(void *arg)
 {
     IjkMediaPlayer *mp = arg;
@@ -452,6 +510,15 @@ static int ijkmp_msg_loop(void *arg)
     return ret;
 }
 
+/**
+ * 异步准备播放。
+ * 状态检查: 仅允许从 MP_STATE_INITIALIZED 或 MP_STATE_STOPPED 调用。
+ * 流程:
+ *   1. 状态 -> ASYNC_PREPARING
+ *   2. 启动消息队列和消息处理线程
+ *   3. 调用 ffp_prepare_async_l 开始解封装
+ *   4. 失败时状态 -> ERROR
+ */
 static int ijkmp_prepare_async_l(IjkMediaPlayer *mp)
 {
     assert(mp);
@@ -499,15 +566,20 @@ int ijkmp_prepare_async(IjkMediaPlayer *mp)
     return retval;
 }
 
+/**
+ * 检查当前状态是否允许 start 操作。
+ * 允许: PREPARED / STARTED / PAUSED / COMPLETED
+ * 拒绝: IDLE / INITIALIZED / ASYNC_PREPARING / STOPPED / ERROR / END
+ */
 static int ikjmp_chkst_start_l(int mp_state)
 {
     MPST_RET_IF_EQ(mp_state, MP_STATE_IDLE);
     MPST_RET_IF_EQ(mp_state, MP_STATE_INITIALIZED);
     MPST_RET_IF_EQ(mp_state, MP_STATE_ASYNC_PREPARING);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_PREPARED);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_STARTED);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_PAUSED);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_COMPLETED);
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_PREPARED);     // 允许
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_STARTED);      // 允许
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_PAUSED);       // 允许
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_COMPLETED);    // 允许
     MPST_RET_IF_EQ(mp_state, MP_STATE_STOPPED);
     MPST_RET_IF_EQ(mp_state, MP_STATE_ERROR);
     MPST_RET_IF_EQ(mp_state, MP_STATE_END);
@@ -515,6 +587,7 @@ static int ikjmp_chkst_start_l(int mp_state)
     return 0;
 }
 
+/* start 实现: 清除旧的 START/PAUSE 请求，发送 FFP_REQ_START 消息 */
 static int ijkmp_start_l(IjkMediaPlayer *mp)
 {
     assert(mp);
@@ -539,15 +612,19 @@ int ijkmp_start(IjkMediaPlayer *mp)
     return retval;
 }
 
+/**
+ * 检查当前状态是否允许 pause 操作。
+ * 允许: PREPARED / STARTED / PAUSED / COMPLETED
+ */
 static int ikjmp_chkst_pause_l(int mp_state)
 {
     MPST_RET_IF_EQ(mp_state, MP_STATE_IDLE);
     MPST_RET_IF_EQ(mp_state, MP_STATE_INITIALIZED);
     MPST_RET_IF_EQ(mp_state, MP_STATE_ASYNC_PREPARING);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_PREPARED);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_STARTED);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_PAUSED);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_COMPLETED);
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_PREPARED);     // 允许
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_STARTED);      // 允许
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_PAUSED);       // 允许
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_COMPLETED);    // 允许
     MPST_RET_IF_EQ(mp_state, MP_STATE_STOPPED);
     MPST_RET_IF_EQ(mp_state, MP_STATE_ERROR);
     MPST_RET_IF_EQ(mp_state, MP_STATE_END);
@@ -555,6 +632,7 @@ static int ikjmp_chkst_pause_l(int mp_state)
     return 0;
 }
 
+/* pause 实现: 清除旧的 START/PAUSE 请求，发送 FFP_REQ_PAUSE 消息 */
 static int ijkmp_pause_l(IjkMediaPlayer *mp)
 {
     assert(mp);
@@ -579,6 +657,11 @@ int ijkmp_pause(IjkMediaPlayer *mp)
     return retval;
 }
 
+/**
+ * 停止播放。
+ * 允许状态: ASYNC_PREPARING ~ COMPLETED / STOPPED
+ * 流程: 清除 START/PAUSE 请求 -> ffp_stop_l -> 状态转换为 STOPPED
+ */
 static int ijkmp_stop_l(IjkMediaPlayer *mp)
 {
     assert(mp);
@@ -627,15 +710,19 @@ bool ijkmp_is_playing(IjkMediaPlayer *mp)
     return false;
 }
 
+/**
+ * 检查当前状态是否允许 seek 操作。
+ * 允许: PREPARED / STARTED / PAUSED / COMPLETED
+ */
 static int ikjmp_chkst_seek_l(int mp_state)
 {
     MPST_RET_IF_EQ(mp_state, MP_STATE_IDLE);
     MPST_RET_IF_EQ(mp_state, MP_STATE_INITIALIZED);
     MPST_RET_IF_EQ(mp_state, MP_STATE_ASYNC_PREPARING);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_PREPARED);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_STARTED);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_PAUSED);
-    // MPST_RET_IF_EQ(mp_state, MP_STATE_COMPLETED);
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_PREPARED);     // 允许
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_STARTED);      // 允许
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_PAUSED);       // 允许
+    // MPST_RET_IF_EQ(mp_state, MP_STATE_COMPLETED);    // 允许
     MPST_RET_IF_EQ(mp_state, MP_STATE_STOPPED);
     MPST_RET_IF_EQ(mp_state, MP_STATE_ERROR);
     MPST_RET_IF_EQ(mp_state, MP_STATE_END);
@@ -643,6 +730,7 @@ static int ikjmp_chkst_seek_l(int mp_state)
     return 0;
 }
 
+/* seek 实现: 记录 seek 目标，清除旧 SEEK 请求，发送 FFP_REQ_SEEK 消息 */
 int ijkmp_seek_to_l(IjkMediaPlayer *mp, long msec)
 {
     assert(mp);
@@ -675,8 +763,11 @@ int ijkmp_get_state(IjkMediaPlayer *mp)
     return mp->mp_state;
 }
 
+/* ==================== 位置/时长查询 ==================== */
+
 static long ijkmp_get_current_position_l(IjkMediaPlayer *mp)
 {
+    /* 若有未完成的 seek 请求，返回 seek 目标位置而非实际播放位置 */
     if (mp->seek_req)
         return mp->seek_msec;
     return ffp_get_current_position_l(mp->ffplayer);
@@ -754,7 +845,29 @@ void *ijkmp_set_weak_thiz(IjkMediaPlayer *mp, void *weak_thiz)
     return prev_weak_thiz;
 }
 
-/* need to call msg_free_res for freeing the resouce obtained in msg */
+/* ==================== 消息处理 ==================== */
+
+/**
+ * 从消息队列获取事件。
+ *
+ * 消息分为两类:
+ *   - 事件消息 (FFP_MSG_*): 返回给上层处理
+ *     - FFP_MSG_PREPARED:     异步准备完成，状态 -> PREPARED
+ *     - FFP_MSG_COMPLETED:    播放完成，状态 -> COMPLETED，设置 restart 标志
+ *     - FFP_MSG_SEEK_COMPLETE: seek 完成，清除 seek_req/seek_msec
+ *
+ *   - 请求消息 (FFP_REQ_*): 在消息循环内部直接处理，不返回给上层
+ *     - FFP_REQ_START:  根据 restart 标志从头播放或恢复播放，状态 -> STARTED
+ *     - FFP_REQ_PAUSE:  暂停播放，状态 -> PAUSED
+ *     - FFP_REQ_SEEK:   执行实际 seek 操作
+ *
+ * 请求消息处理后设置 continue_wait_next_msg=1，继续循环等待下一个事件消息。
+ *
+ * @param mp    播放器实例
+ * @param msg   输出消息结构
+ * @param block 1=阻塞等待，0=非阻塞
+ * @return <0 中止，0 无消息，>0 有消息
+ */
 int ijkmp_get_msg(IjkMediaPlayer *mp, AVMessage *msg, int block)
 {
     assert(mp);
