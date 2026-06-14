@@ -63,12 +63,38 @@ cd android/contrib
 | `IJK_ENABLE_VULKAN` | `1` | 设为 `0` 禁用 Vulkan 设备支持 |
 | `IJK_ENABLE_VULKAN_FILTERS` | `0` | Vulkan GLSL 滤镜（需要 glslang，Android NDK 下默认禁用）|
 
-### 4. 构建 ijkplayer so（arm64）
+### 5. 构建 llama.cpp（可选，AI 推理需要）
+
+如果需要 LLM 对话功能，需先编译 llama.cpp：
+
+```bash
+# 初始化 llama.cpp 源码（首次）
+cd ../..   # 回到 ijkplayer/ 根目录
+./init-android-llama.sh
+
+# 编译 llama.cpp
+cd android/contrib
+./compile-llama.sh
+```
+
+编译产物：`android/contrib/build/llama/output/`
+
+> **关键选项**：编译脚本已默认设置 `-DGGML_OPENMP=OFF`，禁用 OpenMP 以避免运行时缺少 `libomp.so` 导致崩溃。
+>
+> 如需手动调整，可编辑 `compile-llama.sh` 中的 CMake 参数。
+
+### 6. 构建 ijkplayer so（arm64）
 
 ```bash
 cd android
 ./compile-ijk.sh arm64
 ```
+
+> **注意**：`compile-ijk.sh` 要求同时设置 `ANDROID_NDK` 和 `ANDROID_SDK` 环境变量：
+> ```bash
+> export ANDROID_NDK=/path/to/android-ndk-r27
+> export ANDROID_SDK=/path/to/Android/Sdk
+> ```
 
 脚本使用 **CMake + Ninja** 构建；若系统无 Ninja，自动回退到 Make。
 
@@ -86,7 +112,7 @@ cd android
 - `IJK_LOG_DIR=/path/to/logs` — 指定日志目录
 - `IJK_LOG_FILE=/path/to/file.log` — 指定具体日志文件
 
-### 5. 构建 Demo APK
+### 7. 构建 Demo APK
 
 ```bash
 cd android/ijkplayer

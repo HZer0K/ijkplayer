@@ -119,8 +119,10 @@ Demo App（`android/ijkplayer/ijkplayer-example`）提供以下功能：
 
 - **播放器**：IjkMediaPlayer / ExoPlayer 双内核切换
 - **视频滤镜**：渲染层滤镜 + FFmpeg 软件滤镜，运行时实时切换
-- **功能测试**：Vulkan 能力检测、滤镜链路自检
-- **调试诊断**：错误弹窗、日志复制、Track 切换
+- **Vulkan 滤镜测试**：14 种 Vulkan GPU 滤镜（缩放/翻转/旋转/模糊/色差/混合/叠加/去隔行/降噪等），自动检测 Vulkan 能力并回落软件滤镜
+- **AI 对话**：集成 llama.cpp LLM，支持实时流式对话，对话气泡 UI（用户蓝色气泡 + AI 暗色气泡），模型自动下载（海外→国内镜像降级）
+- **功能测试**：Vulkan 能力检测、滤镜链路自检、内核/渲染切换测试
+- **调试诊断**：错误弹窗、日志复制、Track 切换、诊断面板
 
 ---
 
@@ -128,8 +130,8 @@ Demo App（`android/ijkplayer/ijkplayer-example`）提供以下功能：
 
 遇到问题请查阅 [doc/faq.md](doc/faq.md)，涵盖：
 - 滤镜相关（avgblur 未找到、Vulkan 编译报错）
-- 运行时崩溃（libc++_shared.so 找不到）
-- AI 推理相关问题
+- 运行时崩溃（libc++_shared.so / libomp.so 找不到）
+- AI 推理相关问题（模型下载、镜像源、API 使用）
 
 ---
 

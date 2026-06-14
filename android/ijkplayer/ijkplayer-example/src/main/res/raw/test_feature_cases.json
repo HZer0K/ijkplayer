@@ -254,5 +254,74 @@
     "expected": "边缘 RGB 分离非常明显（chromaber_vulkan dist 翻倍）",
     "logKeywords": ["apply vf0="],
     "hint": "dist_x=20 dist_y=12 产生较强的毛玻璃 RGB 分离效果"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "detect", "blackdetect"],
+    "name": "Vulkan 黑屏检测（blackdetect_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,blackdetect_vulkan=d=0.5:pic_th=0.1,hwdownload,format=yuv420p",
+    "expected": "正常播放，日志中输出黑屏片段时间戳（对正常视频基本无影响）",
+    "logKeywords": ["apply vf0=", "blackdetect"],
+    "hint": "blackdetect_vulkan 检测黑屏帧；正常视频基本无变化，可通过日志查看检测结果"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "detect", "scdet"],
+    "name": "Vulkan 场景检测（scdet_vulkan）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,scdet_vulkan=thresh=10:sc_pass=1,hwdownload,format=yuv420p",
+    "expected": "场景切换时画面可能闪烁标记；日志中输出场景切换时间点",
+    "logKeywords": ["apply vf0=", "scdet"],
+    "hint": "scdet_vulkan 检测场景切换；thresh 设置灵敏度阈值，sc_pass=1 时场景切换帧通过"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "stress", "combo"],
+    "name": "Vulkan 压力测试（5 滤镜串联）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,scale_vulkan=w=iw/2:h=ih/2,gblur_vulkan=sigma=2:size=9,chromaber_vulkan=dist_x=5:dist_y=3,hflip_vulkan,transpose_vulkan=dir=clock,hwdownload,format=yuv420p",
+    "expected": "画面缩小+模糊+色差+翻转+旋转；验证 GPU pipeline 稳定性",
+    "logKeywords": ["apply vf0="],
+    "hint": "5 个 Vulkan 滤镜串联压力测试：缩放→模糊→色差→翻转→旋转"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "combo", "deinterlace+scale"],
+    "name": "Vulkan 去隔行+缩放组合（bwdif+scale）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,bwdif_vulkan=mode=send_frame:parity=auto:deint=all,scale_vulkan=w=iw*2:h=ih*2,hwdownload,format=yuv420p",
+    "expected": "去隔行后放大两倍；验证多 Vulkan 滤镜串联（bwdif→scale）",
+    "logKeywords": ["apply vf0="],
+    "hint": "bwdif_vulkan 去隔行后接 scale_vulkan 放大；两个 Vulkan 滤镜串联"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "combo", "blur+chromatic"],
+    "name": "Vulkan 模糊+色差组合（gblur+chromaber）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "hwupload,gblur_vulkan=sigma=4:size=15,chromaber_vulkan=dist_x=8:dist_y=5,hwdownload,format=yuv420p",
+    "expected": "画面变模糊且边缘有 RGB 分离效果；gblur+chromaber 组合",
+    "logKeywords": ["apply vf0="],
+    "hint": "先高斯模糊后色差，两种视觉效果叠加；可用于验证多滤镜 pipeline"
+  },
+  {
+    "category": "AI/对话",
+    "tags": ["ai", "llm", "chat"],
+    "name": "AI 对话功能测试",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "expected": "点击右上角 AI 按钮，首次使用自动下载模型；对话时显示用户问句蓝色气泡和 AI 回答暗色气泡",
+    "logKeywords": ["AI engine initialized", "onAiPartialText"],
+    "hint": "点击右上角菜单 → AI 对话；首次使用会自动下载模型（约 350MB），支持海外→国内镜像降级"
+  },
+  {
+    "category": "滤镜/Vulkan",
+    "tags": ["vulkan", "flip", "scale", "combo"],
+    "name": "Vulkan 翻转+缩放+还原（hflip→scale→pad）",
+    "url": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+    "vf0": "drawbox=x=0:y=0:w=iw/5:h=ih/5:color=yellow@0.8:t=fill,hwupload,hflip_vulkan,scale_vulkan=w=iw/2:h=ih/2,hwdownload,format=yuv420p,pad=w=iw*2:h=ih*2:x=(ow-iw)/2:y=(oh-ih)/2:color=gray",
+    "expected": "左上角黄色方块翻到右上，缩小居中并加灰边；Vulkan 翻转+缩放+软件 pad",
+    "logKeywords": ["apply vf0="],
+    "hint": "drawbox→hflip_vulkan→scale_vulkan→hwdownload→pad；验证 Vulkan+软件混合链路"
   }
 ]

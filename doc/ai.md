@@ -18,9 +18,9 @@ AI 推理框架采用 **双后端 + 统一接口** 架构，整体分为四层�
 │                    Android App                           │
 │  ┌──────────────────────────────────────────────────┐   │
 │  │  IjkAIEngine.java                                │   │
-│  │  ├─ initLLM(modelPath, threads) → 初始化 LLM      │   │
-│  │  ├─ promptAsync(text, callback) → 异步推理       │   │
-│  │  ├─ detectAsync(frame) → 目标检测                │   │
+│  │  ├─ init(modelPath, threads) → 初始化 LLM         │   │
+│  │  ├─ prompt(text, callback, maxTokens) → 异步推理  │   │
+│  │  ├─ cvProcess(frame, ...) → CV 处理（超分/检测）   │   │
 │  │  └─ release() → 释放资源                         │   │
 │  └──────────────┬───────────────────────────────────┘   │
 │                 │ JNI                                  │
@@ -150,23 +150,37 @@ LLM 逐 token 通过回调返回，前端可实时显示生成内容，无需等
 - ✅ llama.cpp 集成（`llm/ijkai_llm.cpp`，通过 CMake `IJKAI_ENABLE_LLM=ON` 启用）
 - ✅ 91 个桌面端 C 单元测试
 
-### 待完成
+### 待完成（可继续扩展）
 
-- （暂无）
+- 帧率自适应（根据 AI 处理耗时动态跳帧/提高精度）
+- 更多 CV 模型集成（风格迁移、人脸关键点等）
+
+### Demo App 层（ijkplayer-example）
+
+Demo App 在引擎基础上封装了以下功能：
+
+| 功能 | 文件 | 说明 |
+|------|------|------|
+| 模型自动下载 | `AiHelper.java` | 首次启用 AI 时自动下载 Qwen2.5-0.5B 模型 |
+| 国内镜像降级 | `AiHelper.java` | 海外源下载失败自动切换 hf-mirror.com |
+| 对话气泡 UI | `VideoActivity.java` + `activity_player.xml` | 用户问句蓝色气泡 + AI 回答暗色气泡 |
+| 流式文字显示 | `VideoActivity.java` | AI 逐 token 实时显示到对话气泡 |
+| 对话管理 | `AiHelper.Callback` | `onUserPromptSent` / `onAiPartialText` 回调链 |
 
 ## Java API 使用示例
 
 ```java
 // 1. 初始化 LLM 引擎
 IjkAIEngine aiEngine = new IjkAIEngine();
-aiEngine.initLLM("/sdcard/models/llama-3.2-1b-q4.gguf", 4);
+aiEngine.init("/sdcard/models/qwen2.5-0.5b-instruct-q4_k_m.gguf", 4);
+// 或指定类型：aiEngine.init(IjkAIEngine.TYPE_LLM, modelPath, 4);
 
 // 2. 异步推理（不阻塞主线程）
-aiEngine.promptAsync("你好，请介绍一下自己", new IjkAIEngine.LLMCallback() {
+aiEngine.prompt("你好，请介绍一下自己", new IjkAIEngine.Callback() {
     @Override
     public void onText(String text, boolean isComplete) {
         if (isComplete) {
-            Log.d("AI", "推理完成: " + text);
+            Log.d("AI", "推理完成");
         } else {
             Log.d("AI", "流式输出: " + text);
         }
@@ -176,7 +190,7 @@ aiEngine.promptAsync("你好，请介绍一下自己", new IjkAIEngine.LLMCallba
     public void onError(String error) {
         Log.e("AI", "推理失败: " + error);
     }
-});
+}, 512); // maxTokens 可选，默认 256
 
 // 3. 释放资源
 aiEngine.release();
@@ -241,8 +255,11 @@ gcc -std=c99 -pthread -I.. -I../async -I. test_ijkai_algo.c -lm -o test_ijkai_al
 
 ```bash
 export ANDROID_NDK=/path/to/android-ndk-r27d
+export ANDROID_SDK=/path/to/Android/Sdk
 cd android/contrib
 ./compile-llama.sh
 ```
+
+> **注意**：编译时已默认设置 `-DGGML_OPENMP=OFF`，避免运行时缺少 `libomp.so` 导致崩溃。
 
 编译完成后，在 `android/ijkplayer/ijkplayer-arm64/src/main/cpp/CMakeLists.txt` 中设置 `IJKAI_ENABLE_LLM=ON`，重新编译 ijkplayer 即可启用 LLM 功能。

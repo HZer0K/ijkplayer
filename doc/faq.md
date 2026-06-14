@@ -40,4 +40,19 @@ A: 需要先初始化并编译 llama.cpp，然后在 CMakeLists.txt 中设置 `I
 
 **Q: 支持哪些 LLM 模型？**
 
-A: 支持 GGUF 格式的模型，推荐使用 llama-3.2-1b/3b（轻量级，适合移动端），或 phi-3-mini、qwen-2.5-1.5b 等。模型需要从 HuggingFace 下载并放到设备存储中。
+A: 支持 GGUF 格式的模型，推荐使用 Qwen2.5-0.5B-Instruct（轻量级，Demo 默认模型）、llama-3.2-1b/3b、phi-3-mini 等。模型可自动从 HuggingFace 下载，也可手动放到设备存储中。
+
+**Q: 运行时崩溃 `UnsatisfiedLinkError: library "libomp.so" not found`？**
+
+A: 这是 llama.cpp 编译时启用了 OpenMP 导致的。已在 `compile-llama.sh` 中设置 `-DGGML_OPENMP=OFF` 禁用 OpenMP。如果遇到此问题，请重新编译 llama.cpp 和 ijkplayer：
+```bash
+cd android/contrib
+./compile-llama.sh
+cd ..
+./compile-ijk.sh clean
+./compile-ijk.sh arm64
+```
+
+**Q: AI 模型下载失败或很慢？**
+
+A: Demo App 已内置国内镜像降级机制：先尝试从 HuggingFace (huggingface.co) 下载，失败后自动切换到国内镜像 hf-mirror.com。如果两个源都失败，可手动下载模型文件（Qwen2.5-0.5B-Instruct GGUF 格式，约 350MB）放到设备存储的 `Android/data/<package>/files/models/` 目录。
