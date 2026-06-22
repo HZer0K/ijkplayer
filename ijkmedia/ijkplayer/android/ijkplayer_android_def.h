@@ -143,6 +143,9 @@ enum media_info_type {
     MEDIA_INFO_AUDIO_SEEK_RENDERING_START = 10009,
 
     MEDIA_INFO_MEDIA_ACCURATE_SEEK_COMPLETE = 10100,
+
+    /* Scene classification result (场景分类) */
+    MEDIA_INFO_SCENE_DETECTED = 10200,
 };
 
 typedef struct ijkmp_mediacodecinfo_context

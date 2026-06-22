@@ -39,6 +39,7 @@ typedef enum {
     IJKAI_TYPE_LLM,           /**< LLM推理 */
     IJKAI_TYPE_CV_SR,         /**< CV超分辨率 */
     IJKAI_TYPE_CV_DETECT,     /**< CV目标检测 */
+    IJKAI_TYPE_CV_SCENE,      /**< CV场景分类 */
     IJKAI_TYPE_MULTIMODAL     /**< 多模态 */
 } ijkai_type;
 
@@ -195,6 +196,13 @@ int ijkai_get_token_count(ijkai_context *ctx);
  * @return 已处理帧数
  */
 int ijkai_get_processed_frames(ijkai_context *ctx);
+
+/**
+ * Get CV-specific context (for direct CV module access)
+ * @param ctx AI context (must be CV type)
+ * @return CV context pointer (ijkai_cv_context*), NULL if not a CV type
+ */
+void *ijkai_get_cv_context(ijkai_context *ctx);
 
 #ifdef __cplusplus
 }

@@ -10,6 +10,7 @@
 #define IJKAI_CV_INTERNAL_H
 
 #include "ijkai_cv.h"
+#include "ijkai_cv_scene.h"
 #include "ijkai_cv_mnn_wrap.h"
 #include "../async/ijkai_queue.h"
 
@@ -25,7 +26,8 @@ extern "C" {
  */
 typedef enum {
     IJKAI_CV_SUPER_RESOLUTION = 0,
-    IJKAI_CV_DETECTION        = 1
+    IJKAI_CV_DETECTION        = 1,
+    IJKAI_CV_SCENE_CLASSIFY   = 2
 } ijkai_cv_sub_type;
 
 /**
@@ -43,6 +45,9 @@ typedef struct {
     ijkai_cv_callback    callback;
     void                *user_data;
     ijkai_cv_sub_type    sub_type;
+
+    /* Scene classification callback (used when sub_type == SCENE_CLASSIFY) */
+    ijkai_scene_callback scene_callback;
 } cv_task_data;
 
 /**

@@ -54,6 +54,7 @@
 #define FFP_MSG_GET_IMG_STATE               1000    /* arg1 = timestamp, arg2 = result code, obj = file name*/
 
 #define FFP_MSG_VIDEO_DECODER_OPEN          10001
+#define FFP_MSG_SCENE_DETECTED              1100    /* obj = label_text string */
 
 #define FFP_REQ_START                       20001
 #define FFP_REQ_PAUSE                       20002

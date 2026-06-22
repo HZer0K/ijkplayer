@@ -206,6 +206,7 @@ if(IJKAI_ENABLE_CV)
         "${IJKAI_ROOT}/cv/ijkai_cv.c"
         "${IJKAI_ROOT}/cv/ijkai_cv_sr.c"
         "${IJKAI_ROOT}/cv/ijkai_cv_detect.c"
+        "${IJKAI_ROOT}/cv/ijkai_cv_scene.c"
         "${IJKAI_ROOT}/cv/ijkai_cv_mnn_wrap.cpp")
     list(APPEND IJKAI_INCLUDES "${IJK_MNN_OUTPUT_DIR}/include")
     list(APPEND IJKAI_LIBS MNN)

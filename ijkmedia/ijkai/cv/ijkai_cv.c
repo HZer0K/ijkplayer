@@ -12,6 +12,7 @@
 #include "ijkai_cv_internal.h"
 #include "ijkai_cv_sr.h"
 #include "ijkai_cv_detect.h"
+#include "ijkai_cv_scene.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -60,6 +61,21 @@ static void *ijkai_cv_worker_loop(void *arg) {
             if (det_ret != 0 || !output_data) {
                 success = 0;
             }
+        } else if (data->sub_type == IJKAI_CV_SCENE_CLASSIFY) {
+            // Scene classification processing
+            ijkai_scene_result scene_result;
+            int scene_ret = ijkai_cv_scene_process_internal(
+                ctx->mnn_ctx,
+                data->input_data, data->in_width, data->in_height,
+                &scene_result);
+            if (scene_ret == 0 && data->scene_callback) {
+                data->scene_callback(&scene_result, data->user_data);
+            }
+            /* Scene callback handles its own result delivery; skip generic callback */
+            if (data->input_data) free(data->input_data);
+            free(data);
+            ctx->processed_frames++;
+            continue;
         } else {
             success = 0;
         }

@@ -181,6 +181,9 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
 
     private AiHelper mAiHelper;
 
+    // --- Scene classification label ---
+    private TextView mSceneLabel;
+
     // --- AI 对话气泡面板 ---
     private View mChatOverlay;
     private View mChatUserRow;
@@ -351,6 +354,23 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 FrameLayout.LayoutParams.WRAP_CONTENT);
         glp.gravity = android.view.Gravity.CENTER;
         root.addView(mGestureOverlay, glp);
+
+        // Scene classification label (bottom-left, semi-transparent)
+        mSceneLabel = new TextView(this);
+        mSceneLabel.setTextSize(14);
+        mSceneLabel.setTextColor(android.graphics.Color.WHITE);
+        mSceneLabel.setShadowLayer(4f, 1f, 1f, android.graphics.Color.BLACK);
+        mSceneLabel.setPadding(16, 8, 16, 8);
+        mSceneLabel.setBackgroundColor(0x80000000);
+        mSceneLabel.setVisibility(View.GONE);
+        FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        slp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.START;
+        slp.bottomMargin = (int) (60 * getResources().getDisplayMetrics().density);
+        slp.leftMargin = 16;
+        root.addView(mSceneLabel, slp);
+
         String testHint = getIntent() != null ? getIntent().getStringExtra(EXTRA_TEST_HINT) : null;
         if (!TextUtils.isEmpty(testHint)) {
             mToastTextView.setText(testHint);
@@ -401,6 +421,17 @@ public class VideoActivity extends AppCompatActivity implements TracksFragment.I
                 float savedSpeed = mSettings != null ? mSettings.getPlaybackSpeed() : 1.0f;
                 if (savedSpeed != 1.0f && mVideoView != null) {
                     mVideoView.setSpeed(savedSpeed);
+                }
+                // Set up scene detection listener if using IjkMediaPlayer
+                if (mp instanceof IjkMediaPlayer) {
+                    ((IjkMediaPlayer) mp).setOnSceneDetectedListener(label ->
+                        runOnUiThread(() -> {
+                            if (mSceneLabel != null) {
+                                mSceneLabel.setText("[\u573a\u666f\u8bc6\u522b] " + label);
+                                mSceneLabel.setVisibility(View.VISIBLE);
+                            }
+                        })
+                    );
                 }
             }
         });

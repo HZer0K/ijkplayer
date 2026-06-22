@@ -40,6 +40,7 @@
 #include "ijksdl/android/ijksdl_android_jni.h"
 #include "ijksdl/android/ijksdl_codec_android_mediadef.h"
 #include "ijkavformat/ijkavformat.h"
+#include "../../ijkai/ijkai.h"
 
 #define JNI_MODULE_PACKAGE      "tv/danmaku/ijk/media/player"
 #define JNI_CLASS_IJKPLAYER     "tv/danmaku/ijk/media/player/IjkMediaPlayer"
@@ -550,6 +551,11 @@ IjkMediaPlayer_setOption(JNIEnv *env, jobject thiz, jint category, jobject name,
     }
 
     ijkmp_set_option(mp, category, c_name, c_value);
+
+    /* Intercept scene-detect option to initialize AI context */
+    if (c_name && strcmp(c_name, "scene-detect") == 0 && category == FFP_OPT_CATEGORY_PLAYER) {
+        ijkmp_set_scene_detect(mp, c_value);
+    }
 
 LABEL_RETURN:
     if (c_name)
@@ -1062,6 +1068,13 @@ static void message_loop_n(JNIEnv *env, IjkMediaPlayer *mp)
         case FFP_MSG_AUDIO_SEEK_RENDERING_START:
             MPTRACE("FFP_MSG_AUDIO_SEEK_RENDERING_START:\n");
             post_event(env, weak_thiz, MEDIA_INFO, MEDIA_INFO_AUDIO_SEEK_RENDERING_START, msg.arg1);
+            break;
+        case FFP_MSG_SCENE_DETECTED:
+            if (msg.obj) {
+                jstring label = (*env)->NewStringUTF(env, (char *)msg.obj);
+                post_event2(env, weak_thiz, MEDIA_INFO, MEDIA_INFO_SCENE_DETECTED, msg.arg1, label);
+                J4A_DeleteLocalRef__p(env, &label);
+            }
             break;
         default:
             ALOGE("unknown FFP_MSG_xxx(%d)\n", msg.what);

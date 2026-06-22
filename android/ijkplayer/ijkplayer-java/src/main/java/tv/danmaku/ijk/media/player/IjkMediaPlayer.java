@@ -1048,6 +1048,12 @@ public final class IjkMediaPlayer extends AbstractMediaPlayer {
                     case MEDIA_INFO_VIDEO_RENDERING_START:
                         DebugLog.i(TAG, "Info: MEDIA_INFO_VIDEO_RENDERING_START\n");
                         break;
+                    case IMediaPlayer.MEDIA_INFO_SCENE_DETECTED:
+                        DebugLog.i(TAG, "Info: SCENE_DETECTED: " + msg.obj + "\n");
+                        if (player.mOnSceneDetectedListener != null && msg.obj instanceof String) {
+                            player.mOnSceneDetectedListener.onSceneDetected((String) msg.obj);
+                        }
+                        break;
                 }
                 player.notifyOnInfo(msg.arg1, msg.arg2);
                 // No real default action so far.
@@ -1304,4 +1310,13 @@ public final class IjkMediaPlayer extends AbstractMediaPlayer {
     public static native void native_profileBegin(String libName);
     public static native void native_profileEnd();
     public static native void native_setLogLevel(int level);
+
+    /* Scene detection listener */
+    public interface OnSceneDetectedListener {
+        void onSceneDetected(String label);
+    }
+    private OnSceneDetectedListener mOnSceneDetectedListener;
+    public void setOnSceneDetectedListener(OnSceneDetectedListener listener) {
+        mOnSceneDetectedListener = listener;
+    }
 }

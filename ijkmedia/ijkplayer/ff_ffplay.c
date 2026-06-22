@@ -51,6 +51,10 @@
 #include <zlib.h>
 #endif
 
+/* Scene classification (AI) */
+#include "../ijkai/ijkai.h"
+#include "../ijkai/cv/ijkai_cv_scene.h"
+
 extern int g_ijkplayer_diag_enabled;
 
 typedef enum {
@@ -2540,6 +2544,93 @@ static int decoder_start(Decoder *d, int (*fn)(void *), void *arg, const char *n
     return 0;
 }
 
+/* ======== Scene Classification ======== */
+
+/**
+ * Scene detection callback: invoked on CV worker thread after inference.
+ * Sends FFP_MSG_SCENE_DETECTED to JNI message loop with the label text.
+ */
+static void ffp_scene_detect_callback(ijkai_scene_result *result, void *user_data)
+{
+    FFPlayer *ffp = (FFPlayer *)user_data;
+    if (!ffp || !result) return;
+
+    /* Store latest label text */
+    snprintf(ffp->scene_label_text, sizeof(ffp->scene_label_text), "%s", result->label_text);
+
+    /* Notify JNI via message queue (thread-safe) */
+    int text_len = (int)strlen(result->label_text) + 1;
+    ffp_notify_msg4(ffp, FFP_MSG_SCENE_DETECTED, (int)result->label,
+                    0, (void *)result->label_text, text_len);
+}
+
+/**
+ * Enqueue a decoded AVFrame for scene classification.
+ * Converts YUV to RGB 224x224, then pushes to async inference queue.
+ * Non-blocking: returns immediately if queue is full.
+ */
+static void ffp_scene_detect_enqueue(FFPlayer *ffp, AVFrame *frame)
+{
+    if (!ffp || !ffp->scene_ctx || !frame) return;
+    if (frame->width <= 0 || frame->height <= 0) return;
+
+    ijkai_context *ai_ctx = (ijkai_context *)ffp->scene_ctx;
+
+    /* Use sws_scale to convert YUV -> RGB 224x224 */
+    int dst_w = SCENE_MODEL_INPUT_W;
+    int dst_h = SCENE_MODEL_INPUT_H;
+    int rgb_size = dst_w * dst_h * 3;
+    uint8_t *rgb_buf = (uint8_t *)av_malloc((size_t)rgb_size);
+    if (!rgb_buf) return;
+
+    uint8_t *dst_data[4] = {rgb_buf, NULL, NULL, NULL};
+    int dst_linesize[4] = {dst_w * 3, 0, 0, 0};
+
+    /* Use a cached sws context for performance */
+    static struct SwsContext *s_sws_ctx = NULL;
+    static int s_last_w = 0, s_last_h = 0;
+    static enum AVPixelFormat s_last_fmt = AV_PIX_FMT_NONE;
+
+    if (!s_sws_ctx || s_last_w != frame->width || s_last_h != frame->height
+        || s_last_fmt != (enum AVPixelFormat)frame->format) {
+        if (s_sws_ctx) sws_freeContext(s_sws_ctx);
+        s_sws_ctx = sws_getContext(frame->width, frame->height,
+                                    (enum AVPixelFormat)frame->format,
+                                    dst_w, dst_h, AV_PIX_FMT_RGB24,
+                                    SWS_BILINEAR, NULL, NULL, NULL);
+        s_last_w = frame->width;
+        s_last_h = frame->height;
+        s_last_fmt = (enum AVPixelFormat)frame->format;
+    }
+
+    if (!s_sws_ctx) {
+        av_free(rgb_buf);
+        return;
+    }
+
+    int ret = sws_scale(s_sws_ctx,
+                         (const uint8_t * const *)frame->data,
+                         frame->linesize,
+                         0, frame->height,
+                         dst_data, dst_linesize);
+    if (ret <= 0) {
+        av_free(rgb_buf);
+        return;
+    }
+
+    /* Enqueue to CV scene classification (async, non-blocking) */
+    ijkai_cv_context *cv_ctx = (ijkai_cv_context *)ijkai_get_cv_context(ai_ctx);
+
+    if (cv_ctx) {
+        ijkai_cv_scene_process(cv_ctx, rgb_buf, dst_w, dst_h,
+                                ffp_scene_detect_callback, ffp);
+    }
+
+    /* Note: rgb_buf is copied inside scene_process, so we can free it here.
+     * Actually, scene_process copies the data, so this is safe. */
+    av_free(rgb_buf);
+}
+
 static int ffplay_video_thread(void *arg)
 {
     FFPlayer *ffp = arg;
@@ -2628,6 +2719,15 @@ static int ffplay_video_thread(void *arg)
             }
             av_frame_unref(frame);
             continue;
+        }
+
+        /* Scene classification: sample every scene_interval_ms */
+        if (ffp->scene_detect_enable && ffp->scene_ctx) {
+            int64_t now_ms = av_gettime_relative() / 1000;
+            if (now_ms - ffp->scene_last_time_ms >= ffp->scene_interval_ms) {
+                ffp->scene_last_time_ms = now_ms;
+                ffp_scene_detect_enqueue(ffp, frame);
+            }
         }
 
 #if CONFIG_AVFILTER
@@ -4527,6 +4627,14 @@ FFPlayer *ffp_create()
     ffp->meta = ijkmeta_create();
 
     av_opt_set_defaults(ffp);
+
+    /* Scene classification defaults */
+    ffp->scene_detect_enable = 0;
+    ffp->scene_ctx = NULL;
+    ffp->scene_last_time_ms = 0;
+    ffp->scene_interval_ms = 2000; /* 2 seconds */
+    ffp->scene_label_text[0] = '\0';
+
     return ffp;
 }
 
@@ -4550,6 +4658,13 @@ void ffp_destroy(FFPlayer *ffp)
 
     SDL_DestroyMutexP(&ffp->af_mutex);
     SDL_DestroyMutexP(&ffp->vf_mutex);
+
+    /* Release scene classification context */
+    if (ffp->scene_ctx) {
+        ijkai_context *ai_ctx = (ijkai_context *)ffp->scene_ctx;
+        ijkai_release(&ai_ctx);
+        ffp->scene_ctx = NULL;
+    }
 
     msg_queue_destroy(&ffp->msg_queue);
 

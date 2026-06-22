@@ -45,6 +45,7 @@
 #include "ijkplayer.h"
 #include "ijkplayer_internal.h"
 #include "ijkversion.h"
+#include "../ijkai/ijkai.h"
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
@@ -232,6 +233,44 @@ void ijkmp_set_video_filter(IjkMediaPlayer *mp, const char *vfilter)
     assert(mp);
     pthread_mutex_lock(&mp->mutex);
     ffp_set_video_filter(mp->ffplayer, vfilter);
+    pthread_mutex_unlock(&mp->mutex);
+}
+
+void ijkmp_set_scene_detect(IjkMediaPlayer *mp, const char *model_path)
+{
+    assert(mp);
+    pthread_mutex_lock(&mp->mutex);
+
+    FFPlayer *ffp = mp->ffplayer;
+    if (!ffp) {
+        pthread_mutex_unlock(&mp->mutex);
+        return;
+    }
+
+    if (!model_path || model_path[0] == '\0') {
+        /* Disable scene detection */
+        ffp->scene_detect_enable = 0;
+        if (ffp->scene_ctx) {
+            ijkai_context *ai_ctx = (ijkai_context *)ffp->scene_ctx;
+            ijkai_release(&ai_ctx);
+            ffp->scene_ctx = NULL;
+        }
+    } else {
+        /* Enable scene detection: initialize AI context with model */
+        if (!ffp->scene_ctx) {
+            ijkai_context *ai_ctx = ijkai_init(IJKAI_TYPE_CV_SCENE, model_path, 2);
+            if (ai_ctx) {
+                ffp->scene_ctx = ai_ctx;
+                ffp->scene_detect_enable = 1;
+                ffp->scene_last_time_ms = 0;
+                printf("[IJKMP] Scene detection enabled: %s\n", model_path);
+            } else {
+                fprintf(stderr, "[IJKMP] Scene detection init failed: %s\n", model_path);
+                ffp->scene_detect_enable = 0;
+            }
+        }
+    }
+
     pthread_mutex_unlock(&mp->mutex);
 }
 

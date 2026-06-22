@@ -31,6 +31,7 @@ LOCAL_LDLIBS += -llog -landroid
 
 LOCAL_C_INCLUDES += $(LOCAL_PATH)
 LOCAL_C_INCLUDES += $(realpath $(LOCAL_PATH)/..)
+LOCAL_C_INCLUDES += $(realpath $(LOCAL_PATH)/../ijkai)
 LOCAL_C_INCLUDES += $(MY_APP_FFMPEG_INCLUDE_PATH)
 LOCAL_C_INCLUDES += $(realpath $(LOCAL_PATH)/../ijkj4a)
 LOCAL_C_INCLUDES += $(realpath $(LOCAL_PATH)/../compat)
@@ -64,6 +65,18 @@ LOCAL_SRC_FILES += ijkavutil/ijkthreadpool.c
 LOCAL_SRC_FILES += ijkavutil/ijktree.c
 LOCAL_SRC_FILES += ijkavutil/ijkfifo.c
 LOCAL_SRC_FILES += ijkavutil/ijkstl.cpp
+
+# ijkai AI framework sources
+LOCAL_SRC_FILES += ../ijkai/ijkai.c
+LOCAL_SRC_FILES += ../ijkai/async/ijkai_queue.c
+LOCAL_SRC_FILES += ../ijkai/cv/ijkai_cv.c
+LOCAL_SRC_FILES += ../ijkai/cv/ijkai_cv_sr.c
+LOCAL_SRC_FILES += ../ijkai/cv/ijkai_cv_detect.c
+LOCAL_SRC_FILES += ../ijkai/cv/ijkai_cv_scene.c
+LOCAL_SRC_FILES += ../ijkai/cv/ijkai_cv_mnn_wrap.cpp
+LOCAL_SRC_FILES += ../ijkai/llm/ijkai_llm.cpp
+LOCAL_SRC_FILES += ../ijkai/ijkai_jni.c
+LOCAL_SRC_FILES += ../ijkai/ijkai_pipenode.c
 
 LOCAL_SHARED_LIBRARIES := ijkffmpeg ijksdl
 LOCAL_STATIC_LIBRARIES := ijksoundtouch

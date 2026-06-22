@@ -142,7 +142,7 @@ ijkai_context *ijkai_init(ijkai_type type, const char *model_path, int n_threads
             free(ctx);
             return NULL;
         }
-    } else if (type == IJKAI_TYPE_CV_SR || type == IJKAI_TYPE_CV_DETECT) {
+    } else if (type == IJKAI_TYPE_CV_SR || type == IJKAI_TYPE_CV_DETECT || type == IJKAI_TYPE_CV_SCENE) {
 #if IJKAI_ENABLE_CV
         // 初始化CV模块(使用CPU后端作为默认)
         ctx->cv_specific_ctx = ijkai_cv_init(type, model_path, n_threads, IJKAI_CV_BACKEND_CPU);
@@ -247,7 +247,7 @@ int ijkai_cv_process(
 int ijkai_cv_set_backend(ijkai_context *ctx, int backend) {
 #if IJKAI_ENABLE_CV
     if (!ctx) return -1;
-    if (ctx->type != IJKAI_TYPE_CV_SR && ctx->type != IJKAI_TYPE_CV_DETECT) {
+    if (ctx->type != IJKAI_TYPE_CV_SR && ctx->type != IJKAI_TYPE_CV_DETECT && ctx->type != IJKAI_TYPE_CV_SCENE) {
         return -1;
     }
     if (!ctx->cv_specific_ctx) {
@@ -327,6 +327,18 @@ int ijkai_get_processed_frames(ijkai_context *ctx) {
     return __atomic_load_n(&ctx->processed_frames, __ATOMIC_RELAXED);
 }
 
+void *ijkai_get_cv_context(ijkai_context *ctx) {
+    if (!ctx) return NULL;
+    if (ctx->type == IJKAI_TYPE_CV_SR || ctx->type == IJKAI_TYPE_CV_DETECT || ctx->type == IJKAI_TYPE_CV_SCENE) {
+#if IJKAI_ENABLE_CV
+        return ctx->cv_specific_ctx;
+#else
+        return NULL;
+#endif
+    }
+    return NULL;
+}
+
 void ijkai_release(ijkai_context **ctx) {
     if (!ctx || !*ctx) {
         return;
@@ -348,7 +360,7 @@ void ijkai_release(ijkai_context **ctx) {
         if (c->llm_ctx) {
             ijkai_llm_release_impl(c->llm_ctx);
         }
-    } else if (c->type == IJKAI_TYPE_CV_SR || c->type == IJKAI_TYPE_CV_DETECT) {
+    } else if (c->type == IJKAI_TYPE_CV_SR || c->type == IJKAI_TYPE_CV_DETECT || c->type == IJKAI_TYPE_CV_SCENE) {
 #if IJKAI_ENABLE_CV
         if (c->cv_specific_ctx) {
             ijkai_cv_release(c->cv_specific_ctx);

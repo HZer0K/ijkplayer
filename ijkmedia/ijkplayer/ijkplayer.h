@@ -195,6 +195,13 @@ void            ijkmp_set_option(IjkMediaPlayer *mp, int opt_category, const cha
 void            ijkmp_set_option_int(IjkMediaPlayer *mp, int opt_category, const char *name, int64_t value);
 void            ijkmp_set_video_filter(IjkMediaPlayer *mp, const char *vfilter);
 
+/* ==================== 场景分类 ==================== */
+/**
+ * Enable/disable scene detection with model path.
+ * @param model_path Path to .mnn model file, NULL to disable
+ */
+void            ijkmp_set_scene_detect(IjkMediaPlayer *mp, const char *model_path);
+
 /* ==================== 媒体信息查询 ==================== */
 int             ijkmp_get_video_codec_info(IjkMediaPlayer *mp, char **codec_info);
 int             ijkmp_get_audio_codec_info(IjkMediaPlayer *mp, char **codec_info);

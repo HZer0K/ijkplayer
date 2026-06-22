@@ -738,6 +738,13 @@ typedef struct FFPlayer {
     char *mediacodec_default_name;
     int ijkmeta_delay_init;
     int render_wait_start;
+
+    /* Scene classification (场景分类) */
+    int              scene_detect_enable;     /**< Feature on/off switch */
+    void            *scene_ctx;               /**< ijkai_context* for scene model */
+    int64_t          scene_last_time_ms;      /**< Last sampling timestamp */
+    int              scene_interval_ms;       /**< Sampling interval (default 2000ms) */
+    char             scene_label_text[64];    /**< Latest classification result text */
 } FFPlayer;
 
 #define fftime_to_milliseconds(ts) (av_rescale(ts, 1000, AV_TIME_BASE))
